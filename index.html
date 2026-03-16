@@ -2102,6 +2102,7 @@ function boExportToExcel() {
 // CUSTOMER CENTRIC DASHBOARD EMBEDDED SCRIPTS
 // ══════════════════════════════════════════════════════════════════════════════
 
+Chart.defaults.scales.linear = Chart.defaults.scales.linear || {};
 
 
 
@@ -2550,7 +2551,7 @@ function renderPareto(){
   charts.pareto=new Chart(ctx,{type:'bar',data:{labels:vals.map(v=>v.name),datasets:[{data:vals.map(v=>v.v),backgroundColor:bgColors,borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return (S.paretoMode==='revenue'?'NIS ':'')+N(c.raw);}}},
     datalabels:{anchor:'end',align:'end',color:'#94a3b8',font:{size:9},formatter:function(v){return N(v);}}},
-    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false},suggestedMax:vals.length?vals[0].v*1.15:100}},
+    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false},suggestedMax:vals.length?vals[0].v*1.15:100}},
     onClick:function(_,els){if(els.length>0){const c=vals[els[0].index];S.selId=c.id;renderTable();openDrawer(customers.find(x=>x.id===c.id));}}}});
 }
 
@@ -2570,7 +2571,7 @@ function renderMix(){
     datasets:Object.keys(agg).map(k=>({label:PROD_LABELS[k]||k,data:list.map(c=>(productMix[c.id]||{})[k]||0),backgroundColor:PROD_COLORS[k]||'rgba(136,146,164,0.7)',stack:'s'}))},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:10},boxWidth:10}},
     datalabels:{anchor:'center',align:'center',color:'#fff',font:{size:8},display:function(c){return c.dataset.data[c.dataIndex]>0;},formatter:function(v){return v>0?N(v):'';}}},
-    scales:{x:{stacked:true,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},y:{stacked:true,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false},grace:'10%'}}}});
+    scales:{x:{stacked:true,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{stacked:true,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false},grace:'10%'}}}});
 }
 
 // ── TREND ─────────────────────────────────────────────────────────────────────
@@ -2583,7 +2584,7 @@ function renderTrend(){
   charts.trend=new Chart(ctx,{type:'line',data:{labels:pm.map(p=>p.month),datasets:[{data:vals,borderColor:'#5D5FEF',backgroundColor:'rgba(93,95,239,0.08)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#5D5FEF',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return N(c.raw);}}},
     datalabels:{anchor:'end',align:'top',offset:6,color:'#64748b',font:{size:11,weight:'600'},formatter:function(v){return N(v);}}},
-    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return N(v);}},grid:{display:false}}}}});
+    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return N(v);}},grid:{display:false,drawBorder:false,drawTicks:false}}}}});
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
@@ -2681,7 +2682,7 @@ function openDrawer(c){
   charts.drawer=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{data:revData,backgroundColor:['rgba(93,95,239,0.6)','rgba(93,95,239,0.9)','rgba(93,95,239,0.5)','rgba(93,95,239,0.8)'],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return N(c.raw);}}},
     datalabels:{anchor:'end',align:'end',color:'#64748b',font:{size:11,weight:'600'},formatter:function(v){return v>0?N(v):'';}}},
-    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return N(v);}},grid:{display:false}}}}});
+    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return N(v);}},grid:{display:false,drawBorder:false,drawTicks:false}}}}});
 
   // SKU table: merge priced SKUs + unpriced from productMix
   const skus=skuDetail[c.id]||[];
@@ -2955,14 +2956,14 @@ function renderWeeklyChart() {
       scales: {
         x: {
           ticks: { color: '#8892a4', font: { size: 11 } },
-          grid:{display:false}
+          grid:{display:false,drawBorder:false,drawTicks:false}
         },
         y: {
           beginAtZero: true,
           min: 0,
           max: _yMax,
           ticks: { color: '#8892a4', font: { size: 10 }, callback: fmtAx },
-          grid:{display:false}
+          grid:{display:false,drawBorder:false,drawTicks:false}
         }
       }
     },
