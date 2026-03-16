@@ -7,48 +7,64 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 :root {
-  --primary:#4f46e5; --success:#22c55e; --danger:#ef4444; --warning:#f59e0b;
-  --bg:#f5f6fa; --card:#ffffff; --text:#1a1a2e; --text-muted:#6b7280;
-  --border:#eef0f2; --surface:#f8f9fb; --shadow:0 1px 2px rgba(0,0,0,0.04);
+  --primary:#5D5FEF; --primary-light:#A5A6F6; --primary-bg:rgba(93,95,239,0.08);
+  --success:#10b981; --success-bg:#ecfdf5; --success-border:#a7f3d0;
+  --danger:#ef4444; --danger-bg:#fef2f2; --danger-border:#fecaca;
+  --warning:#f59e0b;
+  --bg:#F8F9FB; --card:#ffffff; --text:#1A1D23; --text-muted:#64748B;
+  --border:#E2E8F0; --border-light:#f1f5f9;
+  --surface:#F1F5F9; --surface2:#f8fafc;
+  --shadow:0 8px 30px rgba(0,0,0,0.04);
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.06);
+  --radius:24px; --radius-sm:12px; --radius-pill:12px;
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
-  font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+  font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
   background:var(--bg); color:var(--text); direction:ltr;
-  font-size:14px; line-height:1.5;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
 }
 
 /* ── Unified Header ── */
 .unified-hdr {
-  background:var(--card); color:var(--text); padding:24px 32px;
+  background:var(--card); color:var(--text); padding:20px 32px;
   display:flex; justify-content:space-between; align-items:center;
-  border-bottom:1px solid var(--border);
+  border-bottom:1px solid var(--border-light);
 }
 .unified-hdr div { flex:1; }
-.unified-hdr h1 { font-size:28px; font-weight:700; margin-bottom:4px; }
-.unified-hdr .sub { color:var(--text-muted); font-size:13px; }
+.unified-hdr h1 { font-size:22px; font-weight:800; letter-spacing:-0.3px; }
+.unified-hdr .sub { color:var(--text-muted); font-size:12px; margin-top:2px; }
 .export-btn {
-  background:var(--primary); color:#fff; border:none;
-  padding:10px 18px; border-radius:8px; cursor:pointer;
+  background:var(--card); color:var(--text); border:1px solid var(--border);
+  padding:8px 16px; border-radius:var(--radius-pill); cursor:pointer;
   font-weight:600; font-size:13px; transition:all 0.2s;
+  display:flex; align-items:center; gap:6px;
+  box-shadow:var(--shadow-sm);
 }
-.export-btn:hover { opacity:0.9; transform:translateY(-1px); box-shadow:0 2px 8px rgba(79,70,229,0.2); }
+.export-btn:hover { background:var(--surface); border-color:var(--primary); color:var(--primary); }
 
-/* ── Tab Navigation ── */
+/* ── Tab Navigation — pill-in-container style ── */
 .tab-bar {
-  background:var(--card); padding:0 32px; border-bottom:1px solid var(--border);
-  display:flex; gap:0;
+  background:var(--card); padding:16px 32px;
+  display:flex; align-items:center; gap:16px;
+  border-bottom:1px solid var(--border-light);
+}
+.tab-pills {
+  display:inline-flex; background:var(--surface); padding:4px; border-radius:var(--radius-pill);
 }
 .tab-btn {
-  padding:16px 24px; border:none; background:transparent; cursor:pointer;
-  font-size:14px; font-weight:600; color:var(--text-muted);
-  border-bottom:2px solid transparent; transition:all 0.2s;
-  position:relative;
+  padding:8px 20px; border:none; background:transparent; cursor:pointer;
+  font-size:13px; font-weight:600; color:var(--text-muted);
+  border-radius:10px; transition:all 0.2s; white-space:nowrap;
 }
 .tab-btn:hover { color:var(--text); }
-.tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); }
+.tab-btn.active {
+  color:var(--text); background:var(--card);
+  box-shadow:0 1px 3px rgba(0,0,0,0.08);
+}
 
 /* ── Tab Content Container ── */
 .tab-content { display:none; }
@@ -56,52 +72,75 @@ body {
 
 /* ── Business Overview Tab Styles ── */
 #tab-bo .fbar {
-  background:var(--card); padding:20px 32px; border-bottom:1px solid var(--border);
-  display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+  background:var(--card); padding:16px 32px; border-bottom:1px solid var(--border-light);
+  display:flex; gap:12px; align-items:center; flex-wrap:wrap;
 }
 #tab-bo .fbar span {
-  font-weight:600; font-size:13px; color:var(--text);
-  text-transform:uppercase; letter-spacing:0.5px;
+  font-weight:700; font-size:11px; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:0.8px;
+}
+#tab-bo .filter-group {
+  display:inline-flex; background:var(--surface); padding:3px; border-radius:var(--radius-pill);
 }
 #tab-bo .fbtn {
-  padding:8px 16px; border:1px solid var(--border); border-radius:20px;
-  background:var(--card); font-size:13px; cursor:pointer; font-family:inherit;
-  font-weight:500; color:var(--text-muted); transition:all 0.2s;
+  padding:6px 14px; border:none; border-radius:10px;
+  background:transparent; font-size:12px; cursor:pointer; font-family:inherit;
+  font-weight:600; color:var(--text-muted); transition:all 0.2s;
 }
-#tab-bo .fbtn:hover {
-  background:var(--surface); color:var(--text); border-color:var(--primary);
-}
+#tab-bo .fbtn:hover { color:var(--text); }
 #tab-bo .fbtn-active {
-  background:var(--primary); color:#fff; border-color:var(--primary);
+  background:var(--card); color:var(--text);
+  box-shadow:0 1px 3px rgba(0,0,0,0.08);
 }
 #tab-bo .ctr { max-width:1440px; margin:0 auto; padding:32px; }
-#tab-bo .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:20px; margin-bottom:32px; }
+#tab-bo .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-bottom:32px; }
 #tab-bo .kpi {
-  background:var(--card); border-radius:12px; padding:24px;
-  border:1px solid var(--border); box-shadow:var(--shadow);
+  background:var(--card); border-radius:var(--radius); padding:32px;
+  border:1px solid var(--border-light); box-shadow:var(--shadow);
 }
 #tab-bo .kpi-title {
-  font-size:13px; font-weight:600; color:var(--text-muted);
-  margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;
+  font-size:11px; font-weight:700; color:var(--text-muted);
+  margin-bottom:16px; text-transform:uppercase; letter-spacing:0.8px;
 }
 #tab-bo .card {
-  background:var(--card); border-radius:12px; padding:24px;
-  border:1px solid var(--border); box-shadow:var(--shadow);
-  margin-bottom:20px;
+  background:var(--card); border-radius:var(--radius); padding:32px;
+  border:1px solid var(--border-light); box-shadow:var(--shadow);
+  margin-bottom:24px;
 }
 #tab-bo .card.full { width:100%; }
-#tab-bo .card h3 { font-size:16px; font-weight:700; margin-bottom:16px; color:var(--text); }
+#tab-bo .card h3 { font-size:18px; font-weight:700; margin-bottom:20px; color:var(--text); }
 #tab-bo .tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:16px; }
 #tab-bo .tbl th {
-  background:var(--surface); color:var(--text); padding:12px 16px;
+  background:transparent; color:var(--text-muted); padding:10px 14px;
   text-align:left; font-weight:600; border-bottom:1px solid var(--border);
-  font-size:12px; text-transform:uppercase; letter-spacing:0.5px;
+  font-size:11px; text-transform:uppercase; letter-spacing:0.5px;
 }
-#tab-bo .tbl td { padding:12px 16px; text-align:center; border-bottom:1px solid var(--border); }
+#tab-bo .tbl td { padding:10px 14px; text-align:center; border-bottom:1px solid var(--border-light); color:var(--text); }
 #tab-bo .tbl tr:last-child td { border-bottom:none; }
-#tab-bo .tbl tbody tr:hover { background:var(--surface); }
-@media (max-width:1024px) { #tab-bo .kpis { grid-template-columns:repeat(3,1fr); } }
-@media (max-width:768px) { #tab-bo .kpis { grid-template-columns:repeat(2,1fr); } }
+#tab-bo .tbl tbody tr:hover { background:var(--surface2); }
+#tab-bo .tbl .tot { font-weight:700; }
+@media (max-width:1024px) { #tab-bo .kpis { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:768px) { #tab-bo .kpis { grid-template-columns:1fr; } }
+
+/* ── Trend badges ── */
+.badge-up {
+  display:inline-flex; align-items:center; gap:2px;
+  background:var(--success-bg); color:var(--success);
+  font-size:10px; font-weight:700; padding:2px 8px;
+  border-radius:20px; border:1px solid var(--success-border);
+}
+.badge-down {
+  display:inline-flex; align-items:center; gap:2px;
+  background:var(--danger-bg); color:var(--danger);
+  font-size:10px; font-weight:700; padding:2px 8px;
+  border-radius:20px; border:1px solid var(--danger-border);
+}
+.big-number { font-size:48px; font-weight:800; letter-spacing:-1.5px; line-height:1; }
+.big-number-md { font-size:30px; font-weight:800; letter-spacing:-0.5px; line-height:1; }
+.stat-label {
+  font-size:10px; font-weight:700; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:0.8px; margin-top:6px;
+}
 
 /* ── Customer Performance Tab (CC) Styles - Scoped ── */
 
@@ -235,21 +274,21 @@ body {
 /* ── Master Data Tab ── */
 #tab-md .ctr { max-width:1200px; margin:0 auto; padding:32px; }
 #tab-md .card {
-  background:var(--card); border-radius:12px; padding:24px;
-  border:1px solid var(--border); box-shadow:var(--shadow);
+  background:var(--card); border-radius:var(--radius); padding:32px;
+  border:1px solid var(--border-light); box-shadow:var(--shadow);
   margin-bottom:24px;
 }
 #tab-md .card.full { width:100%; }
-#tab-md .card h3 { font-size:16px; font-weight:700; margin-bottom:16px; color:var(--text); }
+#tab-md .card h3 { font-size:18px; font-weight:700; margin-bottom:20px; color:var(--text); }
 #tab-md .tbl { width:100%; border-collapse:collapse; font-size:13px; margin-top:16px; }
 #tab-md .tbl th {
-  background:var(--surface); color:var(--text); padding:12px 16px;
+  background:transparent; color:var(--text-muted); padding:10px 14px;
   text-align:left; font-weight:600; border-bottom:1px solid var(--border);
-  font-size:12px; text-transform:uppercase; letter-spacing:0.5px;
+  font-size:11px; text-transform:uppercase; letter-spacing:0.5px;
 }
-#tab-md .tbl td { padding:12px 16px; border-bottom:1px solid var(--border); }
+#tab-md .tbl td { padding:10px 14px; border-bottom:1px solid var(--border-light); }
 #tab-md .tbl tr:last-child td { border-bottom:none; }
-#tab-md .tbl tbody tr:hover { background:var(--surface); }
+#tab-md .tbl tbody tr:hover { background:var(--surface2); }
 </style>
 </head>
 <body>
@@ -258,29 +297,34 @@ body {
 <div class="unified-hdr">
   <div>
     <h1>Raito Dashboard</h1>
-    <div class="sub">Business Overview · Customer Performance · Master Data | Last updated: 16/03/2026</div>
+    <div class="sub">Business Overview · Customer Performance · Master Data &nbsp;|&nbsp; Last updated: 16/03/2026</div>
   </div>
-  <button class="export-btn" onclick="exportCurrentTab()">📥 Export Excel</button>
+  <button class="export-btn" onclick="exportCurrentTab()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export Excel
+  </button>
 </div>
 
 <!-- Tab Navigation -->
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('bo')">Business Overview</button>
-  <button class="tab-btn" onclick="switchTab('cc')">Customer Performance</button>
-  <button class="tab-btn" onclick="switchTab('md')">Master Data</button>
+  <div class="tab-pills">
+    <button class="tab-btn active" onclick="switchTab('bo')">Business Overview</button>
+    <button class="tab-btn" onclick="switchTab('cc')">Customer Performance</button>
+    <button class="tab-btn" onclick="switchTab('md')">Master Data</button>
+  </div>
 </div>
 
 <!-- Business Overview Tab -->
 <div id="tab-bo" class="tab-content active">
-  <div class="fbar"><span>Period:</span> <button class="fbtn month-btn fbtn-active" onclick="boSetMonth('all')">Overview</button>
+  <div class="fbar"><span>Period</span> <div class="filter-group"><button class="fbtn month-btn fbtn-active" onclick="boSetMonth('all')">Overview</button>
 <button class="fbtn month-btn" onclick="boSetMonth('m0')">Dec '25</button>
 <button class="fbtn month-btn" onclick="boSetMonth('m1')">Jan '26</button>
 <button class="fbtn month-btn" onclick="boSetMonth('m2')">Feb '26</button>
 <button class="fbtn month-btn" onclick="boSetMonth('m3')">Mar '26</button>
-<span style="margin-left:16px">Brand:</span> <button class="fbtn brand-btn fbtn-active" onclick="boSetBrand('ab')">All Brands</button>
+</div><span style="margin-left:8px">Brand</span> <div class="filter-group"><button class="fbtn brand-btn fbtn-active" onclick="boSetBrand('ab')">All Brands</button>
 <button class="fbtn brand-btn" onclick="boSetBrand('turbo')">Turbo</button>
 <button class="fbtn brand-btn" onclick="boSetBrand('danis')">Dani's</button>
-</div>
+</div></div>
   <div class="ctr">
     <div class="month-section" id="sec-all-ab" style="display:block">
 <div style="text-align:center;font-size:20px;font-weight:700;color:#1e3a5f;margin-bottom:14px">KPI's</div>
