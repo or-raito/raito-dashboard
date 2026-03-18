@@ -505,6 +505,9 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
     <li><a onclick="switchTab('cc')" id="nav-cc">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
       Customer Performance</a></li>
+    <li><a onclick="switchTab('ap')" id="nav-ap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+      Agent Plan</a></li>
   </ul>
 
   <div class="sidebar-section">Data</div>
@@ -2599,6 +2602,11 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
 </div>
 
+<!-- Agent Plan Tab -->
+<div id="tab-ap" class="tab-content">
+  <div style="padding:40px;text-align:center;color:#94a3b8">Agent plan data not found.</div>
+</div>
+
 <!-- Master Data Tab -->
 <div id="tab-md" class="tab-content">
   
@@ -3685,7 +3693,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
 function switchTab(tabId) {
   // Hide all tabs
-  ['bo', 'cc', 'md'].forEach(t => {
+  ['bo', 'cc', 'ap', 'md'].forEach(t => {
     var tab = document.getElementById('tab-' + t);
     if (tab) tab.classList.remove('active');
   });
@@ -3719,6 +3727,8 @@ function exportCurrentTab() {
     if (typeof ccExportToExcel === 'function') {
       ccExportToExcel();
     }
+  } else if (activeTab.includes('Agent')) {
+    alert('Export for Agent Plan will be available when weekly data is loaded.');
   } else if (activeTab.includes('Master')) {
     if (typeof mdExportToExcel === 'function') {
       mdExportToExcel();
