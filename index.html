@@ -528,7 +528,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
 <!-- Business Overview Tab -->
 <div id="tab-bo" class="tab-content active">
-  <div class="fbar"><span>Period</span> <div class="filter-group"><button class="fbtn month-btn fbtn-active" data-year="all" onclick="boSetMonth('all')">Overview</button>
+  <div class="fbar"><span>Year</span> <div class="filter-group"><button class="fbtn year-btn fbtn-active" onclick="boSetYear('all')">All Years</button>
+<button class="fbtn year-btn" onclick="boSetYear('2025')">2025</button>
+<button class="fbtn year-btn" onclick="boSetYear('2026')">2026</button>
+</div><span style="margin-left:8px">Period</span> <div class="filter-group"><button class="fbtn month-btn fbtn-active" data-year="all" onclick="boSetMonth('all')">Overview</button>
 <button class="fbtn month-btn" data-year="2025" onclick="boSetMonth('m0')">Dec '25</button>
 <button class="fbtn month-btn" data-year="2026" onclick="boSetMonth('m1')">Jan '26</button>
 <button class="fbtn month-btn" data-year="2026" onclick="boSetMonth('m2')">Feb '26</button>
