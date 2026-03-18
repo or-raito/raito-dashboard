@@ -531,11 +531,11 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
 <!-- Business Overview Tab -->
 <div id="tab-bo" class="tab-content active">
-  <div class="fbar"><span>Year</span> <div class="filter-group"><button class="fbtn year-btn fbtn-active" onclick="boSetYear('all')">All Years</button>
+  <div class="fbar"><span>Year</span> <div class="filter-group"><button class="fbtn year-btn" onclick="boSetYear('all')">All Years</button>
 <button class="fbtn year-btn" onclick="boSetYear('2025')">2025</button>
-<button class="fbtn year-btn" onclick="boSetYear('2026')">2026</button>
+<button class="fbtn year-btn fbtn-active" onclick="boSetYear('2026')">2026</button>
 </div><span style="margin-left:8px">Period</span> <div class="filter-group"><button class="fbtn month-btn fbtn-active" data-year="all" onclick="boSetMonth('all')">Overview</button>
-<button class="fbtn month-btn" data-year="2025" onclick="boSetMonth('m0')">Dec '25</button>
+<button class="fbtn month-btn" style="display:none" data-year="2025" onclick="boSetMonth('m0')">Dec '25</button>
 <button class="fbtn month-btn" data-year="2026" onclick="boSetMonth('m1')">Jan '26</button>
 <button class="fbtn month-btn" data-year="2026" onclick="boSetMonth('m2')">Feb '26</button>
 <button class="fbtn month-btn" data-year="2026" onclick="boSetMonth('m3')">Mar '26</button>
@@ -713,7 +713,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 <div class="card full" style="margin-bottom:14px"><h3>Top Customers (units)</h3><div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="min-width:100px;text-align:right;font-size:12px">וולט מרקט</div><div style="flex:1;background:#f0f0f0;border-radius:4px;height:22px"><div style="width:100.0%;background:#6366f1;height:100%;border-radius:4px;min-width:2px"></div></div><div style="min-width:60px;text-align:left;font-size:12px;font-weight:600">5,805</div></div>
 <div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="min-width:100px;text-align:right;font-size:12px">ינגו</div><div style="flex:1;background:#f0f0f0;border-radius:4px;height:22px"><div style="width:2.6%;background:#6366f1;height:100%;border-radius:4px;min-width:2px"></div></div><div style="min-width:60px;text-align:left;font-size:12px;font-weight:600">150</div></div>
 <div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="min-width:100px;text-align:right;font-size:12px">חוות נעמי</div><div style="flex:1;background:#f0f0f0;border-radius:4px;height:22px"><div style="width:0.3%;background:#6366f1;height:100%;border-radius:4px;min-width:2px"></div></div><div style="min-width:60px;text-align:left;font-size:12px;font-weight:600">15</div></div></div>
-</div><div class="month-section" id="sec-y2026-ab" style="display:none">
+</div><div class="month-section" id="sec-y2026-ab" style="display:block">
 <div class="kpis" style="grid-template-columns:repeat(5,1fr)">
   <div class="kpi">
     <div class="kpi-title">Total Revenue</div>
@@ -1192,7 +1192,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 <div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="min-width:100px;text-align:right;font-size:12px">חוות נעמי</div><div style="flex:1;background:#f0f0f0;border-radius:4px;height:22px"><div style="width:5.3%;background:#6366f1;height:100%;border-radius:4px;min-width:2px"></div></div><div style="min-width:60px;text-align:left;font-size:12px;font-weight:600">483</div></div>
 <div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="min-width:100px;text-align:right;font-size:12px">ינגו</div><div style="flex:1;background:#f0f0f0;border-radius:4px;height:22px"><div style="width:2.8%;background:#6366f1;height:100%;border-radius:4px;min-width:2px"></div></div><div style="min-width:60px;text-align:left;font-size:12px;font-weight:600">257</div></div>
 <div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="min-width:100px;text-align:right;font-size:12px">כרמלה</div><div style="flex:1;background:#f0f0f0;border-radius:4px;height:22px"><div style="width:0.5%;background:#6366f1;height:100%;border-radius:4px;min-width:2px"></div></div><div style="min-width:60px;text-align:left;font-size:12px;font-weight:600">45</div></div></div>
-</div><div class="month-section" id="sec-all-ab" style="display:block">
+</div><div class="month-section" id="sec-all-ab" style="display:none">
 <div class="kpis" style="grid-template-columns:repeat(5,1fr)">
   <div class="kpi">
     <div class="kpi-title">Total Revenue</div>
@@ -2614,10 +2614,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </div>
         <div style="display:flex;gap:8px">
             <div style="background:#f1f5f9;border-radius:10px;padding:6px 14px;font-size:12px;color:#64748b">
-                <span style="font-weight:600;color:#1e293b">3</span> / 78 days elapsed
+                <span style="font-weight:600;color:#1e293b">4</span> / 78 days elapsed
             </div>
             <div style="background:#f1f5f9;border-radius:10px;padding:6px 14px;font-size:12px;color:#64748b">
-                <span style="font-weight:600;color:#1e293b">75</span> days remaining
+                <span style="font-weight:600;color:#1e293b">74</span> days remaining
             </div>
         </div>
     </div>
@@ -2646,10 +2646,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </div>
         <!-- Time Progress Ring -->
         <div style="background:#fff;border:1px solid #f1f5f9;border-radius:16px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04);display:flex;align-items:center;gap:14px">
-            <svg width="80" height="80" viewBox="0 0 80 80"><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f1f5f9" stroke-width="6"/><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f59e0b" stroke-width="6" stroke-dasharray="232.47766" stroke-dashoffset="223.6" stroke-linecap="round" transform="rotate(-90 40.0 40.0)" style="transition:stroke-dashoffset 0.5s"/><text x="40.0" y="41.0" text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="700" fill="#f59e0b">4%</text></svg>
+            <svg width="80" height="80" viewBox="0 0 80 80"><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f1f5f9" stroke-width="6"/><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f59e0b" stroke-width="6" stroke-dasharray="232.47766" stroke-dashoffset="220.6" stroke-linecap="round" transform="rotate(-90 40.0 40.0)" style="transition:stroke-dashoffset 0.5s"/><text x="40.0" y="41.0" text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="700" fill="#f59e0b">5%</text></svg>
             <div>
                 <div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px">Time Elapsed</div>
-                <div style="font-size:13px;font-weight:600;color:#1e293b;margin-top:2px">75 days left</div>
+                <div style="font-size:13px;font-weight:600;color:#1e293b;margin-top:2px">74 days left</div>
             </div>
         </div>
         <!-- Avg Goal per Agent -->
@@ -4199,7 +4199,7 @@ function exportCurrentTab() {
 // BUSINESS OVERVIEW TAB STATE
 // ══════════════════════════════════════════════════════════════════════════════
 
-var boCurrentYear = 'all';
+var boCurrentYear = '2026';
 var boCurrentMonth = 'all';
 var boCurrentBrand = 'ab';
 var boYearOverviewMap = {"2025": "y2025", "2026": "y2026"};
