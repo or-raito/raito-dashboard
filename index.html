@@ -2430,7 +2430,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <option value="feb">February 2026</option>
       <option value="jan">January 2026</option>
       <option value="dec">December 2025</option>
-      <option value="total">All Months</option>
+      <option value="total" selected>All Months</option>
     </select></div>
   <div class="fgroup"><label>Brand</label>
     <div class="tab-grp">
@@ -4567,7 +4567,7 @@ const allReturns = {
 
 // ── STATE ────────────────────────────────────────────────────────────────────
 const S = {
-  year:'2026', cust:'all', dist:'all', status:'all', month:'mar', brand:'all',
+  year:'2026', cust:'all', dist:'all', status:'all', month:'total', brand:'all',
   sortCol:'revActive', sortDir:-1, selId:null,
   paretoMode:'revenue', trendMode:'rev'
 };
@@ -4704,7 +4704,7 @@ function resetFilters(){
   ['f-cust','f-dist','f-status'].forEach(id=>document.getElementById(id).value='all');
   document.getElementById('f-year').value='2026';
   S.year='2026';
-  document.getElementById('f-month').value='mar';
+  document.getElementById('f-month').value='total';
   setBrand('all');
   S.cust='all';S.dist='all';S.status='all';S.month='mar';S.brand='all';
   updateChips(); renderAll();
