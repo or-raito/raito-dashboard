@@ -2423,6 +2423,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <option value="active">Active</option>
       <option value="negotiation">Negotiation</option>
     </select></div>
+  <div class="fgroup"><label>Year</label><select id="f-year" onchange="ccSetYear()"><option value="all">All Years</option><option value="2025">2025</option><option value="2026" selected>2026</option></select></div>
   <div class="fgroup"><label>Month</label>
     <select id="f-month" onchange="applyFilters()">
       <option value="mar">March 2026 (W10)</option>
@@ -4566,7 +4567,7 @@ const allReturns = {
 
 // ── STATE ────────────────────────────────────────────────────────────────────
 const S = {
-  cust:'all', dist:'all', status:'all', month:'mar', brand:'all',
+  year:'2026', cust:'all', dist:'all', status:'all', month:'mar', brand:'all',
   sortCol:'revActive', sortDir:-1, selId:null,
   paretoMode:'revenue', trendMode:'rev'
 };
@@ -4580,6 +4581,7 @@ document.addEventListener('DOMContentLoaded', () => {
     o.value = c.id; o.textContent = c.name; sel.appendChild(o);
   });
   renderAll();
+  ccSetYear();
 });
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -4691,6 +4693,7 @@ function portfolioMonthly(list){
 }
 
 function applyFilters(){
+  S.year  = document.getElementById('f-year').value;
   S.cust  = document.getElementById('f-cust').value;
   S.dist  = document.getElementById('f-dist').value;
   S.status= document.getElementById('f-status').value;
@@ -4699,6 +4702,8 @@ function applyFilters(){
 }
 function resetFilters(){
   ['f-cust','f-dist','f-status'].forEach(id=>document.getElementById(id).value='all');
+  document.getElementById('f-year').value='2026';
+  S.year='2026';
   document.getElementById('f-month').value='mar';
   setBrand('all');
   S.cust='all';S.dist='all';S.status='all';S.month='mar';S.brand='all';
@@ -5625,6 +5630,127 @@ window.ccExportToExcel = function() {
 }
 
 
+
+
+// ── YEAR + MONTH FILTER FOR CC WEEKLY CHART ──────────────────────────────────
+// Map weekly labels to years and months
+const _ccWeekYearMap = weeklyXLabels.map(lbl => {
+  const m = parseInt(lbl.split('/')[1]);
+  return m === 12 ? '2025' : '2026';
+});
+const _ccWeekMonthMap = weeklyXLabels.map(lbl => {
+  const m = parseInt(lbl.split('/')[1]);
+  if (m === 12) return 'dec';
+  if (m === 1) return 'jan';
+  if (m === 2) return 'feb';
+  if (m === 3) return 'mar';
+  return 'unknown';
+});
+
+// Month-to-year mapping for the month dropdown
+const _ccMonthYear = { dec:'2025', jan:'2026', feb:'2026', mar:'2026', total:'all' };
+
+function ccSetYear() {
+  S.year = document.getElementById('f-year').value;
+  // Filter month dropdown options based on year
+  const monthSel = document.getElementById('f-month');
+  const opts = monthSel.options;
+  for (let i = 0; i < opts.length; i++) {
+    const mv = opts[i].value;
+    if (mv === 'total') {
+      opts[i].style.display = '';
+    } else if (S.year === 'all') {
+      opts[i].style.display = '';
+    } else {
+      opts[i].style.display = (_ccMonthYear[mv] === S.year) ? '' : 'none';
+    }
+  }
+  // If current month selection is hidden, reset to appropriate default
+  const curMonth = monthSel.value;
+  if (curMonth !== 'total' && S.year !== 'all' && _ccMonthYear[curMonth] !== S.year) {
+    if (S.year === '2025') { monthSel.value = 'dec'; S.month = 'dec'; }
+    else if (S.year === '2026') { monthSel.value = 'mar'; S.month = 'mar'; }
+  }
+  updateChips(); renderAll();
+}
+
+// Helper: get filtered week indices based on current year + month
+function _ccFilteredWeekIndices() {
+  let indices = weeklyXLabels.map((_, i) => i);
+  // Filter by year
+  if (S.year && S.year !== 'all') {
+    indices = indices.filter(i => _ccWeekYearMap[i] === S.year);
+  }
+  // Filter by month (if a specific month is selected, not "total")
+  if (S.month && S.month !== 'total') {
+    indices = indices.filter(i => _ccWeekMonthMap[i] === S.month);
+  }
+  return indices;
+}
+
+// Override renderWeeklyChart to respect year + month filters
+const _origRenderWeeklyChart = renderWeeklyChart;
+renderWeeklyChart = function() {
+  const mode = _weeklyMode;
+  const dk   = _weeklyDistKey();
+  const ctx  = document.getElementById('c-weekly').getContext('2d');
+  if (charts.weekly) charts.weekly.destroy();
+
+  const isRev = mode === 'rev';
+  const fmtAx = v => isRev
+    ? (v >= 1000000 ? '\u20aa'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '\u20aa'+Math.round(v/1000)+'K' : '\u20aa'+v)
+    : (v >= 1000 ? Math.round(v/1000)+'K' : String(v));
+  const fmtTip = v => isRev
+    ? '\u20aa'+Math.round(v).toLocaleString()
+    : Math.round(v).toLocaleString()+' units';
+
+  const datasets = _mkWeeklyDatasets(mode);
+  _updateWeeklyLegend(dk);
+
+  // Get filtered indices based on year + month
+  const filteredIndices = _ccFilteredWeekIndices();
+
+  // Apply rolling window on filtered data
+  const winIndices = filteredIndices.slice(-WEEKLY_WINDOW);
+  const winLabels = winIndices.map(i => weeklyXLabels[i]);
+  const winDatasets = datasets.map(ds => ({...ds, data: winIndices.map(i => ds.data[i])}));
+
+  // Dynamic Y-axis max
+  const _flatVals = winDatasets.flatMap(ds => ds.data).filter(v => v != null && isFinite(v) && v > 0);
+  const _rawMax   = _flatVals.length ? Math.max(..._flatVals) : (isRev ? 100000 : 10000);
+  const _mag      = Math.pow(10, Math.floor(Math.log10(_rawMax)));
+  const _yMax     = Math.ceil(_rawMax * 1.20 / _mag) * _mag;
+
+  charts.weekly = new Chart(ctx, {
+    type: 'line',
+    data: { labels: winLabels, datasets: winDatasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(255,255,255,0.95)',
+          titleColor: '#1e293b',
+          bodyColor: '#475569',
+          borderColor: '#e2e8f0',
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8,
+          bodyFont: { family: 'Inter,sans-serif' },
+          callbacks: {
+            label: function(ctx2) { return ctx2.dataset.label + ': ' + fmtTip(ctx2.parsed.y); }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter,sans-serif' } }, grid: { display: false, drawBorder: false, drawTicks: false } },
+        y: { beginAtZero: true, suggestedMax: _yMax, ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter,sans-serif' }, callback: fmtAx }, grid: { display: false, drawBorder: false, drawTicks: false } }
+      }
+    }
+  });
+};
 
 
 // ══════════════════════════════════════════════════════════════════════════════
