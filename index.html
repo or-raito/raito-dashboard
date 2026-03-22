@@ -522,7 +522,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 15:21</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 15:49</div>
   </div>
 </nav>
 
@@ -5307,39 +5307,85 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // WEEKLY GRANULAR DATA  (per account × product, updated each week)
 // ══════════════════════════════════════════════════════════════════════════════
 // weeklyDetailHistory — rolling weekly detail, last 4 entries used in export.
-// Each entry: { label: string, rows: [{network, product, units, revenue}] }
-// Network-level aggregation. W12 appended dynamically via IIFE below.
-// Sources: sales_week_12.xls parsed & validated (W10: 725u ✓, W11: 553u ✓, W12: 3067u ✓)
+// Each entry: { label: string, rows: [{distributor, network, product, units, revenue}] }
+// Network-level aggregation. All distributors included. W12 appended dynamically via IIFE below.
+// Sources:
+//   Icedream: sales_week_12.xls parsed & validated (W10: 725u ✓, W11: 553u ✓, W12: 3067u ✓)
+//   Ma'ayan:  maayan_sales_week_10_11.xlsx parsed & validated (W10: 7204u ✓, W11: 7940u ✓)
+//   Ma'ayan revenue: proportionally distributed from _maayWkRev totals (~₪13.80/unit avg)
 const weeklyDetailHistory = [
   {
     label: 'W10|1/3/2026',
     rows: [
-      {network:'דומינוס',   product:'Chocolate',  units:80,  revenue:911.98},
-      {network:'דומינוס',   product:'Mango',      units:60,  revenue:683.95},
-      {network:'דומינוס',   product:'Vanilla',    units:24,  revenue:273.56},
-      {network:'חוות נעמי', product:'Dream Cake', units:66,  revenue:5477.91},
-      {network:'חוות נעמי', product:'Pistachio',  units:50,  revenue:694.97},
-      {network:'ינגו',      product:'Chocolate',  units:140, revenue:1889.96},
-      {network:'ינגו',      product:'Dream Cake', units:57,  revenue:8549.81},
-      {network:'ינגו',      product:'Mango',      units:140, revenue:1889.96},
-      {network:'ינגו',      product:'Vanilla',    units:108, revenue:1457.97},
+      // Icedream (source: sales_week_12.xls · W10 total: 725u / ₪21,830)
+      {distributor:'Icedream', network:'דומינוס',   product:'Chocolate',  units:80,  revenue:911.98},
+      {distributor:'Icedream', network:'דומינוס',   product:'Mango',      units:60,  revenue:683.95},
+      {distributor:'Icedream', network:'דומינוס',   product:'Vanilla',    units:24,  revenue:273.56},
+      {distributor:'Icedream', network:'חוות נעמי', product:'Dream Cake', units:66,  revenue:5477.91},
+      {distributor:'Icedream', network:'חוות נעמי', product:'Pistachio',  units:50,  revenue:694.97},
+      {distributor:'Icedream', network:'ינגו',      product:'Chocolate',  units:140, revenue:1889.96},
+      {distributor:'Icedream', network:'ינגו',      product:'Dream Cake', units:57,  revenue:8549.81},
+      {distributor:'Icedream', network:'ינגו',      product:'Mango',      units:140, revenue:1889.96},
+      {distributor:'Icedream', network:'ינגו',      product:'Vanilla',    units:108, revenue:1457.97},
+      // Ma'ayan (source: maayan_sales_week_10_11.xlsx · W10 total: 7204u / ₪99,415)
+      {distributor:'מעיין', network:'דור אלון',                 product:'Chocolate', units:480,  revenue:6623.99},
+      {distributor:'מעיין', network:'דור אלון',                 product:'Mango',     units:280,  revenue:3863.99},
+      {distributor:'מעיין', network:'דור אלון',                 product:'Vanilla',   units:370,  revenue:5105.99},
+      {distributor:'מעיין', network:'דור אלון',                 product:'Pistachio', units:510,  revenue:7037.99},
+      {distributor:'מעיין', network:'דלק מנטה',                product:'Chocolate', units:60,   revenue:828.00},
+      {distributor:'מעיין', network:'דלק מנטה',                product:'Mango',     units:60,   revenue:828.00},
+      {distributor:'מעיין', network:'דלק מנטה',                product:'Vanilla',   units:70,   revenue:966.00},
+      {distributor:'מעיין', network:'סונול',                   product:'Chocolate', units:20,   revenue:276.00},
+      {distributor:'מעיין', network:'סונול',                   product:'Mango',     units:20,   revenue:276.00},
+      {distributor:'מעיין', network:'פז חברת נפט- סופר יודה',  product:'Chocolate', units:240,  revenue:3311.99},
+      {distributor:'מעיין', network:'פז חברת נפט- סופר יודה',  product:'Mango',     units:150,  revenue:2070.00},
+      {distributor:'מעיין', network:'פז חברת נפט- סופר יודה',  product:'Vanilla',   units:250,  revenue:3449.99},
+      {distributor:'מעיין', network:'פז יילו',                 product:'Chocolate', units:490,  revenue:6761.99},
+      {distributor:'מעיין', network:'פז יילו',                 product:'Mango',     units:360,  revenue:4967.99},
+      {distributor:'מעיין', network:'פז יילו',                 product:'Vanilla',   units:520,  revenue:7175.99},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Chocolate', units:1010, revenue:13937.97},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Mango',     units:640,  revenue:8831.98},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Vanilla',   units:774,  revenue:10681.18},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Pistachio', units:900,  revenue:12419.98},
     ]
-  },  // W10 total: 725u / ₪21,830
+  },  // W10 combined: 7929u / ₪121,245 (Icedream 725u + Ma'ayan 7204u)
   {
     label: 'W11|8/3/2026',
     rows: [
-      {network:'גוד פארם',  product:'Chocolate',  units:30,  revenue:379.81},
-      {network:'גוד פארם',  product:'Mango',      units:30,  revenue:379.79},
-      {network:'גוד פארם',  product:'Pistachio',  units:20,  revenue:334.03},
-      {network:'גוד פארם',  product:'Vanilla',    units:24,  revenue:303.83},
-      {network:'דומינוס',   product:'Chocolate',  units:100, revenue:1139.49},
-      {network:'דומינוס',   product:'Vanilla',    units:48,  revenue:546.95},
-      {network:'חוות נעמי', product:'Chocolate',  units:10,  revenue:132.03},
-      {network:'חוות נעמי', product:'Dream Cake', units:281, revenue:23323.9},
-      {network:'חוות נעמי', product:'Pistachio',  units:10,  revenue:138.99},
+      // Icedream (source: sales_week_12.xls · W11 total: 553u / ₪26,679)
+      {distributor:'Icedream', network:'גוד פארם',  product:'Chocolate',  units:30,  revenue:379.81},
+      {distributor:'Icedream', network:'גוד פארם',  product:'Mango',      units:30,  revenue:379.79},
+      {distributor:'Icedream', network:'גוד פארם',  product:'Pistachio',  units:20,  revenue:334.03},
+      {distributor:'Icedream', network:'גוד פארם',  product:'Vanilla',    units:24,  revenue:303.83},
+      {distributor:'Icedream', network:'דומינוס',   product:'Chocolate',  units:100, revenue:1139.49},
+      {distributor:'Icedream', network:'דומינוס',   product:'Vanilla',    units:48,  revenue:546.95},
+      {distributor:'Icedream', network:'חוות נעמי', product:'Chocolate',  units:10,  revenue:132.03},
+      {distributor:'Icedream', network:'חוות נעמי', product:'Dream Cake', units:281, revenue:23323.90},
+      {distributor:'Icedream', network:'חוות נעמי', product:'Pistachio',  units:10,  revenue:138.99},
+      // Ma'ayan (source: maayan_sales_week_10_11.xlsx · W11 total: 7940u / ₪109,572)
+      {distributor:'מעיין', network:'דור אלון',                 product:'Chocolate', units:400,  revenue:5520.00},
+      {distributor:'מעיין', network:'דור אלון',                 product:'Mango',     units:110,  revenue:1518.00},
+      {distributor:'מעיין', network:'דור אלון',                 product:'Vanilla',   units:360,  revenue:4968.00},
+      {distributor:'מעיין', network:'דור אלון',                 product:'Pistachio', units:430,  revenue:5934.00},
+      {distributor:'מעיין', network:'דלק מנטה',                product:'Chocolate', units:130,  revenue:1794.00},
+      {distributor:'מעיין', network:'דלק מנטה',                product:'Mango',     units:110,  revenue:1518.00},
+      {distributor:'מעיין', network:'דלק מנטה',                product:'Vanilla',   units:140,  revenue:1932.00},
+      {distributor:'מעיין', network:'דלק מנטה',                product:'Pistachio', units:30,   revenue:414.00},
+      {distributor:'מעיין', network:'סונול',                   product:'Mango',     units:10,   revenue:138.00},
+      {distributor:'מעיין', network:'סונול',                   product:'Vanilla',   units:10,   revenue:138.00},
+      {distributor:'מעיין', network:'פז חברת נפט- סופר יודה',  product:'Chocolate', units:70,   revenue:966.00},
+      {distributor:'מעיין', network:'פז חברת נפט- סופר יודה',  product:'Mango',     units:60,   revenue:828.00},
+      {distributor:'מעיין', network:'פז חברת נפט- סופר יודה',  product:'Vanilla',   units:100,  revenue:1380.00},
+      {distributor:'מעיין', network:'פז יילו',                 product:'Chocolate', units:350,  revenue:4830.00},
+      {distributor:'מעיין', network:'פז יילו',                 product:'Mango',     units:240,  revenue:3312.00},
+      {distributor:'מעיין', network:'פז יילו',                 product:'Vanilla',   units:340,  revenue:4692.00},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Chocolate', units:1370, revenue:18906.00},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Mango',     units:880,  revenue:12144.00},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Vanilla',   units:1690, revenue:23322.00},
+      {distributor:'מעיין', network:'שוק פרטי',               product:'Pistachio', units:1110, revenue:15318.00},
     ]
-  },  // W11 total: 553u / ₪26,679
-  // W12 is appended dynamically from weeklyDetail below
+  },  // W11 combined: 8493u / ₪136,251 (Icedream 553u + Ma'ayan 7940u)
+  // W12 is appended dynamically from weeklyDetail below (Ma'ayan W12 file pending)
 ];
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -5467,6 +5513,7 @@ const weeklyDetail = [
 const weeklyDetailLabel = 'שבוע 12 | 15/3/2026';
 
 // Append W12 detail into weeklyDetailHistory (network-level aggregation from weeklyDetail)
+// Icedream only for W12 — Ma'ayan W12 file pending
 ;(function() {
   const netAgg = {};
   weeklyDetail.forEach(r => {
@@ -5479,7 +5526,7 @@ const weeklyDetailLabel = 'שבוע 12 | 15/3/2026';
       return p;
     })(r.product);
     const key = r.network + '||' + fl;
-    if(!netAgg[key]) netAgg[key] = {network:r.network, product:fl, units:0, revenue:0};
+    if(!netAgg[key]) netAgg[key] = {distributor:'Icedream', network:r.network, product:fl, units:0, revenue:0};
     netAgg[key].units   += r.units;
     netAgg[key].revenue += r.revenue;
   });
@@ -5699,47 +5746,59 @@ window.ccExportToExcel = function() {
   const _flavorOrder = ['Chocolate', 'Vanilla', 'Mango', 'Pistachio', 'Dream Cake'];
 
   // Build Weekly Detail sheet from last 4 entries of weeklyDetailHistory
+  // Shows ALL distributors (Icedream + Ma'ayan). Grouped by week → distributor → flavor → network.
   const _histSlice = weeklyDetailHistory.slice(-4);
   const _wdRows = [];
   let _wdGrandU = 0, _wdGrandR = 0;
 
   _histSlice.forEach(entry => {
-    // Aggregate this week's rows by flavor then network
-    const _byFl = {};
+    // Group rows by distributor
+    const _byDist = {};
     entry.rows.forEach(r => {
-      const fl  = r.product; // already English in history rows
+      const dist = r.distributor || 'Icedream';
+      if (!_byDist[dist]) _byDist[dist] = {};
+      const fl  = r.product;
       const net = r.network;
-      if (!_byFl[fl]) _byFl[fl] = {};
-      if (!_byFl[fl][net]) _byFl[fl][net] = {units:0, revenue:0};
-      _byFl[fl][net].units   += r.units;
-      _byFl[fl][net].revenue += r.revenue;
+      if (!_byDist[dist][fl]) _byDist[dist][fl] = {};
+      if (!_byDist[dist][fl][net]) _byDist[dist][fl][net] = {units:0, revenue:0};
+      _byDist[dist][fl][net].units   += r.units;
+      _byDist[dist][fl][net].revenue += r.revenue;
     });
 
-    _flavorOrder.forEach(fl => {
-      if (!_byFl[fl]) return;
-      const nets = Object.entries(_byFl[fl]).sort((a,b) => b[1].units - a[1].units);
-      let flU = 0, flR = 0;
-      nets.forEach(([net, d]) => {
-        _wdRows.push([str(entry.label), str(fl), str(net), num(d.units), {v:d.revenue,t:'n',z:'#,##0.00'}]);
-        flU += d.units; flR += d.revenue;
-        _wdGrandU += d.units; _wdGrandR += d.revenue;
+    // Render each distributor section
+    const distOrder = ['Icedream', 'מעיין'];
+    distOrder.forEach(dist => {
+      if (!_byDist[dist]) return;
+      let distU = 0, distR = 0;
+      _flavorOrder.forEach(fl => {
+        if (!_byDist[dist][fl]) return;
+        const nets = Object.entries(_byDist[dist][fl]).sort((a,b) => b[1].units - a[1].units);
+        let flU = 0, flR = 0;
+        nets.forEach(([net, d]) => {
+          _wdRows.push([str(entry.label), str(dist), str(fl), str(net), num(d.units), {v:d.revenue,t:'n',z:'#,##0.00'}]);
+          flU += d.units; flR += d.revenue;
+          _wdGrandU += d.units; _wdGrandR += d.revenue;
+          distU += d.units; distR += d.revenue;
+        });
+        _wdRows.push([null, null, str(`  ${fl} — Subtotal`), null, num(flU), {v:flR,t:'n',z:'#,##0.00'}]);
+        _wdRows.push([]);
       });
-      _wdRows.push([null, str(`  ${fl} — Subtotal`), null, num(flU), {v:flR,t:'n',z:'#,##0.00'}]);
+      _wdRows.push([null, str(`${dist} — Week Subtotal`), null, null, num(distU), {v:distR,t:'n',z:'#,##0.00'}]);
       _wdRows.push([]);
     });
-    _wdRows.push([]);  // blank row between weeks
+    _wdRows.push([]);  // extra blank row between weeks
   });
-  _wdRows.push([str('GRAND TOTAL (all weeks)'), null, null, num(_wdGrandU), {v:_wdGrandR,t:'n',z:'#,##0.00'}]);
+  _wdRows.push([str('GRAND TOTAL (all weeks, all distributors)'), null, null, null, num(_wdGrandU), {v:_wdGrandR,t:'n',z:'#,##0.00'}]);
 
   const _wdFirstLabel = _histSlice[0]?.label || '';
   const _wdLastLabel  = _histSlice[_histSlice.length-1]?.label || '';
   const ws4b = makeWS([
-    [`WEEKLY DETAIL — BY WEEK × FLAVOR × CUSTOMER  ·  ${_wdFirstLabel} – ${_wdLastLabel}  (Icedreams only)`],
-    [`Aggregated to network level  ·  Gross deliveries only  ·  Last ${_histSlice.length} available weeks`],
+    [`WEEKLY DETAIL — ALL DISTRIBUTORS  ·  ${_wdFirstLabel} – ${_wdLastLabel}`],
+    [`Aggregated to network level  ·  Gross deliveries only  ·  Last ${_histSlice.length} available weeks  ·  Ma'ayan revenue proportional to weekly total`],
     [],
-    ['Week', 'Flavor', 'Customer Network', 'Units', 'Revenue (₪)'],
+    ['Week', 'Distributor', 'Flavor', 'Customer Network', 'Units', 'Revenue (₪)'],
     ..._wdRows,
-  ], [20, 14, 26, 10, 14]);
+  ], [20, 12, 14, 28, 10, 14]);
   XLSX.utils.book_append_sheet(wb, ws4b, 'Weekly Detail');
 
   // ══════════════════════════════════════════════════════════════════════════
