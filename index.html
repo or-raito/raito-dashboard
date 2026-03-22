@@ -522,7 +522,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 14:42</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 14:52</div>
   </div>
 </nav>
 
@@ -2343,7 +2343,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <span class="badge">ISR</span>
       <span class="badge">Ice Cream / Frozen</span>
       <span class="badge green">● Sales Data Loaded</span>
-      <span class="badge amber">Mar = W10 partial</span>
+      <span class="badge amber" id="badge-week">Mar = W12 partial</span>
     </div>
     <button class="btn-export" onclick="ccExportToExcel()" title="Export current view to Excel">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -2372,7 +2372,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div class="fgroup"><label>Year</label><select id="f-year" onchange="ccSetYear()"><option value="all">All Years</option><option value="2025">2025</option><option value="2026" selected>2026</option></select></div>
   <div class="fgroup"><label>Month</label>
     <select id="f-month" onchange="applyFilters()">
-      <option value="mar">March 2026 (W10)</option>
+      <option value="mar" id="opt-mar">March 2026 (W12)</option>
       <option value="feb">February 2026</option>
       <option value="jan">January 2026</option>
       <option value="dec">December 2025</option>
@@ -2393,8 +2393,8 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
   <div class="info-banner">
     <span style="font-size:20px">✅</span>
-    <div><strong>Sales data loaded — Dec '25, Jan '26, Feb '26, Mar '26 (W10 partial) · November excluded</strong> &nbsp;·&nbsp;
-    19 customers · 2 distributors · Brand filter: <strong>Turbo</strong> (ice cream) + <strong>Dani's</strong> (dream cake) · Price DB: 24/2 &nbsp;·&nbsp; <strong>Last updated: 11/03/2026</strong></div>
+    <div><strong id="info-label">Sales data loaded — Dec '25, Jan '26, Feb '26, Mar '26 (W12) · November excluded</strong> &nbsp;·&nbsp;
+    19 customers · 2 distributors · Brand filter: <strong>Turbo</strong> (ice cream) + <strong>Dani's</strong> (dream cake) · Price DB: 24/2 &nbsp;·&nbsp; <strong>Last updated: 19/03/2026</strong></div>
   </div>
 
   
@@ -2405,7 +2405,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
     <div class="ph">
       <div>
         <div class="pt">Weekly Sales Trend — Icedreams vs Mayyan</div>
-        <div class="ps">28/12–1/3 2026 · כל נקודה = יום ראשון של השבוע · Icedreams W1–W10 · מעיין W6–W9 · מציג 10 שבועות אחרונים</div>
+        <div class="ps" id="chart-subtitle">28/12–15/3 2026 · כל נקודה = יום ראשון של השבוע · Icedreams W1–W12 · מעיין W6–W11 · מציג 10 שבועות אחרונים</div>
       </div>
       <div class="tab-grp">
         <button class="tab on" id="wb-rev" onclick="setWeeklyMode('rev')">Revenue ₪</button>
@@ -4704,7 +4704,7 @@ function renderKPIs(){
   const list=filtered();
   const totals=portfolioMonthly(list);
   const mIdx={dec:0,jan:1,feb:2,mar:3}[S.month];
-  const mLbl={dec:"Dec '25",jan:"Jan '26",feb:"Feb '26",mar:"Mar '26 (W10)",total:"All Months"}[S.month];
+  const mLbl={dec:"Dec '25",jan:"Jan '26",feb:"Feb '26",mar:`Mar '26 (W${DATA_LAST_WEEK})`,total:"All Months"}[S.month];
   const curRev  =mIdx!=null?totals[mIdx].revenue :totals.reduce((s,t)=>s+t.revenue,0);
   const curUnits=mIdx!=null?totals[mIdx].units   :totals.reduce((s,t)=>s+t.units,0);
   const grossVal=list.reduce((s,c)=>s+(getRevField(c)*(c.grossMargin||0)/100),0);
@@ -4810,7 +4810,7 @@ function renderTable(){
   };
   activeRows.sort(sortFn);
 
-  const mLbl={dec:"Dec",jan:"Jan",feb:"Feb",mar:"Mar (W10)",total:"Total"}[S.month];
+  const mLbl={dec:"Dec",jan:"Jan",feb:"Feb",mar:`Mar (W${DATA_LAST_WEEK})`,total:"Total"}[S.month];
   const rows=[...activeRows,...zeroRows].map(c=>{
     const rev=c._rev, units=c._units;
     const share=totalRev>0?(rev/totalRev*100):0;
@@ -5306,6 +5306,34 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // ══════════════════════════════════════════════════════════════════════════════
 // WEEKLY GRANULAR DATA  (per account × product, updated each week)
 // ══════════════════════════════════════════════════════════════════════════════
+// weeklyDetailHistory — rolling weekly detail, last 4 entries used in export.
+// Each entry: { label: string, rows: [{network, product, units, revenue}] }
+// Network-level (no branch split) except W12 which has branch detail.
+// Sources: icedream_mar_w10_11.xlsx (W10+W11), icedream_mar_w12.xlsx (W12).
+const weeklyDetailHistory = [
+  {
+    label: 'W10-W11 | 8/3/2026',
+    rows: [
+      {network:'גוד פארם', product:'Vanilla',    units:4,   revenue:303.83},
+      {network:'גוד פארם', product:'Mango',      units:3,   revenue:379.79},
+      {network:'גוד פארם', product:'Pistachio',  units:2,   revenue:334.03},
+      {network:'גוד פארם', product:'Chocolate',  units:3,   revenue:379.81},
+      {network:'דומינוס',  product:'Vanilla',    units:12,  revenue:820.51},
+      {network:'דומינוס',  product:'Mango',      units:6,   revenue:683.95},
+      {network:'דומינוס',  product:'Chocolate',  units:18,  revenue:2051.47},
+      {network:'חוות נעמי',product:'Dream Cake', units:115, revenue:28801.81},
+      {network:'חוות נעמי',product:'Pistachio',  units:6,   revenue:833.96},
+      {network:'חוות נעמי',product:'Chocolate',  units:1,   revenue:132.03},
+      {network:'ינגו',     product:'Dream Cake', units:19,  revenue:8549.81},
+      {network:'ינגו',     product:'Vanilla',    units:18,  revenue:1457.97},
+      {network:'ינגו',     product:'Mango',      units:14,  revenue:1889.96},
+      {network:'ינגו',     product:'Chocolate',  units:14,  revenue:1889.96},
+    ]
+  },
+  // W12 rows are appended dynamically from weeklyDetail below
+];
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Each entry: { network, account, product, upc, boxes, units, revenue }
 // revenue = VAT0 invoice value (negative = return)
 // Branch detail: icedream_mar_w12.xlsx (W12, 19/3/2026).
@@ -5429,6 +5457,26 @@ const weeklyDetail = [
 // Label shown in Excel headers
 const weeklyDetailLabel = 'שבוע 12 | 15/3/2026';
 
+// Append W12 detail into weeklyDetailHistory (network-level aggregation from weeklyDetail)
+;(function() {
+  const netAgg = {};
+  weeklyDetail.forEach(r => {
+    const fl = (function(p){
+      if(p.includes('וניל'))    return 'Vanilla';
+      if(p.includes('מנגו'))    return 'Mango';
+      if(p.includes('פיסטוק')) return 'Pistachio';
+      if(p.includes('שוקולד')) return 'Chocolate';
+      if(p.includes('דרים'))   return 'Dream Cake';
+      return p;
+    })(r.product);
+    const key = r.network + '||' + fl;
+    if(!netAgg[key]) netAgg[key] = {network:r.network, product:fl, units:0, revenue:0};
+    netAgg[key].units   += r.units;
+    netAgg[key].revenue += r.revenue;
+  });
+  weeklyDetailHistory.push({ label: weeklyDetailLabel, rows: Object.values(netAgg) });
+})();
+
 // ══════════════════════════════════════════════════════════════════════════════
 // EXCEL EXPORT — Sales Dashboard - Raito format (4 sheets)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -5455,7 +5503,7 @@ window.ccExportToExcel = function() {
   }
 
   const MONTHS = ['dec','jan','feb','mar'];
-  const MON_LABELS = ['Dec 2025','Jan 2026','Feb 2026','Mar 2026 (W10-W12)'];
+  const MON_LABELS = ['Dec 2025','Jan 2026','Feb 2026',`Mar 2026 (W10–W${DATA_LAST_WEEK})`];
 
   function sumRevMonth(m, dist) {
     return customers.reduce((s,c) => {
@@ -5483,7 +5531,7 @@ window.ccExportToExcel = function() {
   const iceU     = MONTHS.map(m => sumUnitsMonth(m, 'אייסדרים'));
 
   const ws1 = makeWS([
-    ['ICE CREAM SALES DASHBOARD  ·  Dec 2025 – Mar 2026 (W10)'],
+    [`ICE CREAM SALES DASHBOARD  ·  Dec 2025 – Mar 2026 (W10–W${DATA_LAST_WEEK})`],
     ['Source: ICEDREAM invoice files + Mayyan_Turbo.xlsx + weekly XLS  ·  Gross deliveries, returns excluded'],
     [],
     ['  PORTFOLIO KPIs — All Customers'],
@@ -5510,8 +5558,8 @@ window.ccExportToExcel = function() {
   // ══════════════════════════════════════════════════════════════════════════
   const cpHeader = [
     'Customer','Distributor','Status','Dist %',
-    'Rev Dec','Rev Jan','Rev Feb','Rev Mar(W10)','4M Revenue',
-    'Units Dec','Units Jan','Units Feb','Units Mar(W10)','4M Units',
+    'Rev Dec','Rev Jan','Rev Feb',`Rev Mar(W${DATA_LAST_WEEK})`,'4M Revenue',
+    'Units Dec','Units Jan','Units Feb',`Units Mar(W${DATA_LAST_WEEK})`,'4M Units',
     'Avg Price','Gross Margin','Op Margin','MoM Growth (Feb→Mar)','SKUs'
   ];
   const cpRows = customers.map(c => [
@@ -5641,41 +5689,48 @@ window.ccExportToExcel = function() {
   };
   const _flavorOrder = ['Chocolate', 'Vanilla', 'Mango', 'Pistachio', 'Dream Cake'];
 
-  // Aggregate weeklyDetail → {flavor → {network → {boxes,units,revenue}}}
-  const _wdByFlavor = {};
-  weeklyDetail.forEach(r => {
-    const fl  = _toFlavor(r.product);
-    const net = r.network;
-    if (!_wdByFlavor[fl]) _wdByFlavor[fl] = {};
-    if (!_wdByFlavor[fl][net]) _wdByFlavor[fl][net] = {boxes:0, units:0, revenue:0};
-    _wdByFlavor[fl][net].boxes   += r.boxes;
-    _wdByFlavor[fl][net].units   += r.units;
-    _wdByFlavor[fl][net].revenue += r.revenue;
-  });
-
+  // Build Weekly Detail sheet from last 4 entries of weeklyDetailHistory
+  const _histSlice = weeklyDetailHistory.slice(-4);
   const _wdRows = [];
-  _flavorOrder.forEach(fl => {
-    if (!_wdByFlavor[fl]) return;
-    const nets = Object.entries(_wdByFlavor[fl]).sort((a,b) => b[1].units - a[1].units);
-    let flU = 0, flR = 0;
-    nets.forEach(([net, d]) => {
-      _wdRows.push([str(weeklyDetailLabel), str(fl), str(net), num(d.boxes), num(d.units), {v:d.revenue,t:'n',z:'#,##0.00'}]);
-      flU += d.units; flR += d.revenue;
-    });
-    _wdRows.push([null, str(`  ${fl} — Subtotal`), null, null, num(flU), {v:flR,t:'n',z:'#,##0.00'}]);
-    _wdRows.push([]);
-  });
-  const _wdGrandU = weeklyDetail.reduce((s,r)=>s+r.units,0);
-  const _wdGrandR = weeklyDetail.reduce((s,r)=>s+r.revenue,0);
-  _wdRows.push([str('GRAND TOTAL'), null, null, null, num(_wdGrandU), {v:_wdGrandR,t:'n',z:'#,##0.00'}]);
+  let _wdGrandU = 0, _wdGrandR = 0;
 
+  _histSlice.forEach(entry => {
+    // Aggregate this week's rows by flavor then network
+    const _byFl = {};
+    entry.rows.forEach(r => {
+      const fl  = r.product; // already English in history rows
+      const net = r.network;
+      if (!_byFl[fl]) _byFl[fl] = {};
+      if (!_byFl[fl][net]) _byFl[fl][net] = {units:0, revenue:0};
+      _byFl[fl][net].units   += r.units;
+      _byFl[fl][net].revenue += r.revenue;
+    });
+
+    _flavorOrder.forEach(fl => {
+      if (!_byFl[fl]) return;
+      const nets = Object.entries(_byFl[fl]).sort((a,b) => b[1].units - a[1].units);
+      let flU = 0, flR = 0;
+      nets.forEach(([net, d]) => {
+        _wdRows.push([str(entry.label), str(fl), str(net), num(d.units), {v:d.revenue,t:'n',z:'#,##0.00'}]);
+        flU += d.units; flR += d.revenue;
+        _wdGrandU += d.units; _wdGrandR += d.revenue;
+      });
+      _wdRows.push([null, str(`  ${fl} — Subtotal`), null, num(flU), {v:flR,t:'n',z:'#,##0.00'}]);
+      _wdRows.push([]);
+    });
+    _wdRows.push([]);  // blank row between weeks
+  });
+  _wdRows.push([str('GRAND TOTAL (all weeks)'), null, null, num(_wdGrandU), {v:_wdGrandR,t:'n',z:'#,##0.00'}]);
+
+  const _wdFirstLabel = _histSlice[0]?.label || '';
+  const _wdLastLabel  = _histSlice[_histSlice.length-1]?.label || '';
   const ws4b = makeWS([
-    [`WEEKLY DETAIL — BY FLAVOR × CUSTOMER  ·  ${weeklyDetailLabel}  (Icedreams only)`],
-    [`Aggregated to network level  ·  Gross deliveries only`],
+    [`WEEKLY DETAIL — BY WEEK × FLAVOR × CUSTOMER  ·  ${_wdFirstLabel} – ${_wdLastLabel}  (Icedreams only)`],
+    [`Aggregated to network level  ·  Gross deliveries only  ·  Last ${_histSlice.length} available weeks`],
     [],
-    ['Week', 'Flavor', 'Customer Network', 'Boxes', 'Units', 'Revenue (₪)'],
+    ['Week', 'Flavor', 'Customer Network', 'Units', 'Revenue (₪)'],
     ..._wdRows,
-  ], [18, 14, 26, 8, 10, 14]);
+  ], [20, 14, 26, 10, 14]);
   XLSX.utils.book_append_sheet(wb, ws4b, 'Weekly Detail');
 
   // ══════════════════════════════════════════════════════════════════════════
