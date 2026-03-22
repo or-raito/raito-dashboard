@@ -522,7 +522,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 14:52</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 15:21</div>
   </div>
 </nav>
 
@@ -5308,29 +5308,38 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // ══════════════════════════════════════════════════════════════════════════════
 // weeklyDetailHistory — rolling weekly detail, last 4 entries used in export.
 // Each entry: { label: string, rows: [{network, product, units, revenue}] }
-// Network-level (no branch split) except W12 which has branch detail.
-// Sources: icedream_mar_w10_11.xlsx (W10+W11), icedream_mar_w12.xlsx (W12).
+// Network-level aggregation. W12 appended dynamically via IIFE below.
+// Sources: sales_week_12.xls parsed & validated (W10: 725u ✓, W11: 553u ✓, W12: 3067u ✓)
 const weeklyDetailHistory = [
   {
-    label: 'W10-W11 | 8/3/2026',
+    label: 'W10|1/3/2026',
     rows: [
-      {network:'גוד פארם', product:'Vanilla',    units:4,   revenue:303.83},
-      {network:'גוד פארם', product:'Mango',      units:3,   revenue:379.79},
-      {network:'גוד פארם', product:'Pistachio',  units:2,   revenue:334.03},
-      {network:'גוד פארם', product:'Chocolate',  units:3,   revenue:379.81},
-      {network:'דומינוס',  product:'Vanilla',    units:12,  revenue:820.51},
-      {network:'דומינוס',  product:'Mango',      units:6,   revenue:683.95},
-      {network:'דומינוס',  product:'Chocolate',  units:18,  revenue:2051.47},
-      {network:'חוות נעמי',product:'Dream Cake', units:115, revenue:28801.81},
-      {network:'חוות נעמי',product:'Pistachio',  units:6,   revenue:833.96},
-      {network:'חוות נעמי',product:'Chocolate',  units:1,   revenue:132.03},
-      {network:'ינגו',     product:'Dream Cake', units:19,  revenue:8549.81},
-      {network:'ינגו',     product:'Vanilla',    units:18,  revenue:1457.97},
-      {network:'ינגו',     product:'Mango',      units:14,  revenue:1889.96},
-      {network:'ינגו',     product:'Chocolate',  units:14,  revenue:1889.96},
+      {network:'דומינוס',   product:'Chocolate',  units:80,  revenue:911.98},
+      {network:'דומינוס',   product:'Mango',      units:60,  revenue:683.95},
+      {network:'דומינוס',   product:'Vanilla',    units:24,  revenue:273.56},
+      {network:'חוות נעמי', product:'Dream Cake', units:66,  revenue:5477.91},
+      {network:'חוות נעמי', product:'Pistachio',  units:50,  revenue:694.97},
+      {network:'ינגו',      product:'Chocolate',  units:140, revenue:1889.96},
+      {network:'ינגו',      product:'Dream Cake', units:57,  revenue:8549.81},
+      {network:'ינגו',      product:'Mango',      units:140, revenue:1889.96},
+      {network:'ינגו',      product:'Vanilla',    units:108, revenue:1457.97},
     ]
-  },
-  // W12 rows are appended dynamically from weeklyDetail below
+  },  // W10 total: 725u / ₪21,830
+  {
+    label: 'W11|8/3/2026',
+    rows: [
+      {network:'גוד פארם',  product:'Chocolate',  units:30,  revenue:379.81},
+      {network:'גוד פארם',  product:'Mango',      units:30,  revenue:379.79},
+      {network:'גוד פארם',  product:'Pistachio',  units:20,  revenue:334.03},
+      {network:'גוד פארם',  product:'Vanilla',    units:24,  revenue:303.83},
+      {network:'דומינוס',   product:'Chocolate',  units:100, revenue:1139.49},
+      {network:'דומינוס',   product:'Vanilla',    units:48,  revenue:546.95},
+      {network:'חוות נעמי', product:'Chocolate',  units:10,  revenue:132.03},
+      {network:'חוות נעמי', product:'Dream Cake', units:281, revenue:23323.9},
+      {network:'חוות נעמי', product:'Pistachio',  units:10,  revenue:138.99},
+    ]
+  },  // W11 total: 553u / ₪26,679
+  // W12 is appended dynamically from weeklyDetail below
 ];
 
 // ══════════════════════════════════════════════════════════════════════════════
