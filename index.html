@@ -522,7 +522,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 14:17</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 22/03/2026 14:42</div>
   </div>
 </nav>
 
@@ -5624,7 +5624,62 @@ window.ccExportToExcel = function() {
   XLSX.utils.book_append_sheet(wb, ws3, 'Weekly Sales Trend');
 
   // ══════════════════════════════════════════════════════════════════════════
-  // Sheet 4: Product Mix
+  // Sheet 4: Weekly Detail — by Week × Flavor × Customer
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Map Hebrew product names → English flavor
+  const _flavorMap = [
+    ['טורבו שוקולד', 'Chocolate'],
+    ['טורבו וניל',   'Vanilla'],
+    ['טורבו מנגו',   'Mango'],
+    ['טורבו פיסטוק', 'Pistachio'],
+    ['דרים קייק',    'Dream Cake'],
+  ];
+  const _toFlavor = prod => {
+    for (const [k,v] of _flavorMap) { if (prod.includes(k)) return v; }
+    return prod;
+  };
+  const _flavorOrder = ['Chocolate', 'Vanilla', 'Mango', 'Pistachio', 'Dream Cake'];
+
+  // Aggregate weeklyDetail → {flavor → {network → {boxes,units,revenue}}}
+  const _wdByFlavor = {};
+  weeklyDetail.forEach(r => {
+    const fl  = _toFlavor(r.product);
+    const net = r.network;
+    if (!_wdByFlavor[fl]) _wdByFlavor[fl] = {};
+    if (!_wdByFlavor[fl][net]) _wdByFlavor[fl][net] = {boxes:0, units:0, revenue:0};
+    _wdByFlavor[fl][net].boxes   += r.boxes;
+    _wdByFlavor[fl][net].units   += r.units;
+    _wdByFlavor[fl][net].revenue += r.revenue;
+  });
+
+  const _wdRows = [];
+  _flavorOrder.forEach(fl => {
+    if (!_wdByFlavor[fl]) return;
+    const nets = Object.entries(_wdByFlavor[fl]).sort((a,b) => b[1].units - a[1].units);
+    let flU = 0, flR = 0;
+    nets.forEach(([net, d]) => {
+      _wdRows.push([str(weeklyDetailLabel), str(fl), str(net), num(d.boxes), num(d.units), {v:d.revenue,t:'n',z:'#,##0.00'}]);
+      flU += d.units; flR += d.revenue;
+    });
+    _wdRows.push([null, str(`  ${fl} — Subtotal`), null, null, num(flU), {v:flR,t:'n',z:'#,##0.00'}]);
+    _wdRows.push([]);
+  });
+  const _wdGrandU = weeklyDetail.reduce((s,r)=>s+r.units,0);
+  const _wdGrandR = weeklyDetail.reduce((s,r)=>s+r.revenue,0);
+  _wdRows.push([str('GRAND TOTAL'), null, null, null, num(_wdGrandU), {v:_wdGrandR,t:'n',z:'#,##0.00'}]);
+
+  const ws4b = makeWS([
+    [`WEEKLY DETAIL — BY FLAVOR × CUSTOMER  ·  ${weeklyDetailLabel}  (Icedreams only)`],
+    [`Aggregated to network level  ·  Gross deliveries only`],
+    [],
+    ['Week', 'Flavor', 'Customer Network', 'Boxes', 'Units', 'Revenue (₪)'],
+    ..._wdRows,
+  ], [18, 14, 26, 8, 10, 14]);
+  XLSX.utils.book_append_sheet(wb, ws4b, 'Weekly Detail');
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Sheet 5: Product Mix (was Sheet 4)
   // ══════════════════════════════════════════════════════════════════════════
   const PKEYS = ['chocolate','vanilla','mango','pistachio','dream_cake'];
   const pmRows = customers.filter(c=>productMix[c.id]).map(c=>{
