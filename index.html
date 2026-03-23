@@ -525,7 +525,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 23/03/2026 11:06</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 23/03/2026 11:46</div>
   </div>
 </nav>
 
@@ -3191,7 +3191,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         <option value="New">New</option>
       </select>
       <span class="sp-count" id="sp-showing">-</span>
-      <button class="sp-export-btn" onclick="spExport()">&#8595; Export Excel</button>
+      <a class="sp-export-btn" href="raito_salepoints_deep_dive.xlsx" download>&#8595; Export Excel</a>
     </div>
     <div class="sp-body">
       <table class="sp-tbl" id="sp-detail-tbl">
@@ -3340,34 +3340,6 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
       return true;
     });
   }
-
-  // ── Export current detail view to CSV (opens as Excel) ──
-  window.spExport = function() {
-    if (!currentCustomer) return;
-    var rows = getFiltered();
-    var bom = '﻿';
-    var headers = ['#','Sale Point','Dec','Jan','Feb','Mar','Total','Months Active','Trend %','Status','Chocolate','Vanilla','Mango','Pistachio','Dream Cake'];
-    var lines = [headers.join(',')];
-    rows.forEach(function(s, i) {
-      var trend = s.trend !== null ? s.trend : '';
-      var cells = [
-        i+1,
-        '"' + s.name.replace(/"/g,'""') + '"',
-        s.dec, s.jan, s.feb, s.mar, s.total,
-        s.months_active, trend,
-        '"' + s.status + '"',
-        s.choc, s.van, s.mango, s.pist, s.dc
-      ];
-      lines.push(cells.join(','));
-    });
-    var csv = bom + lines.join('\r\n');
-    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    var fname = currentCustomer.name.replace(/[^א-תa-zA-Z0-9 ]/g,'_').trim() + '_sale_points.csv';
-    a.href = url; a.download = fname; a.click();
-    URL.revokeObjectURL(url);
-  };
 
   // ── Helpers ──
   function fmtN(n) { return n == null || n === 0 ? '0' : Number(n).toLocaleString('en-US', {maximumFractionDigits:0}); }
