@@ -81,6 +81,7 @@ body {
   font-weight:600; font-size:12px; transition:all 0.2s;
   display:inline-flex; align-items:center; gap:6px;
   box-shadow:var(--shadow-sm); white-space:nowrap;
+  position:fixed; top:16px; right:24px; z-index:100;
 }
 .tab-export-btn:hover { background:var(--surface); border-color:var(--primary); color:var(--primary); }
 .tab-export-btn svg { flex-shrink:0; }
@@ -581,7 +582,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   </ul>
 
   <div class="sidebar-footer">
-    <div style="text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 19:03</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 19:27</div>
   </div>
 </nav>
 
@@ -603,6 +604,11 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 <!-- Main Content -->
 <div class="main-content">
 
+<button class="tab-export-btn" id="global-export-btn" onclick="showExportModal()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  Export Excel
+</button>
+
 <!-- Business Overview Tab -->
 <div id="tab-bo" class="tab-content active">
   <div class="fbar" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px"><span>Year</span> <div class="filter-group"><button class="fbtn year-btn" onclick="boSetYear('all')">All Years</button>
@@ -616,7 +622,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 </div><span style="margin-left:8px">Brand</span> <div class="filter-group"><button class="fbtn brand-btn fbtn-active" onclick="boSetBrand('ab')">All Brands</button>
 <button class="fbtn brand-btn" onclick="boSetBrand('turbo')">Turbo</button>
 <button class="fbtn brand-btn" onclick="boSetBrand('danis')">Dani's</button>
-</div><div style="margin-left:auto"><button class="tab-export-btn" onclick="showExportModal('bo')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Excel</button></div></div>
+</div></div>
   <div class="ctr">
     <div class="month-section" id="sec-y2025-ab" style="display:none">
 <div class="kpis" style="grid-template-columns:repeat(5,1fr)">
@@ -2466,10 +2472,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <span class="badge green">● Sales Data Loaded</span>
       <span class="badge amber" id="badge-week">Mar = W12 partial</span>
     </div>
-    <button class="tab-export-btn" onclick="showExportModal('cc')" title="Export current view to Excel">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Export Excel
-    </button>
+    
   </div>
 </div>
 
@@ -3283,7 +3286,6 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div id="sp-summary">
     <div class="sp-topbar">
       <div><h2>Sale Points</h2><p>Click a customer to see all sale points</p></div>
-      <a class="tab-export-btn" href="#" onclick="event.preventDefault();showExportModal('sp')">&#8595; Export Excel</a>
       <div class="sp-kpis">
         <div class="sp-kpi"><span class="sp-kpi-n" id="sp-k-cust">-</span><span class="sp-kpi-l">Customers</span></div>
         <div class="sp-kpi"><span class="sp-kpi-n" id="sp-k-sp">-</span><span class="sp-kpi-l">Sale Points</span></div>
@@ -3336,7 +3338,6 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         <option value="New">New</option>
       </select>
       <span class="sp-count" id="sp-showing">-</span>
-      <a class="tab-export-btn" href="#" onclick="event.preventDefault();showExportModal('sp')">&#8595; Export Excel</a>
     </div>
     <div class="sp-body">
       <table class="sp-tbl" id="sp-detail-tbl">
@@ -3849,10 +3850,6 @@ window.__SP_DATA__ = {"customers": [{"name": "Private Market", "distributor": "M
     <p>Raito &middot; Products, Customers, Pricing &amp; Logistics</p>
   </div>
   <div class="md-topbar-actions">
-    <button class="tab-export-btn" onclick="showExportModal('md')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Export Excel
-    </button>
     <button class="md-btn md-btn-secondary" onclick="mdSave()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Save to Excel
@@ -4690,13 +4687,6 @@ function switchTab(tabId) {
 // ── Export Modal Logic ──────────────────────────────────────────────────────
 var _exportTab = '';
 
-function _getActiveTabName() {
-  var a = document.querySelector('.sidebar-nav a.active');
-  return a ? a.textContent.trim() : '';
-}
-
-var _brandSection = [['All Brands','all',true],['Turbo','turbo',true],["Dani's Dream Cake",'danis',true]];
-
 function showExportModal(tab) {
   var name = tab || '';
   if (!name) {
@@ -4714,24 +4704,29 @@ function showExportModal(tab) {
   var title = document.getElementById('export-modal-title');
   body.innerHTML = '';
 
+  // Brand radio (shown first for BO, CC, SP — not MD)
+  var brandHtml = (name !== 'md') ? _emcBrandRadio() : '';
+
   if (name === 'bo') {
     title.textContent = 'Export Business Overview';
     var sheets = [['Overview','overview',true],['Detailed Sales','detailed',true],['Icedream Customers','ice_cust',true],["Ma'ayan Chains",'may_chains',true],['Inventory','inventory',true]];
-    body.innerHTML = _emcSection('Sheets', sheets, 'bos')
-      + _emcSection('Months', _boD.overview.map(function(r){ return [r.month, r.month, true]; }), 'bom')
-      + _emcSection('Brand', _brandSection, 'bob');
+    body.innerHTML = brandHtml
+      + _emcSection('Sheets', sheets, 'bos')
+      + _emcSection('Months', _boD.overview.map(function(r){ return [r.month, r.month, true]; }), 'bom');
   } else if (name === 'cc') {
     title.textContent = 'Export Customer Performance';
     var ccSheets = [['Summary','summary',true],['Customer Performance','cp',true],['Weekly Sales Trend','wst',true],['Weekly Detail','wd',true],['Product Mix','pm',true],['Inactive','inactive',true]];
     var ccCusts = (typeof customers!=='undefined') ? customers.map(function(c){ return [c.name, c.name, true]; }) : [];
-    body.innerHTML = _emcSection('Sheets', ccSheets, 'ccs')
-      + _emcSection('Customers', ccCusts, 'ccc')
-      + _emcSection('Brand', _brandSection, 'ccb');
+    body.innerHTML = brandHtml
+      + _emcSection('Sheets', ccSheets, 'ccs')
+      + _emcSection('Customers', ccCusts, 'ccc');
   } else if (name === 'sp') {
     title.textContent = 'Export Sale Points';
     var spCusts = (typeof window.__SP_DATA__!=='undefined') ? window.__SP_DATA__.customers.map(function(c){ return [c.name, c.name, true]; }) : [];
-    body.innerHTML = _emcSection('Customers', spCusts, 'spc')
-      + _emcSection('Brand', _brandSection, 'spb');
+    var spDists = [['All Distributors','all',true],['Icedream','Icedream',false],["Ma'ayan","Ma'ayan",false],['Biscotti','Biscotti',false]];
+    body.innerHTML = brandHtml
+      + _emcDistRadio(spDists)
+      + _emcSection('Customers', spCusts, 'spc');
   } else if (name === 'md') {
     title.textContent = 'Export Master Data';
     var mdSheets = [['Brands','brands',true],['Products','products',true],['Manufacturers','manufacturers',true],['Distributors','distributors',true],['Customers','customers',true],['Logistics','logistics',true],['Pricing','pricing',true]];
@@ -4748,6 +4743,38 @@ function closeExportModal() {
   document.getElementById('export-modal-overlay').classList.remove('active');
 }
 
+// Brand — single-select radio buttons (no Select All)
+function _emcBrandRadio() {
+  var brands = [['All Brands','all'],['Turbo','turbo'],["Dani's Dream Cake",'danis']];
+  var h = '<div class="export-modal-section"><div class="export-modal-section-title">Brand</div><div class="export-modal-checks">';
+  brands.forEach(function(b, i) {
+    h += '<label><input type="radio" name="emc-brand" value="' + b[1] + '"' + (i===0?' checked':'') + ' style="accent-color:var(--primary)">&nbsp;' + _emcEsc(b[0]) + '</label>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+// Distributor — single-select radio buttons (for SP)
+function _emcDistRadio(items) {
+  var h = '<div class="export-modal-section"><div class="export-modal-section-title">Distributor</div><div class="export-modal-checks">';
+  items.forEach(function(d, i) {
+    h += '<label><input type="radio" name="emc-dist" value="' + _emcEsc(d[1]) + '"' + (i===0?' checked':'') + ' style="accent-color:var(--primary)">&nbsp;' + _emcEsc(d[0]) + '</label>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+function _emcGetBrand() {
+  var r = document.querySelector('input[name="emc-brand"]:checked');
+  return r ? r.value : 'all';
+}
+
+function _emcGetDist() {
+  var r = document.querySelector('input[name="emc-dist"]:checked');
+  return r ? r.value : 'all';
+}
+
+// Checkbox section with Select All
 function _emcSection(label, items, prefix) {
   var h = '<div class="export-modal-section"><div class="export-modal-section-title">' + label + '</div><div class="export-modal-checks">';
   h += '<label class="emc-all"><input type="checkbox" checked onchange="_emcToggleAll(this,\'' + prefix + '\')">&nbsp;Select All</label>';
@@ -4771,12 +4798,13 @@ function _emcGetSelected(prefix) {
 }
 
 function runExport() {
+  var brand = [_emcGetBrand()];
   if (_exportTab === 'bo') {
-    boExportToExcel(_emcGetSelected('bos'), _emcGetSelected('bom'), _emcGetSelected('bob'));
+    boExportToExcel(_emcGetSelected('bos'), _emcGetSelected('bom'), brand);
   } else if (_exportTab === 'cc') {
-    ccExportToExcel(_emcGetSelected('ccs'), _emcGetSelected('ccc'), _emcGetSelected('ccb'));
+    ccExportToExcel(_emcGetSelected('ccs'), _emcGetSelected('ccc'), brand);
   } else if (_exportTab === 'sp') {
-    spExportToExcel(_emcGetSelected('spc'), _emcGetSelected('spb'));
+    spExportToExcel(_emcGetSelected('spc'), brand, _emcGetDist());
   } else if (_exportTab === 'md') {
     mdExportToExcel(_emcGetSelected('mds'));
   }
@@ -6274,11 +6302,31 @@ window.ccExportToExcel = function(selSheets, selCustomers, selBrands) {
   selSheets = selSheets || ['summary','cp','wst','wd','pm','inactive'];
   selCustomers = selCustomers || customers.map(c => c.name);
   selBrands = selBrands || ['all','turbo','danis'];
+  const _ccBrandAll = selBrands.indexOf('all') >= 0;
+  const _ccBrandTurbo = selBrands.indexOf('turbo') >= 0;
+  const _ccBrandDanis = selBrands.indexOf('danis') >= 0;
   const _ccCustFilter = c => {
     if (selCustomers.indexOf(c.name) < 0) return false;
-    if (selBrands.indexOf('all') >= 0) return true;
-    if (selBrands.indexOf('turbo') >= 0 && c.brands && c.brands.indexOf('turbo') >= 0) return true;
-    if (selBrands.indexOf('danis') >= 0 && c.brands && c.brands.indexOf('danis') >= 0) return true;
+    if (_ccBrandAll) return true;
+    if (_ccBrandTurbo && c.brands && c.brands.indexOf('turbo') >= 0) return true;
+    if (_ccBrandDanis && c.brands && c.brands.indexOf('danis') >= 0) return true;
+    return false;
+  };
+  // Product-level brand helpers
+  const _ccIsTurboFlavor = f => ['chocolate','vanilla','mango','pistachio'].indexOf(f) >= 0;
+  const _ccIsDanisFlavor = f => f === 'dream_cake';
+  const _ccFlavorIncluded = f => {
+    if (_ccBrandAll) return true;
+    if (_ccBrandTurbo && _ccIsTurboFlavor(f)) return true;
+    if (_ccBrandDanis && _ccIsDanisFlavor(f)) return true;
+    return false;
+  };
+  const _ccIsTurboProduct = p => p && (p.includes('טורבו') || p.includes('Turbo') || p.includes('Chocolate') || p.includes('Vanilla') || p.includes('Mango') || p.includes('Pistachio'));
+  const _ccIsDanisProduct = p => p && (p.includes('דרים קייק') || p.includes('Dream Cake'));
+  const _ccProductIncluded = p => {
+    if (_ccBrandAll) return true;
+    if (_ccBrandTurbo && _ccIsTurboProduct(p)) return true;
+    if (_ccBrandDanis && _ccIsDanisProduct(p)) return true;
     return false;
   };
 
@@ -6430,7 +6478,7 @@ window.ccExportToExcel = function(selSheets, selCustomers, selBrands) {
   // ── Breakdown by customer & flavor from weeklyDetail ────────────────────
   const _detNetOrder = [];
   const _detNetMap = {};
-  weeklyDetail.forEach(r => {
+  weeklyDetail.filter(r => _ccProductIncluded(r.product)).forEach(r => {
     if (!_detNetMap[r.network]) { _detNetMap[r.network] = {}; _detNetOrder.push(r.network); }
     if (!_detNetMap[r.network][r.account]) _detNetMap[r.network][r.account] = [];
     _detNetMap[r.network][r.account].push(r);
@@ -6499,7 +6547,9 @@ window.ccExportToExcel = function(selSheets, selCustomers, selBrands) {
     for (const [k,v] of _flavorMap) { if (prod.includes(k)) return v; }
     return prod;
   };
-  const _flavorOrder = ['Chocolate', 'Vanilla', 'Mango', 'Pistachio', 'Dream Cake'];
+  const _flavorOrderAll = ['Chocolate', 'Vanilla', 'Mango', 'Pistachio', 'Dream Cake'];
+  const _flavorToBrand = {'Chocolate':'turbo','Vanilla':'turbo','Mango':'turbo','Pistachio':'turbo','Dream Cake':'danis'};
+  const _flavorOrder = _flavorOrderAll.filter(f => _ccBrandAll || (_ccBrandTurbo && _flavorToBrand[f]==='turbo') || (_ccBrandDanis && _flavorToBrand[f]==='danis'));
 
   // Build Weekly Detail sheet from last 4 entries of weeklyDetailHistory
   // Shows ALL distributors (Icedream + Ma'ayan). Grouped by week → distributor → flavor → network.
@@ -6561,20 +6611,22 @@ window.ccExportToExcel = function(selSheets, selCustomers, selBrands) {
   // Sheet 5: Product Mix (was Sheet 4)
   // ══════════════════════════════════════════════════════════════════════════
   const PKEYS = ['chocolate','vanilla','mango','pistachio','dream_cake'];
+  const _pmKeys = PKEYS.filter(_ccFlavorIncluded);
+  const _pmLabels = {'chocolate':'Chocolate','vanilla':'Vanilla','mango':'Mango','pistachio':'Pistachio','dream_cake':'Dream Cake'};
   const pmRows = customers.filter(c=>productMix[c.id]&&_ccCustFilter(c)).map(c=>{
     const mx=productMix[c.id];
-    const vals=PKEYS.map(k=>mx[k]!=null?mx[k]:null);
-    const tot=PKEYS.reduce((s,k)=>s+(mx[k]||0),0);
-    const cv=(mx.chocolate||0)+(mx.vanilla||0);
+    const vals=_pmKeys.map(k=>mx[k]!=null?mx[k]:null);
+    const tot=_pmKeys.reduce((s,k)=>s+(mx[k]||0),0);
+    const cv=(_ccFlavorIncluded('chocolate')?(mx.chocolate||0):0)+(_ccFlavorIncluded('vanilla')?(mx.vanilla||0):0);
     const _dn={'מעיין נציגויות':"Ma'ayan",'אייסדרים':'Icedream','ביסקוטי':'Biscotti'}; return [c.name,(_dn[c.distributor]||c.distributor),...vals,num(tot),pct(tot>0?cv/tot:null)];
   });
-  const pmGT=PKEYS.map(k=>customers.filter(_ccCustFilter).reduce((s,c)=>s+((productMix[c.id]||{})[k]||0),0));
+  const pmGT=_pmKeys.map(k=>customers.filter(_ccCustFilter).reduce((s,c)=>s+((productMix[c.id]||{})[k]||0),0));
   const pmGrand=pmGT.reduce((s,v)=>s+v,0);
-  const pmGCV=customers.filter(_ccCustFilter).reduce((s,c)=>{const mx=productMix[c.id]||{};return s+(mx.chocolate||0)+(mx.vanilla||0);},0);
+  const pmGCV=customers.filter(_ccCustFilter).reduce((s,c)=>{const mx=productMix[c.id]||{};return s+(_ccFlavorIncluded('chocolate')?(mx.chocolate||0):0)+(_ccFlavorIncluded('vanilla')?(mx.vanilla||0):0);},0);
   const ws4=makeWS([
     ['PRODUCT MIX PER CUSTOMER — Total Units (All Months Combined)'],
     [],
-    ['Customer','Distributor','Chocolate','Vanilla','Mango','Pistachio','Dream Cake','Total','% Choc+Van'],
+    ['Customer','Distributor',..._pmKeys.map(k=>_pmLabels[k]),'Total','% Choc+Van'],
     ...pmRows,
     ['TOTAL',null,...pmGT.map(num),num(pmGrand),pct(pmGrand>0?pmGCV/pmGrand:null)],
   ],[20,22,10,10,10,10,11,10,11]);
@@ -6744,11 +6796,12 @@ renderWeeklyChart = function() {
 // ══════════════════════════════════════════════════════════════════════════════
 // SALE POINTS EXPORT FUNCTION (dynamic, SheetJS-based)
 // ══════════════════════════════════════════════════════════════════════════════
-function spExportToExcel(selCustomers, selBrands) {
+function spExportToExcel(selCustomers, selBrands, selDist) {
   if(typeof XLSX==='undefined'){alert('SheetJS library not loaded.');return;}
   if(!window.__SP_DATA__){alert('No sale points data.');return;}
   selCustomers = selCustomers || window.__SP_DATA__.customers.map(function(c){return c.name;});
   selBrands = selBrands || ['all','turbo','danis'];
+  selDist = selDist || 'all';
   var _spIncAll = selBrands.indexOf('all')>=0;
   var _spTurbo = selBrands.indexOf('turbo')>=0;
   var _spDanis = selBrands.indexOf('danis')>=0;
@@ -6774,7 +6827,11 @@ function spExportToExcel(selCustomers, selBrands) {
   function tc(v,t,z){var c={v:v,t:t||'s'};if(z)c.z=z;return c;}
   function n(v,z){return tc(v,'n',z||nf);}
 
-  var custs = window.__SP_DATA__.customers.filter(function(c){return selCustomers.indexOf(c.name)>=0;});
+  var custs = window.__SP_DATA__.customers.filter(function(c){
+    if(selCustomers.indexOf(c.name)<0) return false;
+    if(selDist!=='all' && c.distributor!==selDist) return false;
+    return true;
+  });
 
   // Sheet 1: Summary
   var s1=[[tc('SALE POINTS DEEP DIVE — Summary')],[],
