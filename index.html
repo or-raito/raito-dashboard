@@ -5866,9 +5866,8 @@ function renderWeeklyChart() {
   const fmtAx = v => isRev
     ? (v >= 1000000 ? '₪'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '₪'+Math.round(v/1000)+'K' : '₪'+v)
     : (v >= 1000 ? Math.round(v/1000)+'K' : String(v));
-  const fmtTip = v => isRev
-    ? '₪'+Math.round(v).toLocaleString('en-US')
-    : Math.round(v).toLocaleString('en-US')+' units';
+  const _comma = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const fmtTip = v => isRev ? '₪'+_comma(v) : _comma(v)+' units';
 
   const datasets = _mkWeeklyDatasets(mode);
   _updateWeeklyLegend(dk);
