@@ -22,9 +22,6 @@
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body {
-  height:100%; overflow:hidden;
-}
 body {
   font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
   background:var(--bg); color:var(--text); direction:ltr;
@@ -33,7 +30,7 @@ body {
 
 /* ── App Layout: Sidebar + Main ── */
 .app-layout {
-  display:flex; height:100%;
+  display:flex; min-height:100vh;
 }
 
 /* ── Left Sidebar ── */
@@ -78,16 +75,15 @@ body {
   margin-top:auto; padding:16px 20px; border-top:1px solid var(--border-light);
   font-size:11px; color:var(--text-muted);
 }
-.tab-export-btn {
-  background:var(--card); color:var(--text); border:1px solid var(--border);
-  padding:8px 16px; border-radius:10px; cursor:pointer;
-  font-weight:600; font-size:12px; transition:all 0.2s;
-  display:inline-flex; align-items:center; gap:6px;
-  box-shadow:var(--shadow-sm); white-space:nowrap;
-  position:fixed; top:16px; right:24px; z-index:100;
+.sidebar-export-btn {
+  width:100%; background:var(--primary); color:#fff; border:none;
+  padding:10px 16px; border-radius:10px; cursor:pointer;
+  font-weight:600; font-size:12px; transition:background 0.2s;
+  display:flex; align-items:center; justify-content:center; gap:7px;
+  box-shadow:0 2px 8px rgba(99,102,241,0.3);
 }
-.tab-export-btn:hover { background:var(--surface); border-color:var(--primary); color:var(--primary); }
-.tab-export-btn svg { flex-shrink:0; }
+.sidebar-export-btn:hover { background:#4f46e5; }
+.sidebar-export-btn svg { flex-shrink:0; }
 
 /* ── Export Modal ── */
 .export-modal-overlay {
@@ -150,8 +146,8 @@ body {
 
 /* ── Main Content Area ── */
 .main-content {
-  flex:1; margin-left:240px; height:100%;
-  max-width:calc(100vw - 240px); overflow-y:auto; overflow-x:hidden; box-sizing:border-box;
+  flex:1; margin-left:240px; min-height:100vh;
+  max-width:calc(100vw - 240px); overflow-x:hidden; box-sizing:border-box;
 }
 
 /* ── Tab Content Container ── */
@@ -548,12 +544,6 @@ function checkPwd(){
 if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-gate').style.display='none';}
 </script>
 
-<!-- Global Export Button — direct child of body so position:fixed is always relative to viewport -->
-<button class="tab-export-btn" id="global-export-btn" onclick="showExportModal()">
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-  Export Excel
-</button>
-
 <!-- Export Modal Overlay -->
 <div class="export-modal-overlay" id="export-modal-overlay" onclick="if(event.target===this)closeExportModal()">
   <div class="export-modal">
@@ -606,7 +596,11 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   </ul>
 
   <div class="sidebar-footer">
-    <div style="text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 19:48</div>
+    <button class="sidebar-export-btn" onclick="showExportModal()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export Excel
+    </button>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 24/03/2026 20:02</div>
   </div>
 </nav>
 
