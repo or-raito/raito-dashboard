@@ -2542,7 +2542,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
     <div class="ph">
       <div>
         <div class="pt">Weekly Sales Trend — Icedream · Ma'ayan · Biscotti</div>
-        <div class="ps" id="chart-subtitle">Weekly sales — Icedream / Ma'ayan / Biscotti — Rolling 10-week window<span id="chart-subtitle-info" style="display:inline-block;margin-left:6px;cursor:pointer;position:relative;color:#5D5FEF;font-size:12px;vertical-align:middle" title="28/12–22/3 2026 · Each point = week start (Sunday) · Icedream W1–W12 · Ma’ayan W6–W11 · Biscotti W12–W13 · Rolling 10-week window">ⓘ</span></div>
+        <div class="ps" id="chart-subtitle">Weekly sales — Icedream / Ma'ayan / Biscotti — Rolling 10-week window<span id="chart-subtitle-info" style="display:inline-block;margin-left:6px;cursor:pointer;position:relative;color:#5D5FEF;font-size:12px;vertical-align:middle" title="28/12–15/3 2026 · Each point = week start (Sunday) · Icedream W1–W12 · Ma’ayan W6–W11 · Biscotti W12 · Rolling 10-week window">ⓘ</span></div>
       </div>
       <div class="tab-grp">
         <button class="tab on" id="wb-rev" onclick="setWeeklyMode('rev')">Revenue ₪</button>
@@ -5643,7 +5643,7 @@ function closeDrawer(){
 //   1 = "ינ'26"  (Jan 2026 — monthly total, displayed as dot)
 //   2–10 = "ש'1"–"ש'9"  (weekly, 2026)
 // Source: icedream_weekly_sales.xls  +  CP tab monthly totals  +  maay_feb_full.xlsx
-const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3","22/3"];
+const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3"];
 
 // ── Inactive customers: dynamic period config ─────────────────────────────
 // DATA_LAST_WEEK auto-derived from weeklyXLabels length — update by adding labels above
@@ -5686,14 +5686,14 @@ const _maayMonUnits = { dec: 61775,   jan: 30088   };
 // Danis revenue validated exactly. Yingo W2 validated by user.
 // W10 (1/3/2026): Yango Deli 445u/₪13788, Domino\'s Pizza 164u/₪1869, Naomi\'s Farm 116u/₪6173, וולט -30u return (excluded from gross)
 // Combined (Turbo + Danis)  — W11 source: icedream_15_3 | W12 source: icedream_mar_w12.xlsx (19/3/2026) | W13 pending
-const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979, null];
-const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067, null];
+const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979];
+const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067];
 // Turbo (ice cream) only
-const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872, null];
-const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182, null];
+const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872];
+const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182];
 // Danis (dream cake) only — validated exact match all weeks
-const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106, null];
-const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885, null];
+const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106];
+const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885];
 // Returns tracked separately
 const _iceWkRetRev   = [0, 8278, 1309, 2392, 0, 233, 1890, 1925, 0, 1125, null, 0, null];
 const _iceWkRetUnits = [0, 117, 51, 204, 0, 7, 114, 33, 0, 30, null, 0, null];
@@ -5707,8 +5707,8 @@ const _maayWkUnits = { 6: 9812,   7: 7700,   8: 17399,  9: 8866,   10: 7204,  11
 // Dream Cake (dream_cake_2) only. Sale price ₪80/unit, 0% commission.
 // W12 (18/3–21/3) = Biscotti "שבוע 1": 101 units × ₪80 = ₪8,080
 // W13 (22/3–27/3) = Biscotti "שבוע 2": 20 units × ₪80 = ₪1,600 (partial: only 22/3 data)
-const _biscWkRev   = { 12: 8080, 13: 1600 };
-const _biscWkUnits = { 12: 101,  13: 20   };
+const _biscWkRev   = { 12: 8080 };
+const _biscWkUnits = { 12: 101 };
 
 // ── WEEKLY CHART ─────────────────────────────────────────────────────────────
 let _weeklyMode = 'rev';
@@ -5835,13 +5835,13 @@ function _updateWeeklyLegend(dk) {
   }
   if (dk === 'both') {
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>All Distributors (28/12–22/3)${brandTag} — W1–W5: Icedream · W6–W11: Icedream + Ma'ayan · W12+: Icedream + Biscotti</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>All Distributors (28/12–15/3)${brandTag} — W1–W5: Icedream · W6–W11: Icedream + Ma'ayan · W12+: Icedream + Biscotti</div>`;
     return;
   }
   if (dk === 'ice') {
     const suffix = S.brand === 'danis' ? ' · Dani\'s only (Ma\'ayan does not carry Dani\'s)' : brandTag;
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedream weekly (28/12–22/3)${suffix}</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedream weekly (28/12–15/3)${suffix}</div>`;
     return;
   }
   if (dk === 'maay') {
@@ -5851,7 +5851,7 @@ function _updateWeeklyLegend(dk) {
   }
   if (dk === 'bisc') {
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#f59e0b"></div>Biscotti weekly (18/3–22/3) · Dani's Dream Cake only · W12: 101 units · W13: 20 units (partial)</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#f59e0b"></div>Biscotti weekly (18/3–21/3) · Dani's Dream Cake only · W12: 101 units</div>`;
     return;
   }
 }
