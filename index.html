@@ -525,7 +525,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 10:45</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 10:59</div>
   </div>
 </nav>
 
@@ -3023,6 +3023,28 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
 #sp-app { font-family:'Inter',system-ui,sans-serif; color:var(--text); }
 
+/* Brand filter bar */
+#sp-brand-bar {
+  background:var(--card); border-bottom:1px solid var(--border-light);
+  padding:10px 32px; display:flex; align-items:center; gap:8px;
+  position:sticky; top:0; z-index:10;
+}
+.sp-brand-label {
+  font-size:11px; font-weight:600; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:0.5px; margin-right:4px;
+}
+.sp-brand-btn {
+  padding:5px 16px; border-radius:20px; font-size:12px; font-weight:600;
+  border:1.5px solid var(--border); background:transparent; color:var(--text-muted);
+  cursor:pointer; font-family:inherit; transition:all 0.15s;
+}
+.sp-brand-btn:hover { border-color:var(--primary); color:var(--primary); }
+.sp-brand-active {
+  border-color:var(--primary) !important;
+  background:var(--primary) !important;
+  color:#fff !important;
+}
+
 /* Topbar */
 .sp-topbar {
   background:var(--card); border-bottom:1px solid var(--border-light);
@@ -3135,6 +3157,15 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 }
 </style>
 <div id="sp-app">
+
+  <!-- Brand filter bar — persists across both views -->
+  <div id="sp-brand-bar">
+    <span class="sp-brand-label">Brand</span>
+    <button class="sp-brand-btn sp-brand-active" id="spb-all"   onclick="spSetBrand('all')">All Brands</button>
+    <button class="sp-brand-btn"                 id="spb-turbo" onclick="spSetBrand('turbo')">🍦 Turbo</button>
+    <button class="sp-brand-btn"                 id="spb-danis" onclick="spSetBrand('danis')">🎂 Dani's Dream Cake</button>
+  </div>
+
   <!-- Landing: Customer Summary -->
   <div id="sp-summary">
     <div class="sp-topbar">
@@ -3227,31 +3258,77 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
   var D = window.__SP_DATA__;
   var currentCustomer = null;
   var sortCol = -1, sortAsc = true;
+  var brandFilter = 'all';
+
+  // ── Brand helpers ──
+  function spMatchesBrand(s) {
+    if (brandFilter === 'all')   return true;
+    if (brandFilter === 'turbo') return (s.choc + s.van + s.mango + s.pist) > 0;
+    if (brandFilter === 'danis') return s.dc > 0;
+    return true;
+  }
+  function cHasBrand(c) {
+    if (brandFilter === 'all') return true;
+    return c.salepoints.some(spMatchesBrand);
+  }
+  function cBrandUnits(c) {
+    // Return brand-specific unit totals for the customer row
+    if (brandFilter === 'all') return { dec: c.dec, jan: c.jan, feb: c.feb, mar: c.mar, total: c.total_units, rev: c.total_revenue, sp: c.salepoint_count };
+    var dec=0, jan=0, feb=0, mar=0, total=0, rev=0, sp=0;
+    c.salepoints.forEach(function(s) {
+      if (!spMatchesBrand(s)) return;
+      dec += s.dec; jan += s.jan; feb += s.feb; mar += s.mar;
+      total += s.total; rev += s.rev; sp++;
+    });
+    return { dec: dec, jan: jan, feb: feb, mar: mar, total: total, rev: rev, sp: sp };
+  }
+
+  // ── Set brand filter ──
+  window.spSetBrand = function(b) {
+    brandFilter = b;
+    ['all','turbo','danis'].forEach(function(id) {
+      document.getElementById('spb-' + id).classList.toggle('sp-brand-active', id === b);
+    });
+    if (currentCustomer) {
+      renderDetailFiltered();
+    } else {
+      renderSummary();
+    }
+  };
 
   // ── Render Summary (landing page) ──
   function renderSummary() {
-    document.getElementById('sp-k-cust').textContent = D.customers.length;
-    document.getElementById('sp-k-sp').textContent = fmtN(D.total_salepoints);
-    document.getElementById('sp-k-units').textContent = fmtN(D.total_units);
-    document.getElementById('sp-k-rev').textContent = '₪' + fmtN(D.total_revenue);
+    var filtered = D.customers.filter(cHasBrand);
+    var totSP = 0, totUnits = 0, totRev = 0;
+    filtered.forEach(function(c) {
+      var bu = cBrandUnits(c);
+      totSP += bu.sp; totUnits += bu.total; totRev += bu.rev;
+    });
+    document.getElementById('sp-k-cust').textContent = filtered.length;
+    document.getElementById('sp-k-sp').textContent = fmtN(totSP);
+    document.getElementById('sp-k-units').textContent = fmtN(totUnits);
+    document.getElementById('sp-k-rev').textContent = '₪' + fmtN(totRev);
 
     var tb = document.getElementById('sp-summary-body');
     tb.innerHTML = '';
-    D.customers.forEach(function(c, i) {
+    filtered.forEach(function(c, i) {
+      var bu = cBrandUnits(c);
       var tr = document.createElement('tr');
       tr.className = 'sp-clickable';
-      tr.onclick = function() { spOpen(i); };
+      // Find original index for spOpen
+      var origIdx = D.customers.indexOf(c);
+      tr.onclick = function() { spOpen(origIdx); };
       tr.innerHTML =
         '<td>' + (i+1) + '</td>' +
         '<td class="sp-col-name">' + esc(c.name) + '</td>' +
         '<td><span class="sp-dist sp-dist-' + (c.distributor === "Icedream" ? 'ice' : 'may') + '">' + esc(c.distributor) + '</span></td>' +
-        '<td>' + c.salepoint_count + '</td>' +
-        '<td>' + fmtN(c.dec) + '</td>' +
-        '<td>' + fmtN(c.jan) + '</td>' +
-        '<td>' + fmtN(c.feb) + '</td>' +
-        '<td>' + fmtN(c.mar) + '</td>' +
-        '<td class="sp-bold">' + fmtN(c.total_units) + '</td>' +
-        '<td>₪' + fmtN(c.total_revenue) + '</td>';
+        '<td>' + bu.sp + '</td>' +
+        '<td>' + fmtN(bu.dec) + '</td>' +
+        '<td>' + fmtN(bu.jan) + '</td>' +
+        '<td>' + fmtN(bu.feb) + '</td>' +
+        '<td>' + fmtN(bu.mar) + '</td>' +
+        '<td class="sp-bold">' + fmtN(bu.total) + '</td>' +
+        '<td>₪' + fmtN(bu.rev) + '</td>';
       tb.appendChild(tr);
     });
   }
@@ -3263,17 +3340,27 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
     document.getElementById('sp-summary').style.display = 'none';
     document.getElementById('sp-detail').style.display = 'block';
     document.getElementById('sp-detail-title').textContent = currentCustomer.name;
-    document.getElementById('sp-detail-sub').textContent = currentCustomer.distributor + (currentCustomer.chain ? ' · ' + currentCustomer.chain : '') + ' · ' + currentCustomer.salepoint_count + ' sale points';
-    document.getElementById('sp-d-sp').textContent = currentCustomer.salepoint_count;
-    document.getElementById('sp-d-units').textContent = fmtN(currentCustomer.total_units);
-    document.getElementById('sp-d-rev').textContent = '₪' + fmtN(currentCustomer.total_revenue);
-    // Active = have both feb and mar > 0
-    var active = currentCustomer.salepoints.filter(function(s) { return s.feb > 0 && s.mar > 0; }).length;
-    document.getElementById('sp-d-active').textContent = active;
     document.getElementById('sp-search').value = '';
     document.getElementById('sp-status-filter').value = '';
-    renderDetail(currentCustomer.salepoints);
+    renderDetailFiltered();
   };
+
+  function renderDetailFiltered() {
+    var sps = currentCustomer.salepoints.filter(spMatchesBrand);
+    var spCount = sps.length;
+    var units = sps.reduce(function(s,x){return s+x.total;}, 0);
+    var rev   = sps.reduce(function(s,x){return s+x.rev;},   0);
+    var active = sps.filter(function(s){ return s.feb > 0 && s.mar > 0; }).length;
+    var brandLabel = brandFilter === 'all' ? '' : (brandFilter === 'turbo' ? ' · 🍦 Turbo' : ' · 🎂 Dani's');
+    document.getElementById('sp-detail-sub').textContent =
+      currentCustomer.distributor + (currentCustomer.chain ? ' · ' + currentCustomer.chain : '') +
+      ' · ' + spCount + ' sale points' + brandLabel;
+    document.getElementById('sp-d-sp').textContent = spCount;
+    document.getElementById('sp-d-units').textContent = fmtN(units);
+    document.getElementById('sp-d-rev').textContent = '₪' + fmtN(rev);
+    document.getElementById('sp-d-active').textContent = active;
+    renderDetail(getFiltered());
+  }
 
   // ── Back to summary ──
   window.spBack = function() {
@@ -3336,6 +3423,7 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
     var q = document.getElementById('sp-search').value.toLowerCase();
     var st = document.getElementById('sp-status-filter').value;
     return currentCustomer.salepoints.filter(function(s) {
+      if (!spMatchesBrand(s)) return false;
       if (q && s.name.toLowerCase().indexOf(q) < 0) return false;
       if (st && s.status !== st) return false;
       return true;
