@@ -3236,8 +3236,8 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 }
 .sp-tbl thead th {
   background:var(--surface); padding:10px 10px; text-align:center;
-  font-size:11px; font-weight:700; color:var(--text-muted);
-  text-transform:uppercase; letter-spacing:0.3px;
+  font-size:11px; font-weight:700; color:var(--text2);
+  text-transform:uppercase; letter-spacing:0.5px;
   border-bottom:2px solid var(--border); cursor:pointer; white-space:nowrap;
   user-select:none; position:sticky; top:0; z-index:1;
 }
@@ -3249,7 +3249,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 .sp-tbl tbody tr:hover { background:var(--surface2); }
 .sp-tbl tbody tr:last-child td { border-bottom:none; }
 
-.sp-col-name { text-align:left !important; min-width:200px; direction:rtl; }
+.sp-col-name { text-align:left !important; min-width:120px; direction:rtl; }
 .sp-bold { font-weight:700; }
 
 /* Clickable summary rows */
@@ -3317,7 +3317,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <table class="sp-tbl" id="sp-summary-tbl">
         <thead>
           <tr>
-            <th>#</th><th>Customer</th><th>Distributor</th><th>Sale Points</th>
+            <th>#</th><th class="sp-col-name">Customer</th><th class="sp-col-name">Distributor</th><th>Sale Points</th>
             <th>Dec</th><th>Jan</th><th>Feb</th><th>Mar</th>
             <th>Total Units</th><th>Total Revenue</th>
           </tr>
