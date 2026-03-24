@@ -157,7 +157,7 @@ body {
 
 /* ── Business Overview Tab Styles ── */
 #tab-bo .fbar {
-  background:var(--card); padding:16px 32px; border-bottom:1px solid var(--border-light);
+  background:var(--card); padding:16px 180px 16px 32px; border-bottom:1px solid var(--border-light);
   display:flex; gap:12px; align-items:center; flex-wrap:wrap;
 }
 #tab-bo .fbar span {
@@ -272,7 +272,7 @@ body {
   --radius:16px;
 }
 #tab-cc body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh}
-#tab-cc .header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+#tab-cc .header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 180px 14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:99}
 #tab-cc .header h1{font-size:17px;font-weight:700}
 #tab-cc .header h1 span{font-weight:400;color:var(--text2);font-size:13px;margin-left:8px}
 #tab-cc .badges{display:flex;gap:8px}
@@ -545,6 +545,27 @@ function checkPwd(){
 if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-gate').style.display='none';}
 </script>
 
+<!-- Global Export Button — direct child of body so position:fixed is always relative to viewport -->
+<button class="tab-export-btn" id="global-export-btn" onclick="showExportModal()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  Export Excel
+</button>
+
+<!-- Export Modal Overlay -->
+<div class="export-modal-overlay" id="export-modal-overlay" onclick="if(event.target===this)closeExportModal()">
+  <div class="export-modal">
+    <div class="export-modal-header">
+      <h3 id="export-modal-title">Export to Excel</h3>
+      <button class="export-modal-close" onclick="closeExportModal()">&times;</button>
+    </div>
+    <div class="export-modal-body" id="export-modal-body"></div>
+    <div class="export-modal-footer">
+      <button class="emc-cancel" onclick="closeExportModal()">Cancel</button>
+      <button class="emc-download" onclick="runExport()">Download</button>
+    </div>
+  </div>
+</div>
+
 <div class="app-layout">
 
 <!-- Left Sidebar -->
@@ -582,30 +603,9 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   </ul>
 
   <div class="sidebar-footer">
-    <div style="text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 19:32</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 19:38</div>
   </div>
 </nav>
-
-<!-- Export Modal Overlay -->
-<div class="export-modal-overlay" id="export-modal-overlay" onclick="if(event.target===this)closeExportModal()">
-  <div class="export-modal">
-    <div class="export-modal-header">
-      <h3 id="export-modal-title">Export to Excel</h3>
-      <button class="export-modal-close" onclick="closeExportModal()">&times;</button>
-    </div>
-    <div class="export-modal-body" id="export-modal-body"></div>
-    <div class="export-modal-footer">
-      <button class="emc-cancel" onclick="closeExportModal()">Cancel</button>
-      <button class="emc-download" onclick="runExport()">Download</button>
-    </div>
-  </div>
-</div>
-
-<!-- Global Export Button (outside main-content so position:fixed works reliably) -->
-<button class="tab-export-btn" id="global-export-btn" onclick="showExportModal()">
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-  Export Excel
-</button>
 
 <!-- Main Content -->
 <div class="main-content">
@@ -2679,7 +2679,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   
 <div style="padding:20px 28px;max-width:1400px;margin:0 auto">
     <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-right:160px">
         <div>
             <h2 style="font-size:20px;font-weight:800;color:#1A1D23;margin-bottom:4px">Agent Plan — Ma'ayan Private Market</h2>
             <p style="font-size:13px;color:#64748b">Field agent sales goals · 15/3/2026 — 31/5/2026 · Turbo Ice Cream</p>
