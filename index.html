@@ -407,9 +407,16 @@ body {
 
 /* Filter bar: match BO style */
 #tab-cc .filter-bar {
-  background:var(--surface); border-bottom:1px solid var(--border); padding:16px 32px;
-  display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+  background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px;
+  display:flex; flex-direction:column; gap:0;
   position:sticky; top:49px; z-index:99;
+}
+#tab-cc .fb-row {
+  display:flex; gap:10px; align-items:center; flex-wrap:nowrap; padding:10px 0;
+}
+#tab-cc .fb-row2 {
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  padding:8px 0; border-top:1px solid #f1f5f9;
 }
 #tab-cc .filter-bar label { font-size:11px; font-weight:700; color:var(--text2); white-space:nowrap; text-transform:uppercase; letter-spacing:0.8px; }
 #tab-cc .filter-bar select, #tab-cc .filter-bar input {
@@ -2482,40 +2489,46 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 <!-- Customer Performance Tab -->
 <div id="tab-cc" class="tab-content">
   <div class="filter-bar">
-  <div class="fgroup"><label>Customer</label>
-    <select id="f-cust" onchange="applyFilters()"><option value="all">All Customers</option></select></div>
-  <div class="fgroup"><label>Distributor</label>
-    <select id="f-dist" onchange="applyFilters()">
-      <option value="all">All</option>
-      <option value="אייסדרים">Icedream</option>
-      <option value="מעיין">Ma'ayan</option>
-      <option value="none">No Pricing Data</option>
-      <option value="ביסקוטי">Biscotti</option>
-    </select></div>
-  <div class="fgroup"><label>Status</label>
-    <select id="f-status" onchange="applyFilters()">
-      <option value="all">All</option>
-      <option value="active">Active</option>
-      <option value="negotiation">Negotiation</option>
-    </select></div>
-  <div class="fgroup"><label>Year</label><select id="f-year" onchange="ccSetYear()"><option value="all">All Years</option><option value="2025">2025</option><option value="2026" selected>2026</option></select></div>
-  <div class="fgroup"><label>Month</label>
-    <select id="f-month" onchange="applyFilters()">
-      <option value="mar" id="opt-mar">March 2026 (W12)</option>
-      <option value="feb">February 2026</option>
-      <option value="jan">January 2026</option>
-      <option value="dec">December 2025</option>
-      <option value="total" selected>All Months</option>
-    </select></div>
-  <div class="fgroup"><label>Brand</label>
-    <div class="tab-grp">
-      <button class="tab on" id="bb-all"   onclick="setBrand('all')">All Brands</button>
-      <button class="tab"    id="bb-turbo" onclick="setBrand('turbo')">Turbo</button>
-      <button class="tab"    id="bb-danis" onclick="setBrand('danis')">Dani's</button>
-    </div>
+  <!-- Row 1: data filters + reset -->
+  <div class="fb-row">
+    <div class="fgroup"><label>Customer</label>
+      <select id="f-cust" onchange="applyFilters()"><option value="all">All Customers</option></select></div>
+    <div class="fgroup"><label>Distributor</label>
+      <select id="f-dist" onchange="applyFilters()">
+        <option value="all">All</option>
+        <option value="אייסדרים">Icedream</option>
+        <option value="מעיין">Ma'ayan</option>
+        <option value="none">No Pricing Data</option>
+        <option value="ביסקוטי">Biscotti</option>
+      </select></div>
+    <div class="fgroup"><label>Status</label>
+      <select id="f-status" onchange="applyFilters()">
+        <option value="all">All</option>
+        <option value="active">Active</option>
+        <option value="negotiation">Negotiation</option>
+      </select></div>
+    <div class="fgroup"><label>Year</label><select id="f-year" onchange="ccSetYear()"><option value="all">All Years</option><option value="2025">2025</option><option value="2026" selected>2026</option></select></div>
+    <div class="fgroup"><label>Month</label>
+      <select id="f-month" onchange="applyFilters()">
+        <option value="mar" id="opt-mar">March 2026 (W12)</option>
+        <option value="feb">February 2026</option>
+        <option value="jan">January 2026</option>
+        <option value="dec">December 2025</option>
+        <option value="total" selected>All Months</option>
+      </select></div>
+    <button class="btn btn-secondary" style="margin-left:auto" onclick="resetFilters()">Reset</button>
   </div>
-  <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
-  <div class="chips" id="chips"></div>
+  <!-- Row 2: brand toggle + active filter chips -->
+  <div class="fb-row fb-row2">
+    <div class="fgroup"><label>Brand</label>
+      <div class="tab-grp">
+        <button class="tab on" id="bb-all"   onclick="setBrand('all')">All Brands</button>
+        <button class="tab"    id="bb-turbo" onclick="setBrand('turbo')">Turbo</button>
+        <button class="tab"    id="bb-danis" onclick="setBrand('danis')">Dani's</button>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
 </div>
 
 <div class="main">
