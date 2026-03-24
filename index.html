@@ -5924,12 +5924,12 @@ function renderWeeklyChart() {
             var val = ds.data[idx];
             if (val === null || val === undefined) return;
             var lbl = fmtTip(val);
-            var tw = c2.measureText(lbl).width + 8;
-            var th = 15;
             var lx = el.x;
             var ly = el.y - 10;
             c2.save();
             c2.font = '700 12px Inter,sans-serif';
+            var tw = c2.measureText(lbl).width + 10;
+            var th = 16;
             c2.textAlign = 'center';
             c2.textBaseline = 'bottom';
             /* dark pill background */
