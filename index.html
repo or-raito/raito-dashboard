@@ -2566,7 +2566,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
     </div>
     <div class="panel">
       <div class="ph">
-        <div><div class="pt">Portfolio Revenue Trend</div><div class="ps">Monthly VAT0 + units · Feb = Complete Month</div></div>
+        <div><div class="pt">Portfolio Revenue Trend</div><div class="ps">Monthly VAT0 + units · Feb = Complete · Mar = Partial (W12)</div></div>
         <div class="tab-grp">
           <button class="tab on" id="tb-r" onclick="setTrendMode('rev')">Revenue</button>
           <button class="tab"    id="tb-u" onclick="setTrendMode('units')">Units</button>
@@ -5453,10 +5453,13 @@ function renderPareto(){
   const bgColors=vals.map(x=>x.gm==null?'rgba(148,163,184,0.5)':x.gm>=50?'rgba(16,185,129,0.75)':x.gm>=40?'rgba(245,158,11,0.65)':'rgba(239,68,68,0.6)');
   const ctx=document.getElementById('c-pareto').getContext('2d');
   if(charts.pareto) charts.pareto.destroy();
+  const _isRev=S.paretoMode==='revenue';
+  const _fmtK=v=>v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':String(Math.round(v));
+  const _fmtBar=v=>(_isRev?'\u20aa':'')+_fmtK(v);
   charts.pareto=new Chart(ctx,{type:'bar',data:{labels:vals.map(v=>v.name),datasets:[{data:vals.map(v=>v.v),backgroundColor:bgColors,borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return (S.paretoMode==='revenue'?'NIS ':'')+N(c.raw);}}},
-    datalabels:{anchor:'end',align:'end',color:'#94a3b8',font:{size:9},formatter:function(v){return N(v);}}},
-    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false},suggestedMax:vals.length?vals[0].v*1.15:100}},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return (_isRev?'\u20aa':'')+N(c.raw);}}},
+    datalabels:{anchor:'end',align:'end',color:'#64748b',font:{size:10,weight:'600'},formatter:function(v){return _fmtBar(v);}}},
+    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return _fmtBar(v);}},grid:{display:false,drawBorder:false,drawTicks:false},suggestedMax:vals.length?vals[0].v*1.15:100}},
     onClick:function(_,els){if(els.length>0){const c=vals[els[0].index];S.selId=c.id;renderTable();openDrawer(customers.find(x=>x.id===c.id));}}}});
 }
 
@@ -5486,10 +5489,22 @@ function renderTrend(){
   const vals=pm.map(p=>isRev?p.revenue:p.units);
   const ctx=document.getElementById('c-trend').getContext('2d');
   if(charts.trend) charts.trend.destroy();
-  charts.trend=new Chart(ctx,{type:'line',data:{labels:pm.map(p=>p.month),datasets:[{data:vals,borderColor:'#5D5FEF',backgroundColor:'rgba(93,95,239,0.08)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#5D5FEF',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return N(c.raw);}}},
-    datalabels:{anchor:'end',align:'top',offset:6,color:'#64748b',font:{size:11,weight:'600'},formatter:function(v){return N(v);}}},
-    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return N(v);}},grid:{display:false,drawBorder:false,drawTicks:false}}}}});
+  const _tFmtK=v=>v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':String(Math.round(v));
+  const _tFmt=v=>(isRev?'\u20aa':'')+_tFmtK(v);
+  const lastIdx=vals.length-1;
+  const ptColors=vals.map((_,i)=>i===lastIdx?'#94a3b8':'#5D5FEF');
+  const ptBorderColors=vals.map((_,i)=>i===lastIdx?'#fff':'#fff');
+  const ptRadii=vals.map((_,i)=>i===lastIdx?6:5);
+  charts.trend=new Chart(ctx,{type:'line',data:{labels:pm.map(p=>p.month),datasets:[{data:vals,
+    borderColor:'#5D5FEF',backgroundColor:'rgba(93,95,239,0.08)',fill:true,tension:0.4,
+    pointRadius:ptRadii,pointBackgroundColor:ptColors,pointBorderColor:ptBorderColors,
+    pointBorderWidth:2,pointHoverRadius:7,
+    segment:{borderColor:ctx2=>ctx2.p1DataIndex===lastIdx?'#94a3b8':'#5D5FEF',borderDash:ctx2=>ctx2.p1DataIndex===lastIdx?[6,4]:[]}}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return _tFmt(c.raw);}}},
+    datalabels:{anchor:'end',align:'top',offset:6,color:function(c){return c.dataIndex===lastIdx?'#94a3b8':'#64748b';},font:{size:11,weight:'600'},
+      formatter:function(v,c){return (c.dataIndex===lastIdx?'partial · ':'')+_tFmt(v);}}},
+    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},
+      y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return _tFmt(v);}},grid:{display:false,drawBorder:false,drawTicks:false}}}}});
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
