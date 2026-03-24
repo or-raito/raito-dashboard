@@ -281,13 +281,13 @@ body {
 #tab-cc .btn-export{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);color:var(--green);padding:6px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}
 #tab-cc .btn-export:hover{background:rgba(34,197,94,0.22);border-color:var(--green)}
 #tab-cc .btn-export svg{flex-shrink:0}
-#tab-cc .filter-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-#tab-cc .fgroup{display:flex;align-items:center;gap:5px}
-#tab-cc .fgroup label{font-size:11px;color:var(--text2);white-space:nowrap}
-#tab-cc select,#tab-cc input[type=text]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 9px;border-radius:6px;font-size:12px;outline:none;cursor:pointer}
+#tab-cc .filter-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:99}
+#tab-cc .fgroup{display:flex;align-items:center;gap:6px}
+#tab-cc .fgroup label{font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap;text-transform:uppercase;letter-spacing:0.8px}
+#tab-cc select,#tab-cc input[type=text]{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:12px;font-weight:500;outline:none;cursor:pointer;font-family:inherit}
 #tab-cc select:focus,#tab-cc input:focus{border-color:var(--accent)}
-#tab-cc .btn{padding:5px 13px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;border:none}
-#tab-cc .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+#tab-cc .btn{padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600;border:none;font-family:inherit}
+#tab-cc .btn-secondary{background:var(--surface);color:var(--text2);border:1px solid var(--border)}
 #tab-cc .btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
 #tab-cc .chips{display:flex;gap:5px;flex-wrap:wrap}
 #tab-cc .chip{background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.35);color:var(--accent);padding:3px 9px;border-radius:20px;font-size:11px;display:flex;align-items:center;gap:5px}
@@ -405,21 +405,20 @@ body {
 #tab-cc .badge.green { background:rgba(16,185,129,0.06); border-color:rgba(16,185,129,0.25); color:#10b981; font-size:10px; }
 #tab-cc .badge.amber { background:rgba(245,158,11,0.06); border-color:rgba(245,158,11,0.25); color:#f59e0b; font-size:10px; }
 
-/* Filter bar: compact single row */
+/* Filter bar: match BO style */
 #tab-cc .filter-bar {
-  background:#fff; border-bottom:1px solid #f1f5f9; padding:10px 24px;
-  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  background:var(--surface); border-bottom:1px solid var(--border); padding:16px 32px;
+  display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+  position:sticky; top:0; z-index:99;
 }
-#tab-cc .filter-bar label { font-size:10px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.3px; }
+#tab-cc .filter-bar label { font-size:11px; font-weight:700; color:var(--text2); white-space:nowrap; text-transform:uppercase; letter-spacing:0.8px; }
 #tab-cc .filter-bar select, #tab-cc .filter-bar input {
-  background:#F8F9FB; border:1px solid #E2E8F0; border-radius:8px; color:#1e293b;
-  font-size:12px; padding:5px 10px; font-family:inherit;
+  background:var(--surface); border:1px solid var(--border); color:var(--text);
+  padding:6px 10px; border-radius:8px; font-size:12px; font-weight:500;
+  outline:none; cursor:pointer; font-family:inherit;
 }
 #tab-cc .fgroup { display:flex; align-items:center; gap:6px; }
-#tab-cc .tab-grp { display:flex; gap:2px; }
-#tab-cc .tab-grp .tab { font-size:11px; padding:4px 12px; border-radius:6px; border:1px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; }
-#tab-cc .tab-grp .tab.on { background:#5D5FEF; border-color:#5D5FEF; color:#fff; }
-#tab-cc .btn-secondary { font-size:11px; padding:5px 14px; border-radius:8px; border:1px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; }
+#tab-cc .btn-secondary { padding:6px 14px; border-radius:8px; font-size:12px; cursor:pointer; font-weight:600; border:none; font-family:inherit; background:var(--surface); color:var(--text2); border:1px solid var(--border); }
 
 /* Export button */
 #tab-cc .btn-export { background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); color:#10b981; border-radius:8px; font-size:12px; padding:6px 14px; }
@@ -600,7 +599,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 24/03/2026 20:02</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 24/03/2026 20:15</div>
   </div>
 </nav>
 
@@ -2461,214 +2460,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
 <!-- Customer Performance Tab -->
 <div id="tab-cc" class="tab-content">
-  <div class="header">
-  <h1>Trade &amp; Sales Dashboard <span>Customer-Centric · Dec '25 – Mar '26</span></h1>
-  <div style="display:flex;align-items:center;gap:10px">
-    <div class="badges">
-      <span class="badge">ISR</span>
-      <span class="badge">Ice Cream / Frozen</span>
-      <span class="badge green">● Sales Data Loaded</span>
-      <span class="badge amber" id="badge-week">Mar = W12 partial</span>
-    </div>
-    
-  </div>
-</div>
-
-<div class="filter-bar">
-  <div class="fgroup"><label>Customer</label>
-    <select id="f-cust" onchange="applyFilters()"><option value="all">All Customers</option></select></div>
-  <div class="fgroup"><label>Distributor</label>
-    <select id="f-dist" onchange="applyFilters()">
-      <option value="all">All</option>
-      <option value="אייסדרים">Icedream</option>
-      <option value="מעיין">Ma'ayan</option>
-      <option value="none">No Pricing Data</option>
-      <option value="ביסקוטי">Biscotti</option>
-    </select></div>
-  <div class="fgroup"><label>Status</label>
-    <select id="f-status" onchange="applyFilters()">
-      <option value="all">All</option>
-      <option value="active">Active</option>
-      <option value="negotiation">Negotiation</option>
-    </select></div>
-  <div class="fgroup"><label>Year</label><select id="f-year" onchange="ccSetYear()"><option value="all">All Years</option><option value="2025">2025</option><option value="2026" selected>2026</option></select></div>
-  <div class="fgroup"><label>Month</label>
-    <select id="f-month" onchange="applyFilters()">
-      <option value="mar" id="opt-mar">March 2026 (W12)</option>
-      <option value="feb">February 2026</option>
-      <option value="jan">January 2026</option>
-      <option value="dec">December 2025</option>
-      <option value="total" selected>All Months</option>
-    </select></div>
-  <div class="fgroup"><label>Brand</label>
-    <div class="tab-grp">
-      <button class="tab on" id="bb-all"   onclick="setBrand('all')">All Brands</button>
-      <button class="tab"    id="bb-turbo" onclick="setBrand('turbo')">Turbo</button>
-      <button class="tab"    id="bb-danis" onclick="setBrand('danis')">Dani's</button>
-    </div>
-  </div>
-  <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
-  <div class="chips" id="chips"></div>
-</div>
-
-<div class="main">
-
-  <div class="info-banner">
-    <span style="font-size:20px">✅</span>
-    <div><strong id="info-label">Sales data loaded — Dec '25, Jan '26, Feb '26, Mar '26 (W12) · November excluded</strong> &nbsp;·&nbsp;
-    20 customers · 3 distributors · Brand filter: <strong>Turbo</strong> (ice cream) + <strong>Dani's</strong> (dream cake) · Price DB: 24/3 &nbsp;·&nbsp; <strong>Last updated: 24/03/2026</strong></div>
-  </div>
-
   
-
-  <div class="kpi-grid" id="kpi-grid"></div>
-
-  <div class="weekly-panel">
-    <div class="ph">
-      <div>
-        <div class="pt">Weekly Sales Trend — Icedreams · Ma'ayan · Biscotti</div>
-        <div class="ps" id="chart-subtitle">28/12–22/3 2026 · Each point = week start (Sunday) · Icedreams W1–W13 · Ma'ayan W6–W11 · Biscotti W12–W13 · Rolling 10-week window</div>
-      </div>
-      <div class="tab-grp">
-        <button class="tab on" id="wb-rev" onclick="setWeeklyMode('rev')">Revenue ₪</button>
-        <button class="tab" id="wb-u" onclick="setWeeklyMode('units')">Units</button>
-      </div>
-    </div>
-    <div class="weekly-box"><canvas id="c-weekly"></canvas></div>
-    <div class="wlegend" id="wlegend"></div>
-  </div>
-
-  <div class="row2b">
-    <div class="panel">
-      <div class="ph">
-        <div><div class="pt">Customer Revenue Ranking — Pareto</div><div class="ps">Click bar → customer detail · color = Gross Margin RAG</div></div>
-        <div class="tab-grp">
-          <button class="tab on" id="pb-rev" onclick="setParetoMode('revenue')">Revenue</button>
-          <button class="tab"    id="pb-u"   onclick="setParetoMode('units')">Units</button>
-        </div>
-      </div>
-      <div class="chart-box"><canvas id="c-pareto"></canvas></div>
-    </div>
-    <div class="panel">
-      <div class="ph">
-        <div><div class="pt">Portfolio Revenue Trend</div><div class="ps">Monthly VAT0 + units · Feb = Complete Month</div></div>
-        <div class="tab-grp">
-          <button class="tab on" id="tb-r" onclick="setTrendMode('rev')">Revenue</button>
-          <button class="tab"    id="tb-u" onclick="setTrendMode('units')">Units</button>
-        </div>
-      </div>
-      <div class="chart-box"><canvas id="c-trend"></canvas></div>
-    </div>
-  </div>
-
-  <div class="row2b single">
-    <div class="panel">
-      <div class="ph"><div><div class="pt">Product Mix per Customer</div><div class="ps">Units share by SKU · all months combined</div></div></div>
-      <div class="chart-box"><canvas id="c-mix"></canvas></div>
-    </div>
-  </div>
-
-  <div class="tpanel">
-    <div class="ph">
-      <div><div class="pt">Customer Performance Table</div><div class="ps">Click row → customer detail</div></div>
-      <input class="tsearch" id="t-search" placeholder="Search customer…" oninput="renderTable()"/>
-    </div>
-    <table class="dt">
-      <thead><tr id="t-head">
-        <th onclick="sortBy('name')">Customer ↕</th>
-        <th onclick="sortBy('revActive')">Revenue ↕</th>
-        <th>VAT18%</th>
-        <th onclick="sortBy('share')">Share % ↕</th>
-        <th onclick="sortBy('grossMargin')">Gross % ↕</th>
-        <th onclick="sortBy('grossVal')">Gross ₪ ↕</th>
-        <th onclick="sortBy('opMargin')">Op % ↕</th>
-        <th onclick="sortBy('opVal')">Op ₪ ↕</th>
-        <th onclick="sortBy('unitsActive')">Units ↕</th>
-        <th onclick="sortBy('momGrowth')">MoM ↕</th>
-        <th onclick="sortBy('distributor')">Distributor ↕</th>
-        <th onclick="sortBy('status')">Status ↕</th>
-      </tr></thead>
-      <tbody id="t-body"></tbody>
-    </table>
-  </div>
-</div>
-
-  <!-- ── INACTIVE CUSTOMERS PANEL ────────────────────────────── -->
-  <div class="inactive-panel" id="inactive-panel">
-    <div class="ph">
-      <div>
-        <div class="pt">Inactive Customers — Ma'ayan + Icedream</div>
-        <div class="ps" id="inactive-subtitle">Accounts with no orders in the past 2 weeks</div>
-      </div>
-    </div>
-    <div class="inactive-chips">
-      <div class="ichip warn"><strong id="ic-total">—</strong> Total Inactive</div>
-      <div class="ichip"><strong id="ic-cat1">—</strong><span id="ic-cat1-label">No orders this month</span></div>
-      <div class="ichip"><strong id="ic-cat2">—</strong><span id="ic-cat2-label">Recently stopped</span></div>
-    </div>
-    <div class="ifilters">
-      <select id="if-idist" onchange="renderInactive()">
-        <option value="all">All Distributors</option>
-        <option value="מעיין">Ma'ayan</option>
-        <option value="אייסדרים">Icedream</option>
-      </select>
-      <select id="if-net" onchange="renderInactive()">
-        <option value="all">All Networks</option>
-        <option value="Private Market">Private Market</option>
-        <option value="Alonit">Alonit</option>
-        <option value="Paz Yellow">Paz Yellow</option>
-        <option value="Delek Menta">Delek Menta</option>
-        <option value="Sonol">Sonol</option>
-        <option value="Paz Super Yuda">Paz Super Yuda</option>
-        <option value="Good Pharm">Good Pharm</option>
-        <option value="Domino's Pizza">Domino's Pizza</option>
-        <option value="Noy HaSade">Noy HaSade</option>
-      </select>
-      <select id="if-cat" onchange="renderInactive()">
-        <option value="all">All Categories</option>
-        <option value="1" id="ifcat-opt1">No orders this month</option>
-        <option value="2" id="ifcat-opt2">Recently stopped</option>
-      </select>
-      <input id="if-search" placeholder="Search customer…" oninput="renderInactive()" style="min-width:200px"/>
-      <span id="if-count" style="font-size:11px;color:var(--text2);margin-left:4px"></span>
-    </div>
-    <table class="itable">
-      <thead><tr>
-        <th onclick="sortInactive('name')">Customer ↕</th>
-        <th onclick="sortInactive('net')">Network ↕</th>
-        <th onclick="sortInactive('dist')">Distributor ↕</th>
-        <th>Status</th>
-        <th onclick="sortInactive('last')">Last Order ↕</th>
-        <th onclick="sortInactive('dec')" style="text-align:right">Units 12/25 ↕</th>
-        <th onclick="sortInactive('jan')" style="text-align:right">Units 01/26 ↕</th>
-        <th onclick="sortInactive('feb')" style="text-align:right">Units 02/26 ↕</th>
-      </tr></thead>
-      <tbody id="i-body"></tbody>
-    </table>
-    <div class="ipager">
-      <button id="ip-prev" onclick="iPage(-1)" disabled>&#8249;</button>
-      <span id="ip-info"></span>
-      <button id="ip-next" onclick="iPage(1)">&#8250;</button>
-    </div>
-  </div>
-
-<div class="drawer" id="drawer">
-  <div class="dh">
-    <div class="dt-name" id="d-name">—</div>
-    <button class="dclose" onclick="closeDrawer()">✕ Close</button>
-  </div>
-  <div id="d-tag-row" style="margin-bottom:4px"></div>
-  <div class="dkpis" id="d-kpis"></div>
-  <div class="sec">Monthly Revenue (Dec – Feb 2026)</div>
-  <div class="dch"><canvas id="d-chart"></canvas></div>
-  <div class="sec" id="d-sku-sec">SKU Price List</div>
-  <table class="skut">
-    <thead><tr><th>Product</th><th>VAT0</th><th>VAT18%</th><th>Cost</th><th>Gross%</th><th>Op%</th><th>Dist%</th></tr></thead>
-    <tbody id="d-skus"></tbody>
-  </table>
-</div>
-
-
 </div>
 
 <!-- Agent Plan Tab -->
