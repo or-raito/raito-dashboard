@@ -148,7 +148,7 @@ body {
 /* ── Main Content Area ── */
 .main-content {
   flex:1; margin-left:240px; min-height:100vh;
-  max-width:calc(100vw - 240px); overflow-x:hidden; box-sizing:border-box;
+  max-width:calc(100vw - 240px); overflow-x:clip; box-sizing:border-box;
 }
 
 /* ── Tab Content Container ── */
@@ -177,7 +177,7 @@ body {
   background:var(--card); color:var(--text);
   box-shadow:0 1px 3px rgba(0,0,0,0.08);
 }
-#tab-bo .ctr { max-width:1440px; margin:0 auto; padding:24px; overflow-x:hidden; }
+#tab-bo .ctr { max-width:1440px; margin:0 auto; padding:24px; overflow-x:clip; }
 #tab-bo .kpis { display:grid; grid-template-columns:repeat(5,1fr) !important; gap:12px; margin-bottom:20px; }
 #tab-bo .kpi {
   background:var(--card) !important; border-radius:var(--radius) !important;
@@ -230,7 +230,7 @@ body {
 /* Make all content fit */
 #tab-bo .card.full { width:100% !important; max-width:100% !important; box-sizing:border-box !important; }
 #tab-bo .card.half { min-width:0 !important; flex:1; }
-#tab-bo .month-section { max-width:100%; overflow-x:hidden; }
+#tab-bo .month-section { max-width:100%; overflow-x:clip; }
 
 /* Badge overrides */
 #tab-bo .badge.disc { background:#fef2f2 !important; color:#ef4444 !important; border:1px solid #fecaca !important; font-size:10px !important; padding:1px 8px; border-radius:20px; }
@@ -603,7 +603,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   </ul>
 
   <div class="sidebar-footer">
-    <div style="text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 19:38</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 19:44</div>
   </div>
 </nav>
 
