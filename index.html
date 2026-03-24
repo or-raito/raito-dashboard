@@ -18,7 +18,7 @@
   --surface:#F1F5F9; --surface2:#f8fafc;
   --shadow:0 8px 30px rgba(0,0,0,0.04);
   --shadow-sm:0 1px 3px rgba(0,0,0,0.06);
-  --radius:24px; --radius-sm:12px; --radius-pill:12px;
+  --radius:16px; --radius-sm:10px; --radius-pill:10px;
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -156,7 +156,7 @@ body {
 
 /* ── Business Overview Tab Styles ── */
 #tab-bo .fbar {
-  background:var(--card); padding:16px 180px 16px 32px; border-bottom:1px solid var(--border-light);
+  background:var(--card); padding:16px 32px 16px 32px; border-bottom:1px solid var(--border-light);
   display:flex; gap:12px; align-items:center; flex-wrap:wrap;
 }
 #tab-bo .fbar span {
@@ -254,7 +254,6 @@ body {
 }
 .big-number { font-size:24px !important; font-weight:800 !important; letter-spacing:-0.5px; line-height:1.2; }
 .big-number-md { font-size:20px !important; font-weight:800 !important; letter-spacing:-0.3px; line-height:1.2; }
-.stat-label { font-size:11px !important; }
 .stat-label {
   font-size:10px; font-weight:600; color:var(--text-muted);
   text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;
@@ -265,10 +264,10 @@ body {
 
 *{box-sizing:border-box;margin:0;padding:0}
 #tab-cc{
-  --bg:#F8F9FB;--surface:#ffffff;--surface2:#F1F5F9;--border:#E2E8F0;
-  --text:#1A1D23;--text2:#64748B;--accent:#5D5FEF;--green:#22c55e;
+  /* --bg, --border, --text, --radius inherit from :root (same values) */
+  --surface:#ffffff;--surface2:#F1F5F9;
+  --text2:#64748B;--accent:#5D5FEF;--green:#22c55e;
   --amber:#f59e0b;--red:#ef4444;--purple:#a855f7;--orange:#f97316;
-  --radius:16px;
 }
 #tab-cc body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh}
 #tab-cc .header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 180px 14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:99}
@@ -362,7 +361,7 @@ body {
 #tab-cc ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
 
 /* Weekly chart */
-#tab-cc .weekly-panel{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,0.04) 20px;margin-bottom:0}
+#tab-cc .weekly-panel{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,0.04);margin-bottom:0}
 #tab-cc .weekly-box{position:relative;height:320px}
 #tab-cc .wlegend{display:flex;gap:18px;align-items:center;margin-top:10px;flex-wrap:wrap}
 #tab-cc .wleg-item{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text2)}
@@ -396,7 +395,8 @@ body {
 /* Header: clean, compact, no sticky */
 #tab-cc .header {
   background:#fff; border-bottom:1px solid #f1f5f9; padding:14px 24px;
-  display:flex; align-items:center; justify-content:space-between; position:relative; z-index:auto;
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:100;
 }
 #tab-cc .header h1 { font-size:16px; font-weight:700; color:#1e293b; }
 #tab-cc .header h1 span { font-size:12px; font-weight:400; color:#94a3b8; }
@@ -409,7 +409,7 @@ body {
 #tab-cc .filter-bar {
   background:var(--surface); border-bottom:1px solid var(--border); padding:16px 32px;
   display:flex; gap:12px; align-items:center; flex-wrap:wrap;
-  position:sticky; top:0; z-index:99;
+  position:sticky; top:49px; z-index:99;
 }
 #tab-cc .filter-bar label { font-size:11px; font-weight:700; color:var(--text2); white-space:nowrap; text-transform:uppercase; letter-spacing:0.8px; }
 #tab-cc .filter-bar select, #tab-cc .filter-bar input {
@@ -436,7 +436,7 @@ body {
 #tab-cc .main { padding:20px 24px; gap:16px; }
 #tab-cc .kpi-grid { gap:12px !important; display:grid !important; grid-template-columns:repeat(6,1fr) !important; }
 #tab-cc .kpi-card {
-  border-radius:16px !important; padding:18px 14px !important;
+  padding:18px 14px !important;
   border:1px solid #f1f5f9 !important; box-shadow:0 4px 16px rgba(0,0,0,0.03) !important;
   text-align:center !important;
   display:flex !important; flex-direction:column !important;
@@ -444,7 +444,7 @@ body {
   min-height:110px !important;
 }
 #tab-cc .kpi-label {
-  font-size:9px !important; font-weight:700 !important; letter-spacing:0.6px !important;
+  font-size:11px !important; font-weight:700 !important; letter-spacing:0.6px !important;
   margin-bottom:8px !important; color:#94a3b8 !important;
   text-transform:uppercase !important; text-align:center !important;
 }
@@ -459,7 +459,7 @@ body {
 
 /* Panels */
 #tab-cc .panel, #tab-cc .weekly-panel, #tab-cc .tpanel, #tab-cc .inactive-panel {
-  border-radius:16px !important; padding:20px !important;
+  padding:20px !important;
   border:1px solid #f1f5f9 !important; box-shadow:0 4px 16px rgba(0,0,0,0.03) !important;
   background:#fff !important;
 }
@@ -2507,8 +2507,8 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div class="weekly-panel">
     <div class="ph">
       <div>
-        <div class="pt">Weekly Sales Trend — Icedreams · Ma'ayan · Biscotti</div>
-        <div class="ps" id="chart-subtitle">28/12–22/3 2026 · Each point = week start (Sunday) · Icedreams W1–W13 · Ma'ayan W6–W11 · Biscotti W12–W13 · Rolling 10-week window</div>
+        <div class="pt">Weekly Sales Trend — Icedream · Ma'ayan · Biscotti</div>
+        <div class="ps" id="chart-subtitle">Weekly sales — Icedream / Ma'ayan / Biscotti — Rolling 10-week window<span id="chart-subtitle-info" style="display:inline-block;margin-left:6px;cursor:pointer;position:relative;color:#5D5FEF;font-size:12px;vertical-align:middle" title="28/12–22/3 2026 · Each point = week start (Sunday) · Icedream W1–W12 · Ma’ayan W6–W11 · Biscotti W12–W13 · Rolling 10-week window">ⓘ</span></div>
       </div>
       <div class="tab-grp">
         <button class="tab on" id="wb-rev" onclick="setWeeklyMode('rev')">Revenue ₪</button>
@@ -2657,7 +2657,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   
 <div style="padding:20px 28px;max-width:1400px;margin:0 auto">
     <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-right:160px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-right:0">
         <div>
             <h2 style="font-size:20px;font-weight:800;color:#1A1D23;margin-bottom:4px">Agent Plan — Ma'ayan Private Market</h2>
             <p style="font-size:13px;color:#64748b">Field agent sales goals · 15/3/2026 — 31/5/2026 · Turbo Ice Cream</p>
@@ -2683,7 +2683,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         <!-- Total Achieved -->
         <div style="background:#fff;border:1px solid #f1f5f9;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
             <div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Achieved</div>
-            <div style="font-size:22px;font-weight:800;color:#10b981;letter-spacing:-0.5px">₪0</div>
+            <div style="font-size:22px;font-weight:800;color:#94a3b8;letter-spacing:-0.5px">₪0</div>
             <div style="font-size:11px;color:#94a3b8;margin-top:4px">of ₪780,000 target</div>
         </div>
         <!-- Goal Progress Ring -->
@@ -2746,10 +2746,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
                     <tr>
             <td style="font-weight:600;color:#1e293b">1</td>
             <td style="font-weight:600;color:#1e293b">חיים</td>
-            <td style="color:#64748b">^^^31</td>
+            <td style="color:#64748b">A-001</td>
             <td style="text-align:center">107</td>
             <td style="text-align:right;font-weight:600">₪100,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2764,10 +2764,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">2</td>
             <td style="font-weight:600;color:#1e293b">ליעד</td>
-            <td style="color:#64748b">^^321</td>
+            <td style="color:#64748b">A-002</td>
             <td style="text-align:center">35</td>
             <td style="text-align:right;font-weight:600">₪100,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2782,10 +2782,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">3</td>
             <td style="font-weight:600;color:#1e293b">עידן</td>
-            <td style="color:#64748b">^^^26</td>
+            <td style="color:#64748b">A-003</td>
             <td style="text-align:center">27</td>
             <td style="text-align:right;font-weight:600">₪70,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2800,10 +2800,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">4</td>
             <td style="font-weight:600;color:#1e293b">מאור</td>
-            <td style="color:#64748b">^^^32</td>
+            <td style="color:#64748b">A-004</td>
             <td style="text-align:center">49</td>
             <td style="text-align:right;font-weight:600">₪50,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2818,10 +2818,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">5</td>
             <td style="font-weight:600;color:#1e293b">אדם</td>
-            <td style="color:#64748b">^^^25</td>
+            <td style="color:#64748b">A-005</td>
             <td style="text-align:center">70</td>
             <td style="text-align:right;font-weight:600">₪50,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2836,10 +2836,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">6</td>
             <td style="font-weight:600;color:#1e293b">מקסים</td>
-            <td style="color:#64748b">^^^36</td>
+            <td style="color:#64748b">A-006</td>
             <td style="text-align:center">50</td>
             <td style="text-align:right;font-weight:600">₪45,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2854,10 +2854,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">7</td>
             <td style="font-weight:600;color:#1e293b">בני</td>
-            <td style="color:#64748b">^^^29</td>
+            <td style="color:#64748b">A-007</td>
             <td style="text-align:center">30</td>
             <td style="text-align:right;font-weight:600">₪45,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2872,10 +2872,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">8</td>
             <td style="font-weight:600;color:#1e293b">נדב</td>
-            <td style="color:#64748b">^^^9^</td>
+            <td style="color:#64748b">A-008</td>
             <td style="text-align:center">41</td>
             <td style="text-align:right;font-weight:600">₪45,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2890,10 +2890,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">9</td>
             <td style="font-weight:600;color:#1e293b">אוראל</td>
-            <td style="color:#64748b">^^^8^</td>
+            <td style="color:#64748b">A-009</td>
             <td style="text-align:center">44</td>
             <td style="text-align:right;font-weight:600">₪30,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2908,10 +2908,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">10</td>
             <td style="font-weight:600;color:#1e293b">אילן</td>
-            <td style="color:#64748b">^^^30</td>
+            <td style="color:#64748b">A-010</td>
             <td style="text-align:center">37</td>
             <td style="text-align:right;font-weight:600">₪30,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2926,10 +2926,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">11</td>
             <td style="font-weight:600;color:#1e293b">איתמר</td>
-            <td style="color:#64748b">^^^37</td>
+            <td style="color:#64748b">A-011</td>
             <td style="text-align:center">40</td>
             <td style="text-align:right;font-weight:600">₪30,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2944,10 +2944,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">12</td>
             <td style="font-weight:600;color:#1e293b">אייל</td>
-            <td style="color:#64748b">^^^12</td>
+            <td style="color:#64748b">A-012</td>
             <td style="text-align:center">29</td>
             <td style="text-align:right;font-weight:600">₪30,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2962,10 +2962,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">13</td>
             <td style="font-weight:600;color:#1e293b">צחי</td>
-            <td style="color:#64748b">^^^6^</td>
+            <td style="color:#64748b">A-013</td>
             <td style="text-align:center">28</td>
             <td style="text-align:right;font-weight:600">₪30,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2980,10 +2980,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">14</td>
             <td style="font-weight:600;color:#1e293b">דיויד</td>
-            <td style="color:#64748b">^^^35</td>
+            <td style="color:#64748b">A-014</td>
             <td style="text-align:center">28</td>
             <td style="text-align:right;font-weight:600">₪20,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -2998,10 +2998,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">15</td>
             <td style="font-weight:600;color:#1e293b">ירין</td>
-            <td style="color:#64748b">^^^4^</td>
+            <td style="color:#64748b">A-015</td>
             <td style="text-align:center">19</td>
             <td style="text-align:right;font-weight:600">₪25,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -3016,10 +3016,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">16</td>
             <td style="font-weight:600;color:#1e293b">רפי</td>
-            <td style="color:#64748b">^^^3^</td>
+            <td style="color:#64748b">A-016</td>
             <td style="text-align:center">30</td>
             <td style="text-align:right;font-weight:600">₪20,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -3034,10 +3034,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">17</td>
             <td style="font-weight:600;color:#1e293b">אלון</td>
-            <td style="color:#64748b">^^^21</td>
+            <td style="color:#64748b">A-017</td>
             <td style="text-align:center">12</td>
             <td style="text-align:right;font-weight:600">₪20,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -3052,10 +3052,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">18</td>
             <td style="font-weight:600;color:#1e293b">וודיע</td>
-            <td style="color:#64748b">^^^5^</td>
+            <td style="color:#64748b">A-018</td>
             <td style="text-align:center">16</td>
             <td style="text-align:right;font-weight:600">₪20,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -3070,10 +3070,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </tr><tr>
             <td style="font-weight:600;color:#1e293b">19</td>
             <td style="font-weight:600;color:#1e293b">עומר</td>
-            <td style="color:#64748b">^^^19</td>
+            <td style="color:#64748b">A-019</td>
             <td style="text-align:center">12</td>
             <td style="text-align:right;font-weight:600">₪20,000</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪0</td>
+            <td style="text-align:right;font-weight:600;color:#94a3b8">₪0</td>
             <td style="min-width:120px">
                 <div style="display:flex;align-items:center;gap:6px">
                     <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
@@ -4971,7 +4971,7 @@ Chart.defaults.scales.linear = Chart.defaults.scales.linear || {};
 // Brand: turbo = ice cream (Turbo brand), danis = dream cake (Dani's brand)
 // Price DB updated: 24/2 — אייסדרים dist 15%, dream_cake cost 53.5
 // Revenue verified against actual files: ICEDREAM-*.xlsx (actual invoice) + Mayyan_Turbo.xlsx (units×₪13.8)
-// Last updated: 10/03/2026 — Icedreams customers recalculated from files (וולט, Yango Deli, Carmella, Noy HaSade)
+// Last updated: 10/03/2026 — Icedream customers recalculated from files (וולט, Yango Deli, Carmella, Noy HaSade)
 // Biscotti (ביסקוטי): Dream Cake distributor (dream_cake_2). Active from 18/3/2026.
 // Sale price ₪80/unit, 0% commission, 27.5% gross margin. Data: daniel_amit_weekly_biscotti.xlsx.
 
@@ -5174,7 +5174,7 @@ const mayanReturns = {
   mar:  { units:   0, revenue:     0, rate: 0.0 },
   total:{ units: 152, revenue:  1979, rate: 0.1 }
 };
-// Icedreams: positive כמות + negative מכירות/קניות נטו in monthly sales files
+// Icedream: positive כמות + negative מכירות/קניות נטו in monthly sales files
 const icedreamsReturns = {
   dec:  { units:   0, revenue:     0, rate: 0.0 },
   jan:  { units:   0, revenue:     0, rate: 0.0 },
@@ -5636,7 +5636,7 @@ function getInactiveCat(r) {
 }
 const WEEKLY_WINDOW = 10;  // Rolling window — always show last N weeks
 
-// Icedreams monthly totals (Dec & Jan) — from Customer Performance tab, distributor=Icedreams
+// Icedream monthly totals (Dec & Jan) — from Customer Performance tab, distributor=Icedream
 // Customers: Good Pharm, Wolt Market, Yango Deli דלי, Carmella, Noy HaSade, Domino\'s Pizza, Naomi\'s Farm, Oogiplatset
 const _iceMonRev   = { dec: 686481,  jan: 641087  };
 const _iceMonUnits = { dec: 20289,   jan: 17919   };
@@ -5646,7 +5646,7 @@ const _iceMonUnits = { dec: 20289,   jan: 17919   };
 const _maayMonRev   = { dec: 852496,  jan: 415214  };
 const _maayMonUnits = { dec: 61775,   jan: 30088   };
 
-// Icedreams weekly (weeks 1–10) — from icedream_weekly_sales.xls, per-product rows
+// Icedream weekly (weeks 1–10) — from icedream_weekly_sales.xls, per-product rows
 // Raito products only (באגסו / דובאי excluded). Units = cartons × UPC.
 // GROSS deliveries only (returns excluded). Fixed RK decoder (float byte-order + MULRK offset).
 // Danis revenue validated exactly. Yingo W2 validated by user.
@@ -5680,7 +5680,7 @@ const _biscWkUnits = { 12: 101,  13: 20   };
 let _weeklyMode = 'rev';
 
 // Returns which distributor view to show based on current filter state:
-//   'ice'  = Icedreams only  (blue)
+//   'ice'  = Icedream only  (blue)
 //   'maay' = מעיין only      (green, turbo data only — no danis at Mayyan)
 //   'bisc' = ביסקוטי only    (amber, danis only — dream_cake_2)
 //   'both' = combined        (purple — ice + maay + bisc where applicable)
@@ -5703,7 +5703,7 @@ function _weeklyDistKey() {
   return 'both';  // S.dist === 'all', any brand — combined (bisc null for turbo, maay null for danis)
 }
 
-// Get the correct Icedreams data array for current brand filter
+// Get the correct Icedream data array for current brand filter
 function _iceDataArr(r) {
   if (S.brand === 'turbo') return r ? _iceWkRevTurbo   : _iceWkUnitsTurbo;
   if (S.brand === 'danis') return r ? _iceWkRevDanis   : _iceWkUnitsDanis;
@@ -5742,7 +5742,7 @@ function _mkWeeklyDatasets(mode) {
 
   if (dk === 'ice') {
     return [{
-      label: 'Icedreams',
+      label: 'Icedream',
       data: [...iceData],
       borderColor: '#5D5FEF',
       backgroundColor: 'rgba(93,95,239,0.08)',
@@ -5801,13 +5801,13 @@ function _updateWeeklyLegend(dk) {
   }
   if (dk === 'both') {
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>All Distributors (28/12–22/3)${brandTag} — W1–W5: Icedreams · W6–W11: Icedreams + Ma'ayan · W12+: Icedreams + Biscotti</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>All Distributors (28/12–22/3)${brandTag} — W1–W5: Icedream · W6–W11: Icedream + Ma'ayan · W12+: Icedream + Biscotti</div>`;
     return;
   }
   if (dk === 'ice') {
     const suffix = S.brand === 'danis' ? ' · Dani\'s only (Ma\'ayan does not carry Dani\'s)' : brandTag;
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedreams weekly (28/12–22/3)${suffix}</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedream weekly (28/12–22/3)${suffix}</div>`;
     return;
   }
   if (dk === 'maay') {
@@ -6479,12 +6479,12 @@ window.ccExportToExcel = function(selSheets, selCustomers, selBrands) {
   const _detGrandR = weeklyDetail.reduce((s,r)=>s+r.revenue, 0);
 
   const ws3 = makeWS([
-    [`WEEKLY SALES TREND — Icedreams vs. Ma'ayan vs. Biscotti  ·  ${weeklyXLabels[0]} – ${weeklyXLabels[nW-1]} 2026`],
-    [`Icedreams: W1–W${nW}  ·  Ma'ayan: W6–W11 only  ·  Biscotti: W12+ only  ·  Gross deliveries, returns excluded`],
+    [`WEEKLY SALES TREND — Icedream vs. Ma'ayan vs. Biscotti  ·  ${weeklyXLabels[0]} – ${weeklyXLabels[nW-1]} 2026`],
+    [`Icedream: W1–W${nW}  ·  Ma'ayan: W6–W11 only  ·  Biscotti: W12+ only  ·  Gross deliveries, returns excluded`],
     [],
-    ['  WEEKLY REVENUE (NIS)  ·  Icedreams vs. Ma\'ayan vs. Biscotti'],
+    ['  WEEKLY REVENUE (NIS)  ·  Icedream vs. Ma\'ayan vs. Biscotti'],
     ['Metric','Date',...weeklyXLabels,'Total','Avg/Week'],
-    ['Icedreams — Combined',          null,..._iceWkRev.map(num),      num(totalIceRev),   num(totalIceRev/nW)],
+    ['Icedream — Combined',          null,..._iceWkRev.map(num),      num(totalIceRev),   num(totalIceRev/nW)],
     ['  ↳ Turbo only',                null,..._iceWkRevTurbo.map(num), num(totalTurboRev), num(totalTurboRev/nW)],
     ["  ↳ Danis (Dream Cake) only",   null,..._iceWkRevDanis.map(num), num(totalDanisRev), num(totalDanisRev/nW)],
     ['  ↳ Returns (excl.)',           null,..._iceWkRetRev.map(num),   num(totalRetRev),   num(totalRetRev/nW)],
@@ -6492,18 +6492,18 @@ window.ccExportToExcel = function(selSheets, selCustomers, selBrands) {
     ['Combined (Ice+Ma\'ayan+Biscotti)', null,...combRevRow,              num(totalIceRev+totalMaayRev), num((totalIceRev+totalMaayRev)/nW)],
     ['Week date',                     null,...weeklyXLabels],
     [],
-    ['  WEEKLY UNITS  ·  Icedreams vs. Ma\'ayan vs. Biscotti'],
+    ['  WEEKLY UNITS  ·  Icedream vs. Ma\'ayan vs. Biscotti'],
     ['Week','Date',...wkNums,'Total','Avg/Week'],
-    ['Icedreams', null,..._iceWkUnits.map(num), num(totalIceU),  num(totalIceU/nW)],
+    ['Icedream', null,..._iceWkUnits.map(num), num(totalIceU),  num(totalIceU/nW)],
     ['Ma\'ayan',  null,...maayURow,             num(totalMaayU), num(totalMaayU/4)],
     ['Combined',  null,...combURow,             num(totalIceU+totalMaayU), num((totalIceU+totalMaayU)/nW)],
     [],
-    ['  WEEK-OVER-WEEK REVENUE GROWTH (%)  ·  Icedreams Combined'],
+    ['  WEEK-OVER-WEEK REVENUE GROWTH (%)  ·  Icedream Combined'],
     ['Metric',null,...wowHdrs,'Best Week','Worst Week'],
-    ['Icedreams WoW %',null,...iceWow, pct(wowVals.length?Math.max(...wowVals):null), pct(wowVals.length?Math.min(...wowVals):null)],
+    ['Icedream WoW %',null,...iceWow, pct(wowVals.length?Math.max(...wowVals):null), pct(wowVals.length?Math.min(...wowVals):null)],
     [],
     [],
-    [`  BREAKDOWN BY CUSTOMER & FLAVOR — ${weeklyDetailLabel}  (Icedreams only)`],
+    [`  BREAKDOWN BY CUSTOMER & FLAVOR — ${weeklyDetailLabel}  (Icedream only)`],
     ['Network', 'Account', 'Product', 'Boxes', 'Units', 'Revenue (₪)'],
     ..._detRows,
     ['GRAND TOTAL', null, null, null, num(_detGrandU), {v:_detGrandR, t:'n', z:'#,##0.00'}],
