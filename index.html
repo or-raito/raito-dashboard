@@ -5912,40 +5912,7 @@ function renderWeeklyChart() {
           grid:{display:false,drawBorder:false,drawTicks:false}
         }
       }
-    },
-    plugins: [{
-      id: 'weeklyValueLabels',
-      afterDraw: function(chart) {
-        var c2 = chart.ctx;
-        chart.data.datasets.forEach(function(ds, di) {
-          var meta = chart.getDatasetMeta(di);
-          if (!meta || meta.hidden) return;
-          meta.data.forEach(function(el, idx) {
-            var val = ds.data[idx];
-            if (val === null || val === undefined) return;
-            var lbl = fmtTip(val);
-            var lx = el.x;
-            var ly = el.y - 10;
-            c2.save();
-            c2.font = '700 12px Inter,sans-serif';
-            var tw = c2.measureText(lbl).width + 10;
-            var th = 16;
-            c2.textAlign = 'center';
-            c2.textBaseline = 'bottom';
-            /* dark pill background */
-            c2.fillStyle = 'rgba(255,255,255,0.92)';
-            var rx = lx - tw/2, ry = ly - th;
-            c2.beginPath();
-            c2.roundRect(rx, ry, tw, th, 3);
-            c2.fill();
-            /* label in dataset color */
-            c2.fillStyle = ds.borderColor || '#1A1D23';
-            c2.fillText(lbl, lx, ly);
-            c2.restore();
-          });
-        });
-      }
-    }]
+    }
   });
 }
 
@@ -6768,6 +6735,7 @@ renderWeeklyChart = function() {
   const _mag      = Math.pow(10, Math.floor(Math.log10(_rawMax)));
   const _yMax     = Math.ceil(_rawMax * 1.20 / _mag) * _mag;
 
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   charts.weekly = new Chart(ctx, {
     type: 'line',
     data: { labels: winLabels, datasets: winDatasets },
@@ -6777,6 +6745,7 @@ renderWeeklyChart = function() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
+        datalabels: false,
         tooltip: {
           backgroundColor: 'rgba(255,255,255,0.95)',
           titleColor: '#1e293b',
