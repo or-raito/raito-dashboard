@@ -525,7 +525,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 12:54</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 12:56</div>
   </div>
 </nav>
 
@@ -2432,10 +2432,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div class="fgroup"><label>Distributor</label>
     <select id="f-dist" onchange="applyFilters()">
       <option value="all">All</option>
-      <option value="אייסדרים">אייסדרים (Icedream)</option>
-      <option value="מעיין">מעיין נציגויות</option>
+      <option value="אייסדרים">Icedream</option>
+      <option value="מעיין">Ma'ayan</option>
       <option value="none">No Pricing Data</option>
-      <option value="ביסקוטי">ביסקוטי</option>
+      <option value="ביסקוטי">Biscotti</option>
     </select></div>
   <div class="fgroup"><label>Status</label>
     <select id="f-status" onchange="applyFilters()">
@@ -2468,7 +2468,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div class="info-banner">
     <span style="font-size:20px">✅</span>
     <div><strong id="info-label">Sales data loaded — Dec '25, Jan '26, Feb '26, Mar '26 (W12) · November excluded</strong> &nbsp;·&nbsp;
-    19 customers · 2 distributors · Brand filter: <strong>Turbo</strong> (ice cream) + <strong>Dani's</strong> (dream cake) · Price DB: 24/2 &nbsp;·&nbsp; <strong>Last updated: 19/03/2026</strong></div>
+    20 customers · 3 distributors · Brand filter: <strong>Turbo</strong> (ice cream) + <strong>Dani's</strong> (dream cake) · Price DB: 24/3 &nbsp;·&nbsp; <strong>Last updated: 24/03/2026</strong></div>
   </div>
 
   
@@ -2478,8 +2478,8 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div class="weekly-panel">
     <div class="ph">
       <div>
-        <div class="pt">Weekly Sales Trend — Icedreams vs Mayyan</div>
-        <div class="ps" id="chart-subtitle">28/12–15/3 2026 · כל נקודה = יום ראשון של השבוע · Icedreams W1–W12 · מעיין W6–W11 · מציג 10 שבועות אחרונים</div>
+        <div class="pt">Weekly Sales Trend — Icedreams · Ma'ayan · Biscotti</div>
+        <div class="ps" id="chart-subtitle">28/12–22/3 2026 · Each point = week start (Sunday) · Icedreams W1–W13 · Ma'ayan W6–W11 · Biscotti W12–W13 · Rolling 10-week window</div>
       </div>
       <div class="tab-grp">
         <button class="tab on" id="wb-rev" onclick="setWeeklyMode('rev')">Revenue ₪</button>
@@ -2549,23 +2549,23 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div class="inactive-panel" id="inactive-panel">
     <div class="ph">
       <div>
-        <div class="pt">לקוחות לא פעילים — מעיין + אייסדרים</div>
-        <div class="ps" id="inactive-subtitle">חשבונות שלא הזמינו בשבועיים האחרונים</div>
+        <div class="pt">Inactive Customers — Ma'ayan + Icedream</div>
+        <div class="ps" id="inactive-subtitle">Accounts with no orders in the past 2 weeks</div>
       </div>
     </div>
     <div class="inactive-chips">
-      <div class="ichip warn"><strong id="ic-total">—</strong>סה״כ לא פעילים</div>
-      <div class="ichip"><strong id="ic-cat1">—</strong><span id="ic-cat1-label">לא הזמינו בחודש האחרון</span></div>
-      <div class="ichip"><strong id="ic-cat2">—</strong><span id="ic-cat2-label">עצרו לאחרונה</span></div>
+      <div class="ichip warn"><strong id="ic-total">—</strong> Total Inactive</div>
+      <div class="ichip"><strong id="ic-cat1">—</strong><span id="ic-cat1-label">No orders this month</span></div>
+      <div class="ichip"><strong id="ic-cat2">—</strong><span id="ic-cat2-label">Recently stopped</span></div>
     </div>
     <div class="ifilters">
       <select id="if-idist" onchange="renderInactive()">
-        <option value="all">כל המפיצים</option>
-        <option value="מעיין">מעיין</option>
-        <option value="אייסדרים">אייסדרים</option>
+        <option value="all">All Distributors</option>
+        <option value="מעיין">Ma'ayan</option>
+        <option value="אייסדרים">Icedream</option>
       </select>
       <select id="if-net" onchange="renderInactive()">
-        <option value="all">כל הרשתות</option>
+        <option value="all">All Networks</option>
         <option value="שוק פרטי">שוק פרטי</option>
         <option value="דור אלון">דור אלון</option>
         <option value="פז ילו">פז ילו</option>
@@ -2577,23 +2577,23 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         <option value="נוי השדה">נוי השדה</option>
       </select>
       <select id="if-cat" onchange="renderInactive()">
-        <option value="all">כל הקטגוריות</option>
-        <option value="1" id="ifcat-opt1">לא הזמין בחודש האחרון</option>
-        <option value="2" id="ifcat-opt2">עצר לאחרונה</option>
+        <option value="all">All Categories</option>
+        <option value="1" id="ifcat-opt1">No orders this month</option>
+        <option value="2" id="ifcat-opt2">Recently stopped</option>
       </select>
-      <input id="if-search" placeholder="חיפוש לקוח…" oninput="renderInactive()" style="min-width:200px"/>
+      <input id="if-search" placeholder="Search customer…" oninput="renderInactive()" style="min-width:200px"/>
       <span id="if-count" style="font-size:11px;color:var(--text2);margin-left:4px"></span>
     </div>
     <table class="itable">
       <thead><tr>
-        <th onclick="sortInactive('name')">שם לקוח ↕</th>
-        <th onclick="sortInactive('net')">רשת ↕</th>
-        <th onclick="sortInactive('dist')">מפיץ ↕</th>
-        <th>סטטוס</th>
-        <th onclick="sortInactive('last')">הזמנה אחרונה ↕</th>
-        <th onclick="sortInactive('dec')" style="text-align:right">יח׳ 12/25 ↕</th>
-        <th onclick="sortInactive('jan')" style="text-align:right">יח׳ 01/26 ↕</th>
-        <th onclick="sortInactive('feb')" style="text-align:right">יח׳ 02/26 ↕</th>
+        <th onclick="sortInactive('name')">Customer ↕</th>
+        <th onclick="sortInactive('net')">Network ↕</th>
+        <th onclick="sortInactive('dist')">Distributor ↕</th>
+        <th>Status</th>
+        <th onclick="sortInactive('last')">Last Order ↕</th>
+        <th onclick="sortInactive('dec')" style="text-align:right">Units 12/25 ↕</th>
+        <th onclick="sortInactive('jan')" style="text-align:right">Units 01/26 ↕</th>
+        <th onclick="sortInactive('feb')" style="text-align:right">Units 02/26 ↕</th>
       </tr></thead>
       <tbody id="i-body"></tbody>
     </table>
@@ -4826,63 +4826,63 @@ Chart.defaults.scales.linear = Chart.defaults.scales.linear || {};
 const customers = [
   {id:1,  name:"AMPM",          status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:12.39,  grossMargin:47.42, opMargin:22.42, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:240426.31, jan:49814.27, feb:136710.57, mar:31966.2},  units:{dec:19412, jan:4023,  feb:11038, mar:2580}, momGrowth:174.4},
-  {id:2,  name:"אלונית",        status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:12.27,  grossMargin:46.95, opMargin:21.95, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:2,  name:"Alonit",        status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:12.27,  grossMargin:46.95, opMargin:21.95, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:18184.96, jan:17252.4, feb:21203.52, mar:4417.2},   units:{dec:1482,  jan:1406,  feb:1728, mar:360},   momGrowth:22.9},
-  {id:3,  name:"גוד פארם",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:12.67,  grossMargin:48.70, opMargin:33.70, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:3,  name:"Good Pharm",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:12.67,  grossMargin:48.70, opMargin:33.70, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:0,      jan:14620,  feb:0, mar:2066},   units:{dec:0,     jan:1128,  feb:0, mar:156},   momGrowth:null},
-  {id:4,  name:"דלק",           status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:12.74,  grossMargin:48.98, opMargin:23.98, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:4,  name:"Delek",           status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:12.74,  grossMargin:48.98, opMargin:23.98, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:29442.14, jan:19415.76, feb:12714.52, mar:7644.0},   units:{dec:2311,  jan:1524,  feb:998, mar:600},   momGrowth:-34.5},
-  {id:5,  name:"וולט מרקט",    status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:37.5,   grossMargin:37.44, opMargin:22.44, activeSKUs:6,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
+  {id:5,  name:"Wolt Market",    status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:37.5,   grossMargin:37.44, opMargin:22.44, activeSKUs:6,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
           revenue:{dec:644423,    jan:526052,   feb:400142,   mar:78278},
           turboRev:{dec:178502,   jan:77973,    feb:104044,   mar:18672},  danisRev:{dec:465921,   jan:448079,  feb:296098,  mar:59607},
           units:{dec:18951,       jan:11588,    feb:11350,    mar:2077},
           turboUnits:{dec:13146,  jan:6063,     feb:7699,     mar:1342},  danisUnits:{dec:5805,   jan:5525,    feb:3651,    mar:735},
           momGrowth:-80.5},
-  {id:6,  name:"טיב טעם",       status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:14.2,   grossMargin:54.23, opMargin:29.23, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:6,  name:"Tiv Taam",       status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:14.2,   grossMargin:54.23, opMargin:29.23, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:47286.0, jan:15871.6, feb:22720.0, mar:11502.0},   units:{dec:3330,  jan:1118,  feb:1600, mar:810},   momGrowth:43.1},
-  {id:7,  name:"ינגו דלי",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:39.9,   grossMargin:40.25, opMargin:25.25, activeSKUs:6,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
+  {id:7,  name:"Yingo Deli",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:39.9,   grossMargin:40.25, opMargin:25.25, activeSKUs:6,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
           revenue:{dec:25173,  jan:33718,    feb:25041,    mar:35037},
           turboRev:{dec:2673,  jan:7169,     feb:13041,    mar:11637},  danisRev:{dec:22500, jan:26549,  feb:12000,  mar:23400},
           units:{dec:348,      jan:708,      feb:1046,     mar:1018},
           turboUnits:{dec:198, jan:531,      feb:966,      mar:862},    danisUnits:{dec:150, jan:177,    feb:80,     mar:156},
           momGrowth:39.9},
-  {id:8,  name:"כרמלה",         status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:15.6,   grossMargin:43.49, opMargin:28.49, activeSKUs:6,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
+  {id:8,  name:"Carmela",         status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:15.6,   grossMargin:43.49, opMargin:28.49, activeSKUs:6,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
           revenue:{dec:17185,    jan:4470,     feb:2676,     mar:980},
           turboRev:{dec:17185,   jan:1800,     feb:1341,     mar:980},  danisRev:{dec:0,    jan:2670,    feb:1335,    mar:0},
           units:{dec:1272,       jan:180,      feb:105,      mar:70},
           turboUnits:{dec:1272,  jan:150,      feb:90,       mar:70},   danisUnits:{dec:0,  jan:30,      feb:15,      mar:0},
           momGrowth:-63.4},
-  {id:9,  name:"נוי השדה",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:13.4,   grossMargin:49.53, opMargin:34.53, activeSKUs:5,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
+  {id:9,  name:"Noy Hasade",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:13.4,   grossMargin:49.53, opMargin:34.53, activeSKUs:5,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
           revenue:{dec:13409,    jan:13679,   feb:0,   mar:0},
           turboRev:{dec:13409,   jan:13679,   feb:0,   mar:0},  danisRev:{dec:0,    jan:0,   feb:0,   mar:0},
           units:{dec:978,        jan:1044,    feb:0,   mar:0},
           turboUnits:{dec:978,   jan:1044,    feb:0,   mar:0},  danisUnits:{dec:0,  jan:0,   feb:0,   mar:0},
           momGrowth:-100.0},
-  {id:10, name:"קארפור",        status:"negotiation", distributor:"מעיין נציגויות", dist_pct:25, avgPrice:13.8,   grossMargin:52.9,  opMargin:27.9,  activeSKUs:3,  hasPricing:true,  hasSales:false, brands:['turbo'],
+  {id:10, name:"Carrefour",        status:"negotiation", distributor:"מעיין נציגויות", dist_pct:25, avgPrice:13.8,   grossMargin:52.9,  opMargin:27.9,  activeSKUs:3,  hasPricing:true,  hasSales:false, brands:['turbo'],
           revenue:{dec:0, jan:0, feb:0, mar:0}, units:{dec:0, jan:0, feb:0, mar:0}, momGrowth:null},
-  {id:11, name:"שוק פרטי",      status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:14.1,   grossMargin:53.9,  opMargin:28.9,  activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:11, name:"Shuk Prati",      status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:14.1,   grossMargin:53.9,  opMargin:28.9,  activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:380643.6, jan:203673.0, feb:275514.0, mar:106652.4}, units:{dec:26996, jan:14445, feb:19540, mar:7564}, momGrowth:35.1},
-  {id:12, name:"עוגיפלצת",     status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:null,   grossMargin:null,  opMargin:null,  activeSKUs:3,  hasPricing:false, hasSales:true, brands:['turbo'],
+  {id:12, name:"Ugipletzet",     status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:null,   grossMargin:null,  opMargin:null,  activeSKUs:3,  hasPricing:false, hasSales:true, brands:['turbo'],
           revenue:{dec:0, jan:0, feb:19967.79, mar:7650}, units:{dec:0, jan:0, feb:1582, mar:51}, momGrowth:null},
-  {id:13, name:"פז יילו",        status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:11.0,   grossMargin:40.91, opMargin:15.91, activeSKUs:3,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:13, name:"Paz Yellow",        status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:11.0,   grossMargin:40.91, opMargin:15.91, activeSKUs:3,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:29832.0, jan:64856.0, feb:72105.0, mar:25300.0},  units:{dec:2712,  jan:5896,  feb:6555, mar:2300},  momGrowth:11.2},
-  {id:14, name:"פז סופר יודה",  status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:11.0,   grossMargin:40.91, opMargin:15.91, activeSKUs:3,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:14, name:"Paz Super Yuda",  status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:11.0,   grossMargin:40.91, opMargin:15.91, activeSKUs:3,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:53592.0, jan:15983.0, feb:20240.0, mar:9570.0},  units:{dec:4872,  jan:1453,  feb:1840, mar:870},  momGrowth:26.6},
-  {id:15, name:"סונול",         status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:14.0,   grossMargin:53.57, opMargin:28.57, activeSKUs:3,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:15, name:"Sonol",         status:"active",      distributor:"מעיין נציגויות", dist_pct:25, avgPrice:14.0,   grossMargin:53.57, opMargin:28.57, activeSKUs:3,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:8736.0, jan:6832.0, feb:6692.0, mar:840.0},   units:{dec:624,   jan:488,   feb:478, mar:60},   momGrowth:-2.0},
-  {id:16, name:"דומינוס",       status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:11.4,   grossMargin:42.98, opMargin:27.98, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:16, name:"Domino's",       status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:11.4,   grossMargin:42.98, opMargin:27.98, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:0,      jan:63418,  feb:0,    mar:5407},   units:{dec:0,     jan:5646,  feb:0,    mar:472},   momGrowth:null},
-  {id:17, name:"חוות נעמי",    status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:35.03,  grossMargin:39.48, opMargin:24.48, activeSKUs:5,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
+  {id:17, name:"Naomi's Farm",    status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:35.03,  grossMargin:39.48, opMargin:24.48, activeSKUs:5,  hasPricing:true,  hasSales:true, brands:['turbo','danis'],
           revenue:{dec:7185,   jan:17277,  feb:30748.3,  mar:29768},
           turboRev:{dec:5940,  jan:4329,   feb:3607.48,  mar:966},    danisRev:{dec:1245, jan:12948, feb:27140.82, mar:28802},
           units:{dec:465, jan:484, feb:595, mar:417},
           turboUnits:{dec:450, jan:328, feb:268, mar:70},              danisUnits:{dec:15, jan:156, feb:327, mar:347},
           momGrowth:-3.2},
-  {id:18, name:"חממה",          status:"negotiation", distributor:"אייסדרים",       dist_pct:15, avgPrice:14.1,   grossMargin:53.9,  opMargin:38.9,  activeSKUs:4,  hasPricing:true,  hasSales:false, brands:['turbo'],
+  {id:18, name:"Hama",          status:"negotiation", distributor:"אייסדרים",       dist_pct:15, avgPrice:14.1,   grossMargin:53.9,  opMargin:38.9,  activeSKUs:4,  hasPricing:true,  hasSales:false, brands:['turbo'],
           revenue:{dec:0, jan:0, feb:0, mar:0}, units:{dec:0, jan:0, feb:0, mar:0}, momGrowth:null},
-  {id:19, name:"פוט לוקר",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:15.5,   grossMargin:58.06, opMargin:43.06, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
+  {id:19, name:"Foot Locker",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:15.5,   grossMargin:58.06, opMargin:43.06, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:0, jan:0, feb:0, mar:1302}, units:{dec:0, jan:0, feb:0, mar:84}, momGrowth:null},
-  {id:20, name:"חנויות ביסקוטי", status:"active",    distributor:"ביסקוטי",         dist_pct:0,  avgPrice:80.0,   grossMargin:27.5,  opMargin:27.5,  activeSKUs:1,  hasPricing:true,  hasSales:true, brands:['danis'],
+  {id:20, name:"Biscotti Chain", status:"active",    distributor:"ביסקוטי",         dist_pct:0,  avgPrice:80.0,   grossMargin:27.5,  opMargin:27.5,  activeSKUs:1,  hasPricing:true,  hasSales:true, brands:['danis'],
           revenue:{dec:0, jan:0, feb:0, mar:9680},
           turboRev:{dec:0, jan:0, feb:0, mar:0},    danisRev:{dec:0, jan:0, feb:0, mar:9680},
           units:{dec:0, jan:0, feb:0, mar:121},
@@ -5254,8 +5254,8 @@ function renderKPIs(){
   <div class="kpi-card"><div class="kpi-label">Units (${mLbl})</div><div class="kpi-value">${N(curUnits)}</div><div class="kpi-meta">${withSales} customers w/ sales</div></div>
   <div class="kpi-card"><div class="kpi-label">Gross Profit ₪</div><div class="kpi-value" style="color:var(--green)">₪${N(grossVal)}</div><div class="kpi-meta">Avg Gross: ${avgGMval}%</div></div>
   <div class="kpi-card"><div class="kpi-label">Op Profit ₪</div><div class="kpi-value" style="color:var(--accent)">₪${N(opVal)}</div><div class="kpi-meta">After dist. costs</div></div>
-  ${(()=>{const mKey=S.month==='total'?'total':S.month;const db=S.dist==='מעיין'?mayanReturns:S.dist==='אייסדרים'?icedreamsReturns:allReturns;const lbl=S.dist==='מעיין'?'Returns — Ma\'ayan':S.dist==='אייסדרים'?'Returns — Icedreams':'Returns — All';const ret=db[mKey]||db.jan;const rateCol=ret.rate>=12?'var(--red)':ret.rate>=6?'rgba(245,158,11,0.9)':'var(--green)';return `<div class="kpi-card"><div class="kpi-label">${lbl}</div><div class="kpi-value" style="color:${rateCol}">${N(ret.units)}</div><div class="kpi-meta">₪${N(ret.revenue)} Revenue Loss &nbsp;·&nbsp; <span style="color:${rateCol};font-weight:600">${ret.rate}%</span> Return Rate</div></div>`;})()}
-  <div class="kpi-card"><div class="kpi-label">Portfolio ${S.month==='mar'?'Feb→Mar':S.month==='feb'?'Jan→Feb':S.month==='jan'?'Dec→Jan':'MoM Change'}</div><div class="kpi-value">${momRev!=null?`<span class="${momRev>=0?'up':'down'}">${momRev>=0?'+':''}${momRev.toFixed(1)}%</span>`:'—'}</div><div class="kpi-meta">Revenue MoM change${list.length<19?' · filtered':''}${S.dist!=='all'?` · ${S.dist}`:''}</div></div>`;
+  ${(()=>{const mKey=S.month==='total'?'total':S.month;const db=S.dist==='מעיין'?mayanReturns:S.dist==='אייסדרים'?icedreamsReturns:allReturns;const lbl=S.dist==='מעיין'?'Returns — Ma\'ayan':S.dist==='אייסדרים'?'Returns — Icedream':'Returns — All';const ret=db[mKey]||db.jan;const rateCol=ret.rate>=12?'var(--red)':ret.rate>=6?'rgba(245,158,11,0.9)':'var(--green)';return `<div class="kpi-card"><div class="kpi-label">${lbl}</div><div class="kpi-value" style="color:${rateCol}">${N(ret.units)}</div><div class="kpi-meta">₪${N(ret.revenue)} revenue loss &nbsp;·&nbsp; <span style="color:${rateCol};font-weight:600">${ret.rate}%</span> return rate</div></div>`;})()}
+  <div class="kpi-card"><div class="kpi-label">Portfolio ${S.month==='mar'?'Feb→Mar':S.month==='feb'?'Jan→Feb':S.month==='jan'?'Dec→Jan':'MoM Change'}</div><div class="kpi-value">${momRev!=null?`<span class="${momRev>=0?'up':'down'}">${momRev>=0?'+':''}${momRev.toFixed(1)}%</span>`:'—'}</div><div class="kpi-meta">Revenue MoM change${list.length<19?' · filtered':''}${S.dist!=='all'?` · ${S.dist==='מעיין'?"Ma'ayan":S.dist==='אייסדרים'?'Icedream':'Biscotti'}`:''}</div></div>`;
 }
 
 // ── PARETO ────────────────────────────────────────────────────────────────────
@@ -5469,7 +5469,12 @@ function _monthHe(dateStr) {
   const m = parseInt((dateStr||'').split('/')[1]||0);
   return ['','ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'][m]||'';
 }
-const DATA_MONTH_LABEL = _monthHe(DATA_LAST_WEEK_LABEL); // e.g. "מרץ"
+function _monthEn(dateStr) {
+  const m = parseInt((dateStr||'').split('/')[1]||0);
+  return ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]||'';
+}
+const DATA_MONTH_LABEL    = _monthHe(DATA_LAST_WEEK_LABEL); // Hebrew — kept for data matching
+const DATA_MONTH_LABEL_EN = _monthEn(DATA_LAST_WEEK_LABEL); // English — used for display
 
 // Dynamic category: cat2 = stopped recently (within ~4 weeks); cat1 = long-term inactive
 function getInactiveCat(r) {
@@ -5596,7 +5601,7 @@ function _mkWeeklyDatasets(mode) {
 
   if (dk === 'maay') {
     return [{
-      label: 'מעיין',
+      label: 'Ma\'ayan',
       data: maayData,
       borderColor: '#10b981',
       backgroundColor: 'rgba(16,185,129,0.08)',
@@ -5608,7 +5613,7 @@ function _mkWeeklyDatasets(mode) {
 
   if (dk === 'bisc') {
     return [{
-      label: 'ביסקוטי',
+      label: 'Biscotti',
       data: biscData,
       borderColor: '#f59e0b',
       backgroundColor: 'rgba(245,158,11,0.08)',
@@ -5622,7 +5627,7 @@ function _mkWeeklyDatasets(mode) {
     // Combined: ice + maay (turbo) + bisc (danis) — null-safe per distributor's scope
     const combined = iceData.map((v, i) => (v ?? 0) + (maayData[i] ?? 0) + (biscData[i] ?? 0));
     return [{
-      label: 'כל המפיצים',
+      label: 'All Distributors',
       data: combined,
       borderColor: '#5D5FEF',
       backgroundColor: 'rgba(93,95,239,0.08)',
@@ -5639,28 +5644,28 @@ function _updateWeeklyLegend(dk) {
   if (!el) return;
   const brandTag = S.brand === 'turbo' ? ' · Turbo only' : S.brand === 'danis' ? ' · Dani\'s only' : '';
   if (dk === 'none') {
-    el.innerHTML = '<div class="wleg-item" style="color:var(--amber)">⚠ אין נתונים שבועיים עבור מסנן זה (מעיין אינו מפיץ Dani\'s)</div>';
+    el.innerHTML = '<div class="wleg-item" style="color:var(--amber)">⚠ No weekly data for this filter (Ma'ayan does not carry Dani's)</div>';
     return;
   }
   if (dk === 'both') {
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>כל המפיצים (28/12–22/3)${brandTag} — W1–W5: Icedreams · W6–W11: Icedreams + מעיין · W12+: Icedreams + ביסקוטי</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>All Distributors (28/12–22/3)${brandTag} — W1–W5: Icedreams · W6–W11: Icedreams + Ma'ayan · W12+: Icedreams + Biscotti</div>`;
     return;
   }
   if (dk === 'ice') {
-    const suffix = S.brand === 'danis' ? ' · Dani\'s בלבד (מעיין אינו מפיץ Dani\'s)' : brandTag;
+    const suffix = S.brand === 'danis' ? ' · Dani\'s only (Ma\'ayan does not carry Dani\'s)' : brandTag;
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedreams שבועי (28/12–22/3)${suffix}</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedreams weekly (28/12–22/3)${suffix}</div>`;
     return;
   }
   if (dk === 'maay') {
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#22c55e"></div>מעיין שבועי (1/2–8/3)${brandTag} · W12+ אין נתונים</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#22c55e"></div>Ma'ayan weekly (1/2–8/3)${brandTag} · W12+ no data</div>`;
     return;
   }
   if (dk === 'bisc') {
     el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#f59e0b"></div>ביסקוטי שבועי (18/3–22/3) · Dani\'s Dream Cake בלבד · W12: 101 יח׳ · W13: 20 יח׳ (חלקי)</div>`;
+      `<div class="wleg-item"><div class="wleg-line" style="background:#f59e0b"></div>Biscotti weekly (18/3–22/3) · Dani's Dream Cake only · W12: 101 units · W13: 20 units (partial)</div>`;
     return;
   }
 }
@@ -5800,6 +5805,13 @@ function iPage(d){
   renderInactive();
 }
 
+
+const _MONTH_HE_TO_EN = {
+  'ינואר':'January','פברואר':'February','מרץ':'March','אפריל':'April',
+  'מאי':'May','יוני':'June','יולי':'July','אוגוסט':'August',
+  'ספטמבר':'September','אוקטובר':'October','נובמבר':'November','דצמבר':'December'
+};
+function _heToEnMonth(s){ return _MONTH_HE_TO_EN[s]||s; }
 function renderInactive(){
   let data = filteredInactive();
   // sort
@@ -5818,17 +5830,17 @@ function renderInactive(){
   document.getElementById('ic-total').textContent = total;
   document.getElementById('ic-cat1').textContent  = data.filter(r=>getInactiveCat(r)===1).length;
   document.getElementById('ic-cat2').textContent  = data.filter(r=>getInactiveCat(r)===2).length;
-  document.getElementById('if-count').textContent = total ? `${total} חשבונות` : 'אין תוצאות';
+  document.getElementById('if-count').textContent = total ? `${total} accounts` : 'No results';
 
   const tbody = document.getElementById('i-body');
-  if(!slice.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text2);padding:20px">אין נתונים</td></tr>'; return; }
+  if(!slice.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text2);padding:20px">No data</td></tr>'; return; }
   tbody.innerHTML = slice.map(r=>{
     const _dynCat = getInactiveCat(r);
     const badge = _dynCat===1
-      ? `<span class="ibadge cat1">לא פעיל ב${DATA_MONTH_LABEL}</span>`
-      : `<span class="ibadge cat2">עצר ${r.last}</span>`;
+      ? `<span class="ibadge cat1">Inactive in ${DATA_MONTH_LABEL_EN}</span>`
+      : `<span class="ibadge cat2">Stopped ${_heToEnMonth(r.last)}</span>`;
     const janCol = r.jan>100?'color:var(--accent)':r.jan>50?'color:var(--amber)':'';
-    const distLabel = r.dist==='מעיין'?'<span style="color:var(--accent)">מעיין</span>':'<span style="color:var(--text2)">אייסדרים</span>';
+    const distLabel = r.dist==='מעיין'?'<span style="color:var(--accent)">Ma\'ayan</span>':'<span style="color:var(--text2)">Icedream</span>';
     return `<tr>
       <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name}</td>
       <td style="color:var(--text2)">${r.net}</td>
@@ -5842,7 +5854,7 @@ function renderInactive(){
   }).join('');
 
   // pager
-  document.getElementById('ip-info').textContent = `עמוד ${iPage_+1} מתוך ${pages}`;
+  document.getElementById('ip-info').textContent = `Page ${iPage_+1} of ${pages}`;
   document.getElementById('ip-prev').disabled = iPage_===0;
   document.getElementById('ip-next').disabled = iPage_>=pages-1;
 }
@@ -5850,19 +5862,19 @@ function renderInactive(){
 // init on load
 document.addEventListener('DOMContentLoaded', ()=>{
   // ── Dynamic inactive panel labels ─────────────────────────────────────
-  const _period = DATA_LAST_WEEK_LABEL ? `נכון ל-${DATA_LAST_WEEK_LABEL}` : '';
+  const _period = DATA_LAST_WEEK_LABEL ? `as of ${DATA_LAST_WEEK_LABEL}` : '';
   const _sub = document.getElementById('inactive-subtitle');
-  if (_sub) _sub.textContent = `חשבונות שלא הזמינו בשבועיים האחרונים (${_period})`;
+  if (_sub) _sub.textContent = `Accounts with no orders in the past 2 weeks (${_period})`;
 
   const _lbl1 = document.getElementById('ic-cat1-label');
-  if (_lbl1) _lbl1.textContent = `לא הזמינו ב${DATA_MONTH_LABEL}`;
+  if (_lbl1) _lbl1.textContent = `No orders in ${DATA_MONTH_LABEL_EN}`;
   const _lbl2 = document.getElementById('ic-cat2-label');
-  if (_lbl2) _lbl2.textContent = `עצרו לאחרונה (${DATA_MONTH_LABEL})`;
+  if (_lbl2) _lbl2.textContent = `Recently stopped (${DATA_MONTH_LABEL_EN})`;
 
   const _opt1 = document.getElementById('ifcat-opt1');
-  if (_opt1) _opt1.textContent = `לא הזמין ב${DATA_MONTH_LABEL}`;
+  if (_opt1) _opt1.textContent = `No orders in ${DATA_MONTH_LABEL_EN}`;
   const _opt2 = document.getElementById('ifcat-opt2');
-  if (_opt2) _opt2.textContent = `עצר לאחרונה (${DATA_MONTH_LABEL})`;
+  if (_opt2) _opt2.textContent = `Recently stopped (${DATA_MONTH_LABEL_EN})`;
 
   renderInactive();
 });
@@ -6173,14 +6185,14 @@ window.ccExportToExcel = function() {
     [],
     ['  BY DISTRIBUTOR — Revenue (NIS)'],
     ['Distributor', ...MON_LABELS, 'Dec→Jan','Jan→Feb','Feb→Mar','4M Total','% of Total'],
-    ['מעיין נציגויות', ...maayRev.map(num), mom(maayRev[0],maayRev[1]), mom(maayRev[1],maayRev[2]), mom(maayRev[2],maayRev[3]), num(sum4(maayRev)), pct(sum4(totRev)>0?sum4(maayRev)/sum4(totRev):0)],
-    ['אייסדרים',       ...iceRev.map(num),  mom(iceRev[0],iceRev[1]),   mom(iceRev[1],iceRev[2]),   mom(iceRev[2],iceRev[3]),   num(sum4(iceRev)),  pct(sum4(totRev)>0?sum4(iceRev)/sum4(totRev):0)],
+    ['Ma\'ayan', ...maayRev.map(num), mom(maayRev[0],maayRev[1]), mom(maayRev[1],maayRev[2]), mom(maayRev[2],maayRev[3]), num(sum4(maayRev)), pct(sum4(totRev)>0?sum4(maayRev)/sum4(totRev):0)],
+    ['Icedream',       ...iceRev.map(num),  mom(iceRev[0],iceRev[1]),   mom(iceRev[1],iceRev[2]),   mom(iceRev[2],iceRev[3]),   num(sum4(iceRev)),  pct(sum4(totRev)>0?sum4(iceRev)/sum4(totRev):0)],
     ['TOTAL',          ...totRev.map(num),  mom(totRev[0],totRev[1]),   mom(totRev[1],totRev[2]),   mom(totRev[2],totRev[3]),   num(sum4(totRev)),  pct(1)],
     [],
     ['  BY DISTRIBUTOR — Units'],
     ['Distributor', ...MON_LABELS, 'Dec→Jan','Jan→Feb','Feb→Mar','4M Total','% of Total'],
-    ['מעיין נציגויות', ...maayU.map(num), mom(maayU[0],maayU[1]), mom(maayU[1],maayU[2]), mom(maayU[2],maayU[3]), num(sum4(maayU)), pct(sum4(totUnits)>0?sum4(maayU)/sum4(totUnits):0)],
-    ['אייסדרים',       ...iceU.map(num),  mom(iceU[0],iceU[1]),   mom(iceU[1],iceU[2]),   mom(iceU[2],iceU[3]),   num(sum4(iceU)),  pct(sum4(totUnits)>0?sum4(iceU)/sum4(totUnits):0)],
+    ['Ma\'ayan', ...maayU.map(num), mom(maayU[0],maayU[1]), mom(maayU[1],maayU[2]), mom(maayU[2],maayU[3]), num(sum4(maayU)), pct(sum4(totUnits)>0?sum4(maayU)/sum4(totUnits):0)],
+    ['Icedream',       ...iceU.map(num),  mom(iceU[0],iceU[1]),   mom(iceU[1],iceU[2]),   mom(iceU[2],iceU[3]),   num(sum4(iceU)),  pct(sum4(totUnits)>0?sum4(iceU)/sum4(totUnits):0)],
     ['TOTAL',          ...totUnits.map(num), mom(totUnits[0],totUnits[1]), mom(totUnits[1],totUnits[2]), mom(totUnits[2],totUnits[3]), num(sum4(totUnits)), pct(1)],
   ], [30,14,14,14,14,10,10,10,14,14]);
   XLSX.utils.book_append_sheet(wb, ws1, 'Summary');
@@ -6272,23 +6284,23 @@ window.ccExportToExcel = function() {
   const _detGrandR = weeklyDetail.reduce((s,r)=>s+r.revenue, 0);
 
   const ws3 = makeWS([
-    [`WEEKLY SALES TREND — Icedreams vs. מעיין נציגויות  ·  ${weeklyXLabels[0]} – ${weeklyXLabels[nW-1]} 2026`],
-    [`Icedreams: W1–W${nW}  ·  מעיין: W6–W9 only  ·  Gross deliveries, returns excluded  ·  Danis (Dream Cake) included`],
+    [`WEEKLY SALES TREND — Icedreams vs. Ma'ayan vs. Biscotti  ·  ${weeklyXLabels[0]} – ${weeklyXLabels[nW-1]} 2026`],
+    [`Icedreams: W1–W${nW}  ·  Ma'ayan: W6–W11 only  ·  Biscotti: W12+ only  ·  Gross deliveries, returns excluded`],
     [],
-    ['  WEEKLY REVENUE (NIS)  ·  Icedreams vs. מעיין'],
+    ['  WEEKLY REVENUE (NIS)  ·  Icedreams vs. Ma\'ayan vs. Biscotti'],
     ['Metric','Date',...weeklyXLabels,'Total','Avg/Week'],
     ['Icedreams — Combined',          null,..._iceWkRev.map(num),      num(totalIceRev),   num(totalIceRev/nW)],
     ['  ↳ Turbo only',                null,..._iceWkRevTurbo.map(num), num(totalTurboRev), num(totalTurboRev/nW)],
     ["  ↳ Danis (Dream Cake) only",   null,..._iceWkRevDanis.map(num), num(totalDanisRev), num(totalDanisRev/nW)],
     ['  ↳ Returns (excl.)',           null,..._iceWkRetRev.map(num),   num(totalRetRev),   num(totalRetRev/nW)],
-    ['מעיין — Turbo',                  null,...maayRevRow,              num(totalMaayRev),  num(totalMaayRev/4)],
-    ['Combined (Ice+מעיין)',           null,...combRevRow,              num(totalIceRev+totalMaayRev), num((totalIceRev+totalMaayRev)/nW)],
+    ['Ma\'ayan — Turbo',               null,...maayRevRow,              num(totalMaayRev),  num(totalMaayRev/4)],
+    ['Combined (Ice+Ma\'ayan+Biscotti)', null,...combRevRow,              num(totalIceRev+totalMaayRev), num((totalIceRev+totalMaayRev)/nW)],
     ['Week date',                     null,...weeklyXLabels],
     [],
-    ['  WEEKLY UNITS  ·  Icedreams vs. מעיין'],
+    ['  WEEKLY UNITS  ·  Icedreams vs. Ma\'ayan vs. Biscotti'],
     ['Week','Date',...wkNums,'Total','Avg/Week'],
     ['Icedreams', null,..._iceWkUnits.map(num), num(totalIceU),  num(totalIceU/nW)],
-    ['מעיין',      null,...maayURow,             num(totalMaayU), num(totalMaayU/4)],
+    ['Ma\'ayan',  null,...maayURow,             num(totalMaayU), num(totalMaayU/4)],
     ['Combined',  null,...combURow,             num(totalIceU+totalMaayU), num((totalIceU+totalMaayU)/nW)],
     [],
     ['  WEEK-OVER-WEEK REVENUE GROWTH (%)  ·  Icedreams Combined'],
@@ -6342,7 +6354,7 @@ window.ccExportToExcel = function() {
     });
 
     // Render each distributor section
-    const distOrder = ['Icedream', 'מעיין'];
+    const distOrder = ['Icedream', 'מעיין', 'ביסקוטי'];
     distOrder.forEach(dist => {
       if (!_byDist[dist]) return;
       let distU = 0, distR = 0;
@@ -6386,7 +6398,7 @@ window.ccExportToExcel = function() {
     const vals=PKEYS.map(k=>mx[k]!=null?mx[k]:null);
     const tot=PKEYS.reduce((s,k)=>s+(mx[k]||0),0);
     const cv=(mx.chocolate||0)+(mx.vanilla||0);
-    return [c.name,c.distributor,...vals,num(tot),pct(tot>0?cv/tot:null)];
+    const _dn={'מעיין נציגויות':"Ma'ayan",'אייסדרים':'Icedream','ביסקוטי':'Biscotti'}; return [c.name,(_dn[c.distributor]||c.distributor),...vals,num(tot),pct(tot>0?cv/tot:null)];
   });
   const pmGT=PKEYS.map(k=>customers.reduce((s,c)=>s+((productMix[c.id]||{})[k]||0),0));
   const pmGrand=pmGT.reduce((s,v)=>s+v,0);
@@ -6403,18 +6415,18 @@ window.ccExportToExcel = function() {
   // ══════════════════════════════════════════════════════════════════════════
   // Sheet 5: Inactive Customers
   // ══════════════════════════════════════════════════════════════════════════
-  const _inactivePeriod = `שבועיים האחרונים (נכון ל-${DATA_LAST_WEEK_LABEL})`;
+  const _inactivePeriod = `past 2 weeks (as of ${DATA_LAST_WEEK_LABEL})`;
   const _allInactive = inactiveCustomers;
   const ws5 = makeWS([
-    [`לקוחות לא פעילים — מעיין + אייסדרים  ·  ${_inactivePeriod}`],
-    [`סה"כ ${_allInactive.length} חשבונות שלא הזמינו ב${_inactivePeriod}`],
+    [`Inactive Customers — Ma'ayan + Icedream  ·  ${_inactivePeriod}`],
+    [`Total: ${_allInactive.length} accounts with no orders in the ${_inactivePeriod}`],
     [],
-    ['שם לקוח','רשת','מפיץ','קטגוריה','הזמנה אחרונה','שבוע אחרון','יח׳ 12/25','יח׳ 01/26','יח׳ 02/26'],
+    ['Customer','Network','Distributor','Category','Last Order','Last Week','Units 12/25','Units 01/26','Units 02/26'],
     ..._allInactive.map(r => [
       str(r.name),
       str(r.net),
       str(r.dist),
-      str(getInactiveCat(r)===1 ? `לא פעיל ב${DATA_MONTH_LABEL}` : `עצר ${r.last}`),
+      str(getInactiveCat(r)===1 ? `Inactive in ${DATA_MONTH_LABEL_EN}` : `Stopped ${_heToEnMonth(r.last)}`),
       str(r.last),
       r.lastWeek != null ? num(r.lastWeek) : str('—'),
       num(r.dec||0),
@@ -6422,7 +6434,7 @@ window.ccExportToExcel = function() {
       num(r.feb||0)
     ])
   ], [45, 20, 12, 22, 14, 12, 10, 10, 10]);
-  XLSX.utils.book_append_sheet(wb, ws5, 'לא פעילים');
+  XLSX.utils.book_append_sheet(wb, ws5, 'Inactive');
 
   // ── Write file ─────────────────────────────────────────────────────────────
   const today=new Date();
