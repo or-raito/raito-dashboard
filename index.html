@@ -2566,7 +2566,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
     </div>
     <div class="panel">
       <div class="ph">
-        <div><div class="pt">Portfolio Revenue Trend</div><div class="ps">Monthly VAT0 + units · Feb = Complete · Mar = Partial (W12)</div></div>
+        <div><div class="pt">Portfolio Revenue Trend</div><div class="ps" id="trend-subtitle">Monthly VAT0 + units</div></div>
         <div class="tab-grp">
           <button class="tab on" id="tb-r" onclick="setTrendMode('rev')">Revenue</button>
           <button class="tab"    id="tb-u" onclick="setTrendMode('units')">Units</button>
@@ -5486,6 +5486,16 @@ function renderMix(){
 function renderTrend(){
   const pm=portfolioMonthly();
   const isRev=S.trendMode==='rev';
+  // Dynamic subtitle: last month = partial, second-to-last = last complete
+  (function(){
+    const el=document.getElementById('trend-subtitle');
+    if(!el) return;
+    const mths=pm.map(p=>p.month);
+    const partial=mths[mths.length-1];
+    const lastComplete=mths.length>1?mths[mths.length-2]:null;
+    const wLabel='W'+DATA_LAST_WEEK;
+    el.textContent='Monthly VAT0 + units'+(lastComplete?' · '+lastComplete+' = Complete':'')+' · '+partial+' = Partial ('+wLabel+')';
+  })();
   const vals=pm.map(p=>isRev?p.revenue:p.units);
   const ctx=document.getElementById('c-trend').getContext('2d');
   if(charts.trend) charts.trend.destroy();
