@@ -5867,8 +5867,8 @@ function renderWeeklyChart() {
     ? (v >= 1000000 ? '₪'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '₪'+Math.round(v/1000)+'K' : '₪'+v)
     : (v >= 1000 ? Math.round(v/1000)+'K' : String(v));
   const fmtTip = v => isRev
-    ? '₪'+Math.round(v).toLocaleString()
-    : Math.round(v).toLocaleString()+' units';
+    ? '₪'+Math.round(v).toLocaleString('en-US')
+    : Math.round(v).toLocaleString('en-US')+' units';
 
   const datasets = _mkWeeklyDatasets(mode);
   _updateWeeklyLegend(dk);
@@ -5925,12 +5925,12 @@ function renderWeeklyChart() {
             var val = ds.data[idx];
             if (val === null || val === undefined) return;
             var lbl = fmtTip(val);
-            var tw = c2.measureText(lbl).width + 6;
-            var th = 13;
+            var tw = c2.measureText(lbl).width + 8;
+            var th = 15;
             var lx = el.x;
             var ly = el.y - 10;
             c2.save();
-            c2.font = '700 10px Inter,sans-serif';
+            c2.font = '700 12px Inter,sans-serif';
             c2.textAlign = 'center';
             c2.textBaseline = 'bottom';
             /* dark pill background */
