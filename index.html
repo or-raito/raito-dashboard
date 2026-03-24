@@ -525,7 +525,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 10:59</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 11:07</div>
   </div>
 </nav>
 
@@ -3162,8 +3162,8 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   <div id="sp-brand-bar">
     <span class="sp-brand-label">Brand</span>
     <button class="sp-brand-btn sp-brand-active" id="spb-all"   onclick="spSetBrand('all')">All Brands</button>
-    <button class="sp-brand-btn"                 id="spb-turbo" onclick="spSetBrand('turbo')">🍦 Turbo</button>
-    <button class="sp-brand-btn"                 id="spb-danis" onclick="spSetBrand('danis')">🎂 Dani's Dream Cake</button>
+    <button class="sp-brand-btn"                 id="spb-turbo" onclick="spSetBrand('turbo')">Turbo</button>
+    <button class="sp-brand-btn"                 id="spb-danis" onclick="spSetBrand('danis')">Dani's Dream Cake</button>
   </div>
 
   <!-- Landing: Customer Summary -->
@@ -3351,7 +3351,7 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
     var units = sps.reduce(function(s,x){return s+x.total;}, 0);
     var rev   = sps.reduce(function(s,x){return s+x.rev;},   0);
     var active = sps.filter(function(s){ return s.feb > 0 && s.mar > 0; }).length;
-    var brandLabel = brandFilter === 'all' ? '' : (brandFilter === 'turbo' ? ' · 🍦 Turbo' : ' · 🎂 Dani's');
+    var brandLabel = brandFilter === 'all' ? '' : (brandFilter === 'turbo' ? ' · Turbo' : " · Dani's Dream Cake");
     document.getElementById('sp-detail-sub').textContent =
       currentCustomer.distributor + (currentCustomer.chain ? ' · ' + currentCustomer.chain : '') +
       ' · ' + spCount + ' sale points' + brandLabel;
