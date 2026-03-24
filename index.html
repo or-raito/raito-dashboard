@@ -587,7 +587,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 00:02</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 00:08</div>
   </div>
 </nav>
 
@@ -2520,7 +2520,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
     </div>
     <div class="panel">
       <div class="ph">
-        <div><div class="pt">Portfolio Revenue Trend</div><div class="ps">Monthly VAT0 + units · Feb = Complete Month</div></div>
+        <div><div class="pt">Portfolio Revenue Trend</div><div class="ps" id="trend-subtitle">Monthly VAT0 + units</div></div>
         <div class="tab-grp">
           <button class="tab on" id="tb-r" onclick="setTrendMode('rev')">Revenue</button>
           <button class="tab"    id="tb-u" onclick="setTrendMode('units')">Units</button>
@@ -5347,12 +5347,15 @@ function renderPareto(){
   const vals=list.map(c=>({name:c.name,v:S.paretoMode==='revenue'?getRevField(c):getUnitField(c),gm:c.grossMargin,id:c.id}));
   vals.sort((a,b)=>b.v-a.v);
   const bgColors=vals.map(x=>x.gm==null?'rgba(148,163,184,0.5)':x.gm>=50?'rgba(16,185,129,0.75)':x.gm>=40?'rgba(245,158,11,0.65)':'rgba(239,68,68,0.6)');
+  const _isRev=S.paretoMode==='revenue';
+  const _fmtK=v=>v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?Math.round(v/1000)+'K':String(Math.round(v));
+  const _fmtBar=v=>(_isRev?'\u20aa':'')+_fmtK(v);
   const ctx=document.getElementById('c-pareto').getContext('2d');
   if(charts.pareto) charts.pareto.destroy();
   charts.pareto=new Chart(ctx,{type:'bar',data:{labels:vals.map(v=>v.name),datasets:[{data:vals.map(v=>v.v),backgroundColor:bgColors,borderWidth:0}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return (S.paretoMode==='revenue'?'NIS ':'')+N(c.raw);}}},
-    datalabels:{anchor:'end',align:'end',color:'#94a3b8',font:{size:9},formatter:function(v){return N(v);}}},
-    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false},suggestedMax:vals.length?vals[0].v*1.15:100}},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return _fmtBar(c.raw);}}},
+    datalabels:{anchor:'end',align:'end',color:'#94a3b8',font:{size:9},formatter:function(v){return _fmtBar(v);}}},
+    scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{min:0,ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return _fmtBar(v);}},grid:{display:false,drawBorder:false,drawTicks:false},suggestedMax:vals.length?vals[0].v*1.15:100}},
     onClick:function(_,els){if(els.length>0){const c=vals[els[0].index];S.selId=c.id;renderTable();openDrawer(customers.find(x=>x.id===c.id));}}}});
 }
 
@@ -5380,11 +5383,27 @@ function renderTrend(){
   const pm=portfolioMonthly();
   const isRev=S.trendMode==='rev';
   const vals=pm.map(p=>isRev?p.revenue:p.units);
+  const lastIdx=vals.length-1;
+  const _tFmt=v=>isRev?'\u20aa'+Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,','):Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g,',')+' u';
+  const ptColors=vals.map((_,i)=>i===lastIdx?'#94a3b8':'#4f8ef7');
+  // Dynamic subtitle
+  (function(){
+    const el=document.getElementById('trend-subtitle');
+    if(!el) return;
+    const mths=pm.map(p=>p.month);
+    const partial=mths[mths.length-1];
+    const lastComplete=mths.length>1?mths[mths.length-2]:null;
+    const wLabel='W'+DATA_LAST_WEEK;
+    el.textContent='Monthly VAT0 + units'+(lastComplete?' \u00b7 '+lastComplete+' = Complete':'')+' \u00b7 '+partial+' = Partial ('+wLabel+')';
+  })();
   const ctx=document.getElementById('c-trend').getContext('2d');
   if(charts.trend) charts.trend.destroy();
-  charts.trend=new Chart(ctx,{type:'line',data:{labels:pm.map(p=>p.month),datasets:[{data:vals,borderColor:'#5D5FEF',backgroundColor:'rgba(93,95,239,0.08)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#5D5FEF',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:7}]},
+  charts.trend=new Chart(ctx,{type:'line',data:{labels:pm.map(p=>p.month),datasets:[{data:vals,
+    borderColor:'#5D5FEF',backgroundColor:'rgba(93,95,239,0.08)',fill:true,tension:0.3,
+    pointRadius:5,pointBackgroundColor:ptColors,
+    segment:{borderColor:ctx2=>ctx2.p1DataIndex===lastIdx?'#94a3b8':'#4f8ef7',borderDash:ctx2=>ctx2.p1DataIndex===lastIdx?[6,4]:[]}}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return N(c.raw);}}},
-    datalabels:{anchor:'end',align:'top',offset:6,color:'#64748b',font:{size:11,weight:'600'},formatter:function(v){return N(v);}}},
+    datalabels:{anchor:'end',align:'top',offset:6,color:'#64748b',font:{size:11,weight:'600'},formatter:function(v,c){return (c.dataIndex===lastIdx?'partial \u00b7 ':'')+_tFmt(v);}}},
     scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false,drawBorder:false,drawTicks:false}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return N(v);}},grid:{display:false,drawBorder:false,drawTicks:false}}}}});
 }
 
@@ -5539,7 +5558,7 @@ function closeDrawer(){
 //   1 = "ינ'26"  (Jan 2026 — monthly total, displayed as dot)
 //   2–10 = "ש'1"–"ש'9"  (weekly, 2026)
 // Source: icedream_weekly_sales.xls  +  CP tab monthly totals  +  maay_feb_full.xlsx
-const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3","22/3"];
+const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3"];
 
 // ── Inactive customers: dynamic period config ─────────────────────────────
 // DATA_LAST_WEEK auto-derived from weeklyXLabels length — update by adding labels above
