@@ -525,7 +525,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 11:07</div>
+    <div style="margin-top:12px; text-align:center; font-size:10px; color:var(--text-muted);">Last updated: 24/03/2026 11:13</div>
   </div>
 </nav>
 
@@ -3267,18 +3267,38 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
     if (brandFilter === 'danis') return s.dc > 0;
     return true;
   }
+  // Brand-specific unit count for a single sale point
+  function spBrandUnits(s) {
+    if (brandFilter === 'turbo') return s.choc + s.van + s.mango + s.pist;
+    if (brandFilter === 'danis') return s.dc;
+    return s.total;
+  }
+  // Brand-specific revenue for a single sale point (fixed B2B prices)
+  function spBrandRev(s) {
+    if (brandFilter === 'turbo') return (s.choc + s.van + s.mango + s.pist) * 13.8;
+    if (brandFilter === 'danis') return s.dc * 81.1;
+    return s.rev;
+  }
   function cHasBrand(c) {
     if (brandFilter === 'all') return true;
     return c.salepoints.some(spMatchesBrand);
   }
   function cBrandUnits(c) {
-    // Return brand-specific unit totals for the customer row
+    // Return brand-specific totals for the customer summary row
     if (brandFilter === 'all') return { dec: c.dec, jan: c.jan, feb: c.feb, mar: c.mar, total: c.total_units, rev: c.total_revenue, sp: c.salepoint_count };
     var dec=0, jan=0, feb=0, mar=0, total=0, rev=0, sp=0;
     c.salepoints.forEach(function(s) {
       if (!spMatchesBrand(s)) return;
-      dec += s.dec; jan += s.jan; feb += s.feb; mar += s.mar;
-      total += s.total; rev += s.rev; sp++;
+      var bu = spBrandUnits(s);
+      // Distribute monthly units proportionally by brand share
+      var frac = s.total > 0 ? bu / s.total : 0;
+      dec   += Math.round(s.dec * frac);
+      jan   += Math.round(s.jan * frac);
+      feb   += Math.round(s.feb * frac);
+      mar   += Math.round(s.mar * frac);
+      total += bu;
+      rev   += spBrandRev(s);
+      sp++;
     });
     return { dec: dec, jan: jan, feb: feb, mar: mar, total: total, rev: rev, sp: sp };
   }
@@ -3348,8 +3368,8 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
   function renderDetailFiltered() {
     var sps = currentCustomer.salepoints.filter(spMatchesBrand);
     var spCount = sps.length;
-    var units = sps.reduce(function(s,x){return s+x.total;}, 0);
-    var rev   = sps.reduce(function(s,x){return s+x.rev;},   0);
+    var units = sps.reduce(function(a,x){return a+spBrandUnits(x);}, 0);
+    var rev   = sps.reduce(function(a,x){return a+spBrandRev(x);},   0);
     var active = sps.filter(function(s){ return s.feb > 0 && s.mar > 0; }).length;
     var brandLabel = brandFilter === 'all' ? '' : (brandFilter === 'turbo' ? ' · Turbo' : " · Dani's Dream Cake");
     document.getElementById('sp-detail-sub').textContent =
@@ -3385,7 +3405,7 @@ window.__SP_DATA__ = {"customers": [{"name": "שוק פרטי", "distributor": "
         '<td>' + fmtN(s.jan) + '</td>' +
         '<td>' + fmtN(s.feb) + '</td>' +
         '<td>' + fmtN(s.mar) + '</td>' +
-        '<td class="sp-bold">' + fmtN(s.total) + '</td>' +
+        '<td class="sp-bold">' + fmtN(spBrandUnits(s)) + '</td>' +
         '<td>' + s.months_active + '</td>' +
         '<td>' + trendHtml + '</td>' +
         '<td><span class="sp-status ' + statusCls + '">' + esc(s.status) + '</span></td>' +
