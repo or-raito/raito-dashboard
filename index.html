@@ -6748,9 +6748,8 @@ renderWeeklyChart = function() {
   const fmtAx = v => isRev
     ? (v >= 1000000 ? '\u20aa'+(v/1000000).toFixed(1)+'M' : v >= 1000 ? '\u20aa'+Math.round(v/1000)+'K' : '\u20aa'+v)
     : (v >= 1000 ? Math.round(v/1000)+'K' : String(v));
-  const fmtTip = v => isRev
-    ? '\u20aa'+Math.round(v).toLocaleString()
-    : Math.round(v).toLocaleString()+' units';
+  const _comma = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const fmtTip = v => isRev ? '\u20aa'+_comma(v) : _comma(v)+' units';
 
   const datasets = _mkWeeklyDatasets(mode);
   _updateWeeklyLegend(dk);
@@ -6796,7 +6795,35 @@ renderWeeklyChart = function() {
         x: { ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter,sans-serif' } }, grid: { display: false, drawBorder: false, drawTicks: false } },
         y: { beginAtZero: true, suggestedMax: _yMax, ticks: { color: '#94a3b8', font: { size: 11, family: 'Inter,sans-serif' }, callback: fmtAx }, grid: { display: false, drawBorder: false, drawTicks: false } }
       }
-    }
+    },
+    plugins: [{
+      id: 'weeklyValueLabels',
+      afterDraw: function(chart) {
+        var c2 = chart.ctx;
+        chart.data.datasets.forEach(function(ds, di) {
+          var meta = chart.getDatasetMeta(di);
+          if (!meta || meta.hidden) return;
+          meta.data.forEach(function(el, idx) {
+            var val = ds.data[idx];
+            if (val === null || val === undefined) return;
+            var lbl = fmtTip(val);
+            c2.save();
+            c2.font = '700 12px Inter,sans-serif';
+            var tw = c2.measureText(lbl).width + 10;
+            var th = 16;
+            var lx = el.x, ly = el.y - 10;
+            c2.textAlign = 'center';
+            c2.textBaseline = 'bottom';
+            c2.fillStyle = 'rgba(255,255,255,0.92)';
+            var rx = lx - tw/2, ry = ly - th;
+            c2.beginPath(); c2.roundRect(rx, ry, tw, th, 3); c2.fill();
+            c2.fillStyle = ds.borderColor || '#1A1D23';
+            c2.fillText(lbl, lx, ly);
+            c2.restore();
+          });
+        });
+      }
+    }]
   });
 };
 
