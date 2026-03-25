@@ -587,7 +587,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 19:58</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 20:01</div>
   </div>
 </nav>
 
@@ -4612,7 +4612,16 @@ window.__SP_DATA__ = {"customers": [{"name": "Private Market", "distributor": "M
     } else {
       /* ── Offline mode: mutate local state ── */
       if(_mMode==='add') S[_mSheet].push(rec);
-      else S[_mSheet][_mIdx]=rec;
+      else { var old=S[_mSheet][_mIdx]; for(var k in rec) old[k]=rec[k]; rec=old; }
+      /* Auto-resolve product display fields for pricing */
+      if(_mSheet==='pricing' && rec.sku_key) {
+        var prod=S.products.find(function(p){return p.sku_key===rec.sku_key;});
+        if(prod) {
+          if(!rec.name_en) rec.name_en=prod.name_en||'';
+          if(!rec.name_he) rec.name_he=prod.name_he||'';
+          if(!rec.barcode) rec.barcode=prod.barcode||'';
+        }
+      }
       mdModalClose();
       mdRender(_mSheet);
       markDirty();
