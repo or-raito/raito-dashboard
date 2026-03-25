@@ -9,7 +9,7 @@ import json
 from config import extract_customer_name, PRODUCT_SHORT
 from registry import CUSTOMER_NAMES_EN
 from pricing_engine import (
-    get_b2b_price_safe, load_mayyan_price_table, get_mayyan_chain_price,
+    get_b2b_price_safe,
     all_b2b_prices,
 )
 from business_logic import enrich_salepoint
@@ -338,8 +338,6 @@ def _extract(data):
     Status/Trend: Pre-computed via business_logic (Option A — Python-side only).
     """
     months = ['December 2025', 'January 2026', 'February 2026', 'March 2026']
-    price_table = load_mayyan_price_table()
-
     # Collect per-customer, per-branch data — same grouping as the Excel
     # For Ma'ayan: group by normalized chain. Each account = one sale point.
     # For Icedream: group by normalized chain. Each customer entry = one sale point.
@@ -348,7 +346,7 @@ def _extract(data):
     for m in months:
         md = data['monthly_data'].get(m, {})
 
-        # Ma'ayan accounts
+        # Ma'ayan accounts — pdata is {product: {units, value}} (priced at parse time)
         for (raw_chain, acct_name), pdata in md.get('mayyan_accounts', {}).items():
             norm = extract_customer_name(acct_name, source_customer=raw_chain)
             key = ("Ma'ayan", norm)
@@ -358,11 +356,12 @@ def _extract(data):
             if acct_name not in customers[key]['branches']:
                 customers[key]['branches'][acct_name] = {mo: {'units': 0, 'rev': 0, 'flav': {}} for mo in months}
             b = customers[key]['branches'][acct_name][m]
-            for prod, units in pdata.items():
-                if isinstance(units, (int, float)) and units != 0:
-                    price = get_mayyan_chain_price(price_table, raw_chain, prod)
+            for prod, prod_data in pdata.items():
+                units = prod_data.get('units', 0) if isinstance(prod_data, dict) else (prod_data or 0)
+                value = prod_data.get('value', 0) if isinstance(prod_data, dict) else 0
+                if units != 0:
                     b['units'] += units
-                    b['rev'] += units * price
+                    b['rev'] += value
                     b['flav'][prod] = b['flav'].get(prod, 0) + units
 
         # Icedream customers

@@ -2092,8 +2092,8 @@ def generate_unified_dashboard(data, master_data=None):
     turbo_b2b = get_b2b_price_safe('chocolate')
     dc_b2b = get_b2b_price_safe('dream_cake_2')
 
-    # Build CC tab (source now embedded in cc_dashboard.py — no file dependency)
-    cc_data = build_cc_tab()
+    # Build CC tab — passes the same consolidated data object as BO (single pipeline)
+    cc_data = build_cc_tab(data)
 
     # Build Excel data JSON
     excel_json = _build_excel_data_json(data)
