@@ -587,7 +587,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 10:52</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 11:00</div>
   </div>
 </nav>
 
@@ -2489,6 +2489,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
 
 
   
+  </div>
 
   <div class="kpi-grid" id="kpi-grid"></div>
 
@@ -2503,9 +2504,14 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         <button class="tab" id="wb-u" onclick="setWeeklyMode('units')">Units</button>
       </div>
     </div>
-    <div class="weekly-box"><canvas id="c-weekly"></canvas></div>
-    <div class="wlegend" id="wlegend"></div>
-  </div>
+    <div id="weekly-no-cust" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:180px;gap:10px;color:var(--text2);font-size:13px">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01" stroke-linecap="round"/></svg>
+      <span>Weekly trend shows <strong>portfolio-level</strong> data &mdash; select <strong>All Customers</strong> to view</span>
+    </div>
+    <div id="weekly-chart-wrap">
+      <div class="weekly-box"><canvas id="c-weekly"></canvas></div>
+      <div class="wlegend" id="wlegend"></div>
+    </div>
 
   <div class="row2b">
     <div class="panel">
@@ -5778,6 +5784,14 @@ function _updateWeeklyLegend(dk) {
 }
 
 function renderWeeklyChart() {
+  // Portfolio-level chart — not meaningful when a single customer is selected.
+  const _noCust  = document.getElementById('weekly-no-cust');
+  const _wrap    = document.getElementById('weekly-chart-wrap');
+  const _custSel = S.cust !== 'all';
+  if (_noCust) _noCust.style.display = _custSel ? 'flex' : 'none';
+  if (_wrap)   _wrap.style.display   = _custSel ? 'none' : 'block';
+  if (_custSel) { if (charts.weekly) { charts.weekly.destroy(); charts.weekly = null; } return; }
+
   const mode = _weeklyMode;
   const dk   = _weeklyDistKey();
   const ctx  = document.getElementById('c-weekly').getContext('2d');
