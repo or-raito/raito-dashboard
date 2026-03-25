@@ -587,7 +587,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 11:00</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 25/03/2026 11:11</div>
   </div>
 </nav>
 
@@ -5784,14 +5784,6 @@ function _updateWeeklyLegend(dk) {
 }
 
 function renderWeeklyChart() {
-  // Portfolio-level chart — not meaningful when a single customer is selected.
-  const _noCust  = document.getElementById('weekly-no-cust');
-  const _wrap    = document.getElementById('weekly-chart-wrap');
-  const _custSel = S.cust !== 'all';
-  if (_noCust) _noCust.style.display = _custSel ? 'flex' : 'none';
-  if (_wrap)   _wrap.style.display   = _custSel ? 'none' : 'block';
-  if (_custSel) { if (charts.weekly) { charts.weekly.destroy(); charts.weekly = null; } return; }
-
   const mode = _weeklyMode;
   const dk   = _weeklyDistKey();
   const ctx  = document.getElementById('c-weekly').getContext('2d');
@@ -6545,6 +6537,14 @@ function _ccFilteredWeekIndices() {
 // Override renderWeeklyChart to respect year + month filters
 const _origRenderWeeklyChart = renderWeeklyChart;
 renderWeeklyChart = function() {
+  // Portfolio-level chart — hide when a single customer is selected
+  const _noCust  = document.getElementById('weekly-no-cust');
+  const _wrap    = document.getElementById('weekly-chart-wrap');
+  const _custSel = S.cust !== 'all';
+  if (_noCust) _noCust.style.display = _custSel ? 'flex' : 'none';
+  if (_wrap)   _wrap.style.display   = _custSel ? 'none' : 'block';
+  if (_custSel) { if (charts.weekly) { charts.weekly.destroy(); charts.weekly = null; } return; }
+
   const mode = _weeklyMode;
   const dk   = _weeklyDistKey();
   const ctx  = document.getElementById('c-weekly').getContext('2d');
