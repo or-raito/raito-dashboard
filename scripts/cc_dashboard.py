@@ -1531,11 +1531,25 @@ function getBrandUnits(c){
 }
 function getRevField(c){
   const r=getBrandRev(c);
-  return S.month==='dec'?r.dec:S.month==='feb'?r.feb:S.month==='mar'?(r.mar||0):S.month==='total'?(r.dec+r.jan+r.feb+(r.mar||0)):r.jan;
+  if(S.month==='dec') return r.dec;
+  if(S.month==='jan') return r.jan;
+  if(S.month==='feb') return r.feb;
+  if(S.month==='mar') return r.mar||0;
+  // total: respect year filter
+  if(S.year==='2025') return r.dec;
+  if(S.year==='2026') return r.jan+r.feb+(r.mar||0);
+  return r.dec+r.jan+r.feb+(r.mar||0);
 }
 function getUnitField(c){
   const u=getBrandUnits(c);
-  return S.month==='dec'?u.dec:S.month==='feb'?u.feb:S.month==='mar'?(u.mar||0):S.month==='total'?(u.dec+u.jan+u.feb+(u.mar||0)):u.jan;
+  if(S.month==='dec') return u.dec;
+  if(S.month==='jan') return u.jan;
+  if(S.month==='feb') return u.feb;
+  if(S.month==='mar') return u.mar||0;
+  // total: respect year filter
+  if(S.year==='2025') return u.dec;
+  if(S.year==='2026') return u.jan+u.feb+(u.mar||0);
+  return u.dec+u.jan+u.feb+(u.mar||0);
 }
 
 // ── FILTERS ───────────────────────────────────────────────────────────────────
@@ -1553,13 +1567,21 @@ function filtered(){
 
 function portfolioMonthly(list){
   const src=list||filtered();
-  return ['dec','jan','feb','mar'].map((m,i)=>{
+  const allM=['dec','jan','feb','mar'];
+  const allL=["Dec '25","Jan '26","Feb '26","Mar '26"];
+  // When showing 'total' mode, only include months for the selected year
+  const active = S.month!=='total' ? allM
+    : S.year==='2025' ? ['dec']
+    : S.year==='2026' ? ['jan','feb','mar']
+    : allM;
+  return active.map(m=>{
+    const i=allM.indexOf(m);
     let rev=0,units=0;
     src.forEach(c=>{
       const r=getBrandRev(c); const u=getBrandUnits(c);
       rev+=r[m]||0; units+=u[m]||0;
     });
-    return {month:["Dec '25","Jan '26","Feb '26","Mar '26"][i],revenue:rev,units};
+    return {month:allL[i],revenue:rev,units};
   });
 }
 
@@ -1625,9 +1647,11 @@ function renderKPIs(){
   const list=filtered();
   const totals=portfolioMonthly(list);
   const mIdx={dec:0,jan:1,feb:2,mar:3}[S.month];
-  const mLbl={dec:"Dec '25",jan:"Jan '26",feb:"Feb '26",mar:`Mar '26 (W${DATA_LAST_WEEK})`,total:"All Months"}[S.month];
-  const curRev  =mIdx!=null?totals[mIdx].revenue :totals.reduce((s,t)=>s+t.revenue,0);
-  const curUnits=mIdx!=null?totals[mIdx].units   :totals.reduce((s,t)=>s+t.units,0);
+  const yLbl=S.year==='2025'?" '25":S.year==='2026'?" '26":'';
+  const mLbl={dec:"Dec '25",jan:"Jan '26",feb:"Feb '26",mar:`Mar '26 (W${DATA_LAST_WEEK})`,total:`All Months${yLbl}`}[S.month];
+  // For 'total' mode use getRevField (year-aware) rather than summing portfolioMonthly
+  const curRev  =mIdx!=null?totals[mIdx].revenue :list.reduce((s,c)=>s+getRevField(c),0);
+  const curUnits=mIdx!=null?totals[mIdx].units   :list.reduce((s,c)=>s+getUnitField(c),0);
   const grossVal=list.reduce((s,c)=>s+(getRevField(c)*(c.grossMargin||0)/100),0);
   const opVal   =list.reduce((s,c)=>s+(getRevField(c)*(c.opMargin||0)/100),0);
   const withSales=list.filter(c=>getRevField(c)>0).length;
@@ -1750,7 +1774,8 @@ function renderTable(){
   };
   activeRows.sort(sortFn);
 
-  const mLbl={dec:"Dec",jan:"Jan",feb:"Feb",mar:`Mar (W${DATA_LAST_WEEK})`,total:"Total"}[S.month];
+  const tYLbl=S.year==='2025'?"'25":S.year==='2026'?"'26":'';
+  const mLbl={dec:"Dec",jan:"Jan",feb:"Feb",mar:`Mar (W${DATA_LAST_WEEK})`,total:tYLbl?`Total ${tYLbl}`:"Total"}[S.month];
   const rows=[...activeRows,...zeroRows].map(c=>{
     const rev=c._rev, units=c._units;
     const share=totalRev>0?(rev/totalRev*100):0;
