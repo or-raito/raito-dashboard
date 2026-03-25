@@ -568,18 +568,26 @@ def parse_mayyan_file(filepath, price_table=None):
 
         by_account = {}
         if branch_col:
-            group_cols = [branch_col, 'product']
-            if chain_col:
-                group_cols = [chain_col, branch_col, 'product']
-            for _, row in mdf.groupby(group_cols).agg(
-                total_units=(units_col, 'sum')
-            ).reset_index().iterrows():
-                acct = str(row[branch_col]).strip()
-                chain_name = str(row[chain_col]).strip() if chain_col else ''
+            for _, row in mdf.iterrows():
+                acct_raw = row.get(branch_col) if branch_col in row.index else None
+                if not acct_raw:
+                    continue
+                acct = str(acct_raw).strip()
+                chain_name = str(row[chain_col]).strip() if chain_col and chain_col in row.index else ''
+                product = row.get('product')
+                if not product:
+                    continue
+                row_units = int(row[units_col]) if row.get(units_col) else 0
+                unit_price = _mayyan_chain_price(price_table, chain_name, product)
                 key = (chain_name, acct)
                 if key not in by_account:
                     by_account[key] = {}
-                by_account[key][row['product']] = int(row['total_units'])
+                if product not in by_account[key]:
+                    by_account[key][product] = {'units': 0, 'value': 0.0}
+                by_account[key][product]['units'] += row_units
+                by_account[key][product]['value'] = round(
+                    by_account[key][product]['value'] + row_units * unit_price, 2
+                )
 
         branches = set()
         if branch_col:
@@ -1126,16 +1134,9 @@ def consolidate_data():
                 }
         month_data['mayyan_chains_revenue'] = mayyan_chains_revenue
 
-        mayyan_accounts_revenue = {}
-        for key, pdata in month_data.get('mayyan_accounts', {}).items():
-            # key is (chain_name, account_name) tuple
-            mayyan_accounts_revenue[key] = {}
-            for p, units in pdata.items():
-                mayyan_accounts_revenue[key][p] = {
-                    'units': units,
-                    'value': round(units * get_b2b_price_safe(p), 2),
-                }
-        month_data['mayyan_accounts_revenue'] = mayyan_accounts_revenue
+        # mayyan_accounts now carries {product: {units, value}} — pass through directly
+        # (pricing was applied at parse time using _mayyan_chain_price per row)
+        month_data['mayyan_accounts_revenue'] = month_data.get('mayyan_accounts', {})
 
         consolidated['monthly_data'][month] = month_data
 

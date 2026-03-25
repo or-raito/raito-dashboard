@@ -14,49 +14,41 @@ Updated: 2026-03-24
 import re
 import re as _re
 from registry import CUSTOMER_NAMES_EN
-from pricing_engine import get_customer_price, get_b2b_price_safe
+from pricing_engine import (
+    get_customer_price, get_b2b_price_safe, get_production_cost,
+    load_mayyan_price_table, _MAAYAN_CHAIN_TO_PRICEDB,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Dynamic data generation — replaces hardcoded customers[] and productMix{}
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Static customer metadata: fields that don't change with weekly data updates.
-# Dynamic fields (revenue, units) are computed by _compute_cc_dynamic_data().
+# Static customer metadata: structural fields only.
+# avgPrice, grossMargin, opMargin, momGrowth are computed DYNAMICALLY from
+# actual transaction data by _compute_cc_dynamic_data() — never hardcoded.
 _CC_CUSTOMER_META = {
-    1:  dict(name="AMPM",           status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=12.39, grossMargin=47.42, opMargin=22.42, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=174.4),
-    2:  dict(name="Alonit",         status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=12.27, grossMargin=46.95, opMargin=21.95, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=22.9),
-    3:  dict(name="Good Pharm",     status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=12.67, grossMargin=48.70, opMargin=33.70, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=None),
-    4:  dict(name="Delek",          status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=12.74, grossMargin=48.98, opMargin=23.98, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=-34.5),
-    5:  dict(name="Wolt Market",    status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=37.5,  grossMargin=37.44, opMargin=22.44, activeSKUs=6,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"],   momGrowth=-80.5),
-    6:  dict(name="Tiv Taam",       status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=14.2,  grossMargin=54.23, opMargin=29.23, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=43.1),
-    7:  dict(name="Yingo Deli",     status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=39.9,  grossMargin=40.25, opMargin=25.25, activeSKUs=6,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"],   momGrowth=39.9),
-    8:  dict(name="Carmela",        status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=15.6,  grossMargin=43.49, opMargin=28.49, activeSKUs=6,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"],   momGrowth=-63.4),
-    9:  dict(name="Noy Hasade",     status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=13.4,  grossMargin=49.53, opMargin=34.53, activeSKUs=5,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"],   momGrowth=-100.0),
-    10: dict(name="Carrefour",      status="negotiation", distributor="מעיין נציגויות", dist_pct=25, avgPrice=13.8,  grossMargin=52.9,  opMargin=27.9,  activeSKUs=3,  hasPricing=True,  hasSales=False, brands=["turbo"],            momGrowth=None),
-    11: dict(name="Private Market", status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=14.1,  grossMargin=53.9,  opMargin=28.9,  activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=35.1),
-    12: dict(name="Ugipletzet",     status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=None,  grossMargin=None,  opMargin=None,  activeSKUs=3,  hasPricing=False, hasSales=True,  brands=["turbo"],            momGrowth=None),
-    13: dict(name="Paz Yellow",     status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=11.0,  grossMargin=40.91, opMargin=15.91, activeSKUs=3,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=11.2),
-    14: dict(name="Paz Super Yuda", status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=11.0,  grossMargin=40.91, opMargin=15.91, activeSKUs=3,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=26.6),
-    15: dict(name="Sonol",          status="active",      distributor="מעיין נציגויות", dist_pct=25, avgPrice=14.0,  grossMargin=53.57, opMargin=28.57, activeSKUs=3,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=-2.0),
-    16: dict(name="Domino's",       status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=11.4,  grossMargin=42.98, opMargin=27.98, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=None),
-    17: dict(name="Naomi's Farm",   status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=35.03, grossMargin=39.48, opMargin=24.48, activeSKUs=5,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"],   momGrowth=-3.2),
-    18: dict(name="Hama",           status="negotiation", distributor="אייסדרים",       dist_pct=15, avgPrice=14.1,  grossMargin=53.9,  opMargin=38.9,  activeSKUs=4,  hasPricing=True,  hasSales=False, brands=["turbo"],            momGrowth=None),
-    19: dict(name="Foot Locker",    status="active",      distributor="אייסדרים",       dist_pct=15, avgPrice=15.5,  grossMargin=58.06, opMargin=43.06, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"],            momGrowth=None),
-    20: dict(name="Biscotti Chain", status="active",      distributor="ביסקוטי",        dist_pct=0,  avgPrice=80.0,  grossMargin=27.5,  opMargin=27.5,  activeSKUs=1,  hasPricing=True,  hasSales=True,  brands=["danis"],            momGrowth=None),
+    1:  dict(name="AMPM",           status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    2:  dict(name="Alonit",         status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    3:  dict(name="Good Pharm",     status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    4:  dict(name="Delek",          status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    5:  dict(name="Wolt Market",    status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=6,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"]),
+    6:  dict(name="Tiv Taam",       status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    7:  dict(name="Yingo Deli",     status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=6,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"]),
+    8:  dict(name="Carmela",        status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=6,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"]),
+    9:  dict(name="Noy Hasade",     status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=5,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"]),
+    10: dict(name="Carrefour",      status="negotiation", distributor="מעיין נציגויות", dist_pct=25, activeSKUs=3,  hasPricing=True,  hasSales=False, brands=["turbo"]),
+    11: dict(name="Private Market", status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    12: dict(name="Ugipletzet",     status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=3,  hasPricing=False, hasSales=True,  brands=["turbo"]),
+    13: dict(name="Paz Yellow",     status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=3,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    14: dict(name="Paz Super Yuda", status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=3,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    15: dict(name="Sonol",          status="active",      distributor="מעיין נציגויות", dist_pct=25, activeSKUs=3,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    16: dict(name="Domino's",       status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    17: dict(name="Naomi's Farm",   status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=5,  hasPricing=True,  hasSales=True,  brands=["turbo", "danis"]),
+    18: dict(name="Hama",           status="negotiation", distributor="אייסדרים",       dist_pct=15, activeSKUs=4,  hasPricing=True,  hasSales=False, brands=["turbo"]),
+    19: dict(name="Foot Locker",    status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
+    20: dict(name="Biscotti Chain", status="active",      distributor="ביסקוטי",        dist_pct=0,  activeSKUs=1,  hasPricing=True,  hasSales=True,  brands=["danis"]),
 }
-
-# Per-customer selling prices for CC Ma'ayan revenue computation.
-# Sourced from pricing_engine.get_customer_price() — no hardcoded literals.
-# This function returns the negotiated price for a customer+SKU, or B2B fallback.
-def _cc_customer_price(customer_en: str, sku: str = 'chocolate') -> float:
-    """Get the selling price for a CC customer.
-
-    For Turbo products, returns the negotiated per-customer price.
-    For Dani's products, returns the B2B list price.
-    Falls back to B2B list price for unknown customers.
-    """
-    return get_customer_price(sku, customer_en)
 
 # Maps English chain name (as returned by extract_customer_name) → CC customer ID.
 # Used to route parsed records to the right customer row.
@@ -98,24 +90,92 @@ _DANIS_PRODUCTS = {'dream_cake', 'dream_cake_2'}
 # JS product output order for productMix{}
 _PRODUCT_ORDER = ['chocolate', 'vanilla', 'mango', 'pistachio', 'magadat', 'dream_cake', 'dream_cake_2']
 
+# Maps CC customer ID → price-DB customer key for Ma'ayan price table lookups.
+# Only Ma'ayan-distributed customers appear here. Others fall back to
+# get_customer_price() or B2B list price.
+_CC_ID_TO_PRICEDB_CUST = {
+    1:  'AMPM',
+    2:  'אלונית',
+    4:  'דלק',
+    11: 'שוק פרטי',
+    13: 'פז יילו',
+    14: 'פז סופר יודה',
+    15: 'סונול',
+}
 
-def _compute_cc_dynamic_data():
-    """Parse all distributor files and return (customers_js, product_mix_js) strings.
+# Maps CC customer ID → English name used by pricing_engine.get_customer_price().
+# Needed because _CC_CUSTOMER_META display names may differ from pricing-engine keys.
+_CC_ID_TO_PRICING_EN = {
+    1:  'AMPM',
+    2:  'Alonit',
+    3:  'Good Pharm',
+    4:  'Delek Menta',
+    5:  'Wolt Market',
+    6:  'Tiv Taam',
+    7:  'Yango Deli',
+    8:  'Carmella',
+    9:  'Noy HaSade',
+    11: 'Private Market',
+    13: 'Paz Yellow',
+    14: 'Paz Super Yuda',
+    15: 'Sonol',
+    16: "Domino's Pizza",
+    17: "Naomi's Farm",
+    19: 'Foot Locker',
+}
 
-    Aggregates:
-      - Icedream Dec/Jan/Feb: from parse_all_icedreams() monthly parser
-      - Icedream Mar: from parse_format_b_xls() (Format B weekly XLS)
-      - Ma'ayan all months: from parse_all_mayyan() with _CC_MAY_ICE_PRICE
-      - Biscotti all months: from parse_all_biscotti()
+# Products shown per customer in the pricing drawer (const productPricing).
+# Structural: which SKUs Raito sells to this customer.
+_CC_CUST_SKUS = {
+    1:  ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    2:  ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    3:  ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    4:  ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    5:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2', 'magadat'],
+    6:  ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    7:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2', 'magadat'],
+    8:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2', 'magadat'],
+    9:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'magadat'],
+    10: ['vanilla', 'mango', 'chocolate'],
+    11: ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    13: ['vanilla', 'mango', 'chocolate'],
+    14: ['vanilla', 'mango', 'chocolate'],
+    15: ['vanilla', 'mango', 'chocolate'],
+    16: ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    17: ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2'],
+    18: ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    19: ['vanilla', 'mango', 'chocolate', 'pistachio'],
+    20: ['dream_cake_2'],
+}
+
+# Hebrew product names for the pricing drawer
+_PROD_HEB = {
+    'vanilla':      'גלידת חלבון וניל',
+    'mango':        'גלידת חלבון מנגו',
+    'chocolate':    'גלידת חלבון שוקולד לוז',
+    'pistachio':    'גלידת חלבון פיסטוק',
+    'dream_cake':   'דרים קייק (Piece of Cake)',
+    'dream_cake_2': 'דרים קייק',
+    'magadat':      'מארז שלישיית גלידות',
+}
+
+
+def _compute_cc_dynamic_data(data):
+    """Build customers[] and productMix{} JS from the shared consolidated data dict.
+
+    Consumes the SAME data object used by the BO tab — no independent file parsing.
+    Revenue values come pre-priced from parsers.py:
+      - Icedream: actual invoice value from monthly XLSX files
+      - Ma'ayan:  _mayyan_chain_price() per row (price DB + B2B fallback)
+      - Biscotti: BISCOTTI_PRICE_DREAM_CAKE per unit
+
+    avgPrice, grossMargin, opMargin, momGrowth are ALL computed dynamically
+    from the aggregated transaction data — no static literals.
 
     Returns two JS variable declaration strings suitable for regex-injecting
     into the _CC_HTML constant to replace the hardcoded blocks.
     """
-    import sys
-    import os as _os
-    sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-    from parsers import parse_all_icedreams, parse_all_mayyan, parse_all_biscotti, parse_format_b_xls
-    from config import DATA_DIR, extract_customer_name
+    from config import extract_customer_name
 
     months = _ALL_MONTHS
 
@@ -129,7 +189,7 @@ def _compute_cc_dynamic_data():
     pmix = {cid: {} for cid in _CC_CUSTOMER_META}
 
     def _add(cid, mkey, product, units_val, value_val):
-        # Allow negative contributions (returns) — we clamp customer totals at the end.
+        # Allow negative contributions (returns) — clamped at the end.
         units_val = int(round(units_val))
         value_val = float(value_val)
         rev[cid][mkey]  += value_val
@@ -143,14 +203,13 @@ def _compute_cc_dynamic_data():
         if units_val > 0:
             pmix[cid][product] = pmix[cid].get(product, 0) + units_val
 
-    # ── 1. Icedream Dec / Jan / Feb (monthly parser) ─────────────────────
-    print("  [CC] Parsing Icedream monthly data (Dec/Jan/Feb)...")
-    ice_data = parse_all_icedreams()
-    for month_str, mdata in ice_data.items():
-        mkey = _MONTH_KEYS.get(month_str)
-        if not mkey or mkey == 'mar':
-            continue  # March handled separately via Format B
-        for cust_heb, prods in mdata.get('by_customer', {}).items():
+    # ── 1. All distributors, all months — from consolidated data ──────────
+    # Single pipeline: same data object as BO tab.
+    for month_str, mkey in _MONTH_KEYS.items():
+        md = data['monthly_data'].get(month_str, {})
+
+        # Icedream customers (Hebrew name keys → translate to English → lookup CC ID)
+        for cust_heb, prods in md.get('icedreams_customers', {}).items():
             chain_en = extract_customer_name(cust_heb)
             cid = _CUSTOMER_EN_TO_CC_ID.get(chain_en)
             if not cid:
@@ -158,67 +217,34 @@ def _compute_cc_dynamic_data():
             for product, pdata in prods.items():
                 _add(cid, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0))
 
-    # ── 2. Icedream March (Format B weekly XLS) ──────────────────────────
-    print("  [CC] Parsing Icedream Format B XLS (March)...")
-    fb_path = DATA_DIR / 'icedreams' / 'sales_week_12.xls'
-    if fb_path.exists():
-        fb_data = parse_format_b_xls(fb_path)
-        for chain_en, wk_data in fb_data.items():
-            cid = _CUSTOMER_EN_TO_CC_ID.get(chain_en)
-            if not cid:
-                continue
-            for _wk_i, prod_data in wk_data.items():
-                for product, pdata in prod_data.items():
-                    _add(cid, 'mar', product, pdata.get('units', 0), pdata.get('value', 0.0))
-    else:
-        print(f"  [CC] Warning: {fb_path} not found — March Icedream data will be 0")
-
-    # ── 3. Ma'ayan all months ─────────────────────────────────────────────
-    print("  [CC] Parsing Ma'ayan data...")
-    may_data = parse_all_mayyan()
-    for month_str, mdata in may_data.items():
-        mkey = _MONTH_KEYS.get(month_str)
-        if not mkey:
-            continue
-        by_account = mdata.get('by_account', {})
-
-        # Use by_account for ALL Ma'ayan chains so that account-level name
-        # logic in extract_customer_name() fires correctly. This handles:
-        #   - דור אלון → AMPM vs Alonit (by branch name containing AM:PM)
-        #   - שוק פרטי → Tiv Taam vs Private Market (by branch name containing טיב טעם)
-        for (chain_raw, acct), prods in by_account.items():
+        # Ma'ayan accounts — pdata is {product: {units, value}} priced at parse time
+        # via _mayyan_chain_price() (price DB per customer+product, B2B fallback).
+        # Branch-level name logic in extract_customer_name() handles:
+        #   דור אלון → AMPM vs Alonit, שוק פרטי → Tiv Taam vs Private Market
+        for (chain_raw, acct), prods in md.get('mayyan_accounts', {}).items():
             chain_en = extract_customer_name(acct, source_customer=chain_raw)
             cid = _CUSTOMER_EN_TO_CC_ID.get(chain_en)
             if not cid:
                 continue
-            for product, units_val in prods.items():
-                price = _cc_customer_price(chain_en, product)
-                _add(cid, mkey, product, units_val, units_val * price)
+            for product, prod_data in prods.items():
+                units_val = prod_data.get('units', 0) if isinstance(prod_data, dict) else 0
+                value_val = prod_data.get('value', 0.0) if isinstance(prod_data, dict) else 0.0
+                _add(cid, mkey, product, units_val, value_val)
 
-    # ── 4. Biscotti (Mar onwards) ─────────────────────────────────────────
-    print("  [CC] Parsing Biscotti data...")
-    bisc_cid = 20
-    bisc_data = parse_all_biscotti()
-    for month_str, mdata in bisc_data.items():
-        mkey = _MONTH_KEYS.get(month_str)
-        if not mkey:
-            continue
-        for _branch, prods in mdata.get('by_customer', {}).items():
+        # Biscotti customers
+        for _branch, prods in md.get('biscotti_customers', {}).items():
             for product, pdata in prods.items():
-                _add(bisc_cid, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0))
+                _add(20, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0))
 
-    # ── 5. Clamp negative totals to 0 ────────────────────────────────────
-    # A customer-month total can go negative when returns exceed sales.
-    # The dashboard shows 0 for such months (no negative units displayed).
+    # ── 2. Clamp negative totals to 0 ────────────────────────────────────
     for cid in _CC_CUSTOMER_META:
         for m in months:
             if u[cid][m] < 0:
-                u[cid][m]    = 0
-                rev[cid][m]  = 0.0
-                tu[cid][m]   = 0; trev[cid][m] = 0.0
-                du[cid][m]   = 0; drev[cid][m] = 0.0
+                u[cid][m] = 0;    rev[cid][m] = 0.0
+                tu[cid][m] = 0;   trev[cid][m] = 0.0
+                du[cid][m] = 0;   drev[cid][m] = 0.0
 
-    # ── 6. JS number formatter ────────────────────────────────────────────
+    # ── 3. JS number formatter ────────────────────────────────────────────
     def _jn(v, ndigits=2):
         """Format Python value as JS literal. None → null, bool → true/false."""
         if v is None:
@@ -230,12 +256,37 @@ def _compute_cc_dynamic_data():
         r = round(float(v), ndigits)
         return str(int(r)) if r == int(r) else str(r)
 
-    # ── 6. Build customers[] JS ───────────────────────────────────────────
+    # ── 4. Build customers[] JS ───────────────────────────────────────────
     lines = ['const customers = [']
     for cid in sorted(_CC_CUSTOMER_META.keys()):
-        meta  = _CC_CUSTOMER_META[cid]
-        mom   = meta['momGrowth']
+        meta = _CC_CUSTOMER_META[cid]
         brands_js = ','.join(f"'{b}'" for b in meta['brands'])
+
+        # Dynamic financial fields — derived from actual transaction data
+        total_units = sum(u[cid].values())
+        total_rev   = sum(rev[cid].values())
+        dp = meta['dist_pct']
+
+        if total_units > 0 and total_rev > 0 and meta.get('hasPricing'):
+            avg_price = round(total_rev / total_units, 2)
+            total_cost = sum(
+                pmix[cid].get(p, 0) * get_production_cost(p)
+                for p in pmix[cid]
+            )
+            gross_margin = round((total_rev - total_cost) / total_rev * 100, 2)
+            op_margin    = round(gross_margin - dp, 2)
+        else:
+            avg_price = gross_margin = op_margin = None
+
+        # MoM growth: last two consecutive months with revenue > 0
+        month_revs = [rev[cid][m] for m in months]
+        mom_growth = None
+        for i in range(len(month_revs) - 1, 0, -1):
+            if month_revs[i] > 0 and month_revs[i - 1] > 0:
+                mom_growth = round(
+                    (month_revs[i] - month_revs[i - 1]) / month_revs[i - 1] * 100, 1
+                )
+                break
 
         rev_js  = ','.join(f"{m}:{_jn(rev[cid][m])}" for m in months)
         unit_js = ','.join(f"{m}:{u[cid][m]}" for m in months)
@@ -243,8 +294,8 @@ def _compute_cc_dynamic_data():
         row = (
             f"  {{id:{cid}, name:\"{meta['name']}\", status:\"{meta['status']}\","
             f" distributor:\"{meta['distributor']}\","
-            f" dist_pct:{meta['dist_pct']}, avgPrice:{_jn(meta['avgPrice'])},"
-            f" grossMargin:{_jn(meta['grossMargin'])}, opMargin:{_jn(meta['opMargin'])},"
+            f" dist_pct:{meta['dist_pct']}, avgPrice:{_jn(avg_price)},"
+            f" grossMargin:{_jn(gross_margin)}, opMargin:{_jn(op_margin)},"
             f" activeSKUs:{meta['activeSKUs']}, hasPricing:{_jn(meta['hasPricing'])},"
             f" hasSales:{_jn(meta['hasSales'])}, brands:[{brands_js}],\n"
             f"          revenue:{{{rev_js}}},"
@@ -263,13 +314,13 @@ def _compute_cc_dynamic_data():
         else:
             row += f"\n          units:{{{unit_js}}},"
 
-        row += f" momGrowth:{_jn(mom)}}},\n"
+        row += f" momGrowth:{_jn(mom_growth)}}},\n"
         lines.append(row)
 
     lines.append('];')
     customers_js = '\n'.join(lines)
 
-    # ── 7. Build productMix{} JS ──────────────────────────────────────────
+    # ── 5. Build productMix{} JS ──────────────────────────────────────────
     pm_lines = ['const productMix = {']
     for cid in sorted(_CC_CUSTOMER_META.keys()):
         mx = pmix[cid]
@@ -282,9 +333,61 @@ def _compute_cc_dynamic_data():
     return customers_js, product_mix_js
 
 
-def build_cc_tab():
+def _build_product_pricing_js():
+    """Generate const productPricing = {...} from pricing_engine — no hardcoded literals.
+
+    For Ma'ayan customers: uses the price DB per-product lookup (most accurate).
+    For Icedream/Biscotti customers: uses get_customer_price() with B2B fallback.
+    Computes p18 (inc-VAT), cost, gm%, and om% from the engine.
+    """
+    price_table = load_mayyan_price_table()
+    vat = 1.18
+
+    def _get_price(sku, cid):
+        """Best-available price for a CC customer + SKU."""
+        pricedb_cust = _CC_ID_TO_PRICEDB_CUST.get(cid)
+        if pricedb_cust and sku in price_table:
+            p = price_table[sku].get(pricedb_cust)
+            if p:
+                return p
+        # Fallback: pricing_engine per-customer price (or B2B list)
+        cust_en = _CC_ID_TO_PRICING_EN.get(cid, '')
+        return get_customer_price(sku, cust_en) if cust_en else get_b2b_price_safe(sku)
+
+    lines = ['const productPricing = {']
+    for cid in sorted(_CC_CUST_SKUS.keys()):
+        if cid not in _CC_CUSTOMER_META:
+            continue
+        meta = _CC_CUSTOMER_META[cid]
+        dp   = meta['dist_pct']
+        skus = _CC_CUST_SKUS[cid]
+
+        prod_parts = []
+        for sku in skus:
+            p0   = _get_price(sku, cid)
+            p18  = round(p0 * vat, 2)
+            cost = get_production_cost(sku)
+            gm   = round((p0 - cost) / p0 * 100, 2) if p0 > 0 else 0
+            om   = round(gm - dp, 2)
+            heb  = _PROD_HEB.get(sku, sku)
+            prod_parts.append(
+                f'      {{name:"{heb}",p0:{p0},p18:{p18},cost:{cost},gm:{gm},om:{om},dp:{dp}}}'
+            )
+
+        lines.append(f'  {cid}: [')
+        lines.append(',\n'.join(prod_parts) + '],')
+
+    lines.append('};')
+    return '\n'.join(lines)
+
+
+def build_cc_tab(data):
     """
     Generate the Customer Centric tab HTML content.
+
+    Args:
+        data: The consolidated data dict from parsers.consolidate_data().
+              CC consumes the SAME object as the BO tab (single pipeline).
 
     Applies the same CSS/JS processing as _read_cc_dashboard() in unified_dashboard.py,
     but reads from the embedded _CC_HTML constant instead of a file.
@@ -295,10 +398,11 @@ def build_cc_tab():
     content = _CC_HTML
 
     # ── Inject dynamically computed customer data ─────────────────────────
-    # Replaces the hardcoded const customers=[...] and const productMix={...}
-    # blocks with live data parsed from distributor files.
+    # Replaces const customers=[...], productMix={...}, productPricing={...}
+    # with live data derived from the shared consolidated data object.
     try:
-        customers_js, product_mix_js = _compute_cc_dynamic_data()
+        customers_js, product_mix_js = _compute_cc_dynamic_data(data)
+        product_pricing_js = _build_product_pricing_js()
         content = re.sub(
             r'const customers = \[.*?\];',
             lambda m: customers_js,
@@ -311,7 +415,13 @@ def build_cc_tab():
             content,
             flags=re.DOTALL,
         )
-        print("  [CC] Dynamic customers[] and productMix{} injected successfully")
+        content = re.sub(
+            r'const productPricing = \{.*?\};',
+            lambda m: product_pricing_js,
+            content,
+            flags=re.DOTALL,
+        )
+        print("  [CC] Dynamic customers[], productMix{}, productPricing{} injected successfully")
     except Exception as _cc_dyn_err:
         import traceback as _tb
         print(f"  [CC] Warning: dynamic data generation failed — using hardcoded values")

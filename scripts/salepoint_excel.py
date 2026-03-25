@@ -189,11 +189,11 @@ def _extract_salepoint_data(data: dict) -> dict:
                 grp['salepoints'][sp_name] = _empty_sp(sp_name)
             sp = grp['salepoints'][sp_name]
 
-            for flavor, units in products.items():
+            for flavor, prod_data in products.items():
                 if flavor not in FLAVORS:
                     continue
-                units = int(units) if units else 0
-                value = units * get_b2b_price_safe(flavor)
+                units = int(prod_data.get('units', 0)) if isinstance(prod_data, dict) else int(prod_data or 0)
+                value = prod_data.get('value', 0) if isinstance(prod_data, dict) else 0
 
                 sp['months_units'][month] += units
                 sp['total_units'] += units
