@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# GitHub Pages deploy directory
+github-deploy/
+
+# Generated output (rebuilt at runtime from SQL)
+docs/
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Claude/Cowork metadata
+.auto-memory/
+.claude/
+CLAUDE.md
+RAITO_BRIEFING.md
+RAITO_SQL_Architecture_Plan.md

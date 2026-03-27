@@ -274,26 +274,91 @@ def parse_master_data():
                     'last_updated':    _str(r[16]) if len(r) > 16 else '',
                 })
 
-    # ── Portfolio — always from original ─────────────────────────────────────
-    wb_pf = wb_orig or wb_src
-    if 'Portfolio' in wb_pf.sheetnames:
-        ws = wb_pf['Portfolio']
-        # Rows 1-3 = title/guide/legend; Row 4 = headers; Data row 5+
-        header_row = list(ws.iter_rows(min_row=4, max_row=4, values_only=True))[0]
-        headers = [_str(h) for h in header_row]
-        result['portfolio'] = {'headers': headers, 'rows': []}
-        for r in _rows(ws, min_row=5):
-            if not r[1]:
-                continue
-            clean = []
-            for v in r:
-                if v is None:
-                    clean.append(None)
-                elif isinstance(v, (int, float)):
-                    clean.append(v)
+    # ── Normalize pricing: resolve customer names + fill missing product names ─
+    if 'customers' in result and 'pricing' in result:
+        # Customer name → English lookup
+        _to_en = {}
+        for c in result['customers']:
+            en = c.get('name_en', '')
+            if en:
+                _to_en[c.get('name_he', '')] = en
+                _to_en[c.get('key', '')]     = en
+                _to_en[en]                   = en   # identity
+        for pr in result['pricing']:
+            raw = pr.get('customer', '')
+            if raw in _to_en:
+                pr['customer'] = _to_en[raw]
+
+    if 'products' in result and 'pricing' in result:
+        # Fill missing name_en / name_he from products table by sku_key
+        _sku_lookup = {}
+        for p in result['products']:
+            _sku_lookup[p.get('sku_key', '')] = p
+        for pr in result['pricing']:
+            sku = pr.get('sku_key', '')
+            prod = _sku_lookup.get(sku)
+            if prod:
+                if not pr.get('name_en'):
+                    pr['name_en'] = prod.get('name_en', '')
+                if not pr.get('name_he'):
+                    pr['name_he'] = prod.get('name_he', '')
+
+    # ── Portfolio — dynamically generated from customers + products + pricing ─
+    # Build a pivot: rows = customers, columns = active products, cells = price/Pipeline/empty
+    if 'products' in result and 'customers' in result and 'pricing' in result:
+        active_products = [p for p in result['products']
+                           if p.get('status') in ('Active', 'New')]
+
+        # Build pricing lookup keyed by BOTH customer name_he AND customer key
+        # Pricing rows may use either display names (Hebrew) or keys (English)
+        pricing_lookup = {}   # (identifier, sku_key) → (sale_price, status)
+        for pr in result['pricing']:
+            cust_name = pr.get('customer', '')
+            sku = pr.get('sku_key', '')
+            if cust_name and sku:
+                pricing_lookup[(cust_name, sku)] = (
+                    pr.get('sale_price'),
+                    pr.get('status', 'Active')
+                )
+
+        headers = ['#', 'Customer', 'Customer (EN)', 'Type', 'Distributor', 'Status']
+        for prod in active_products:
+            headers.append(prod.get('name_en', prod.get('sku_key', '')))
+        headers.append('Active SKUs')
+
+        rows = []
+        sorted_customers = sorted(result['customers'],
+                                  key=lambda c: c.get('name_en', ''))
+        for i, cust in enumerate(sorted_customers, 1):
+            name_he = cust.get('name_he', '')
+            name_en = cust.get('name_en', '')
+            cust_key = cust.get('key', '')
+            row = [i, name_he, name_en,
+                   cust.get('type', ''),
+                   cust.get('distributor', ''),
+                   cust.get('status', '')]
+            active_count = 0
+            for prod in active_products:
+                sku = prod.get('sku_key', '')
+                # Try matching by name_he first, then by customer key, then name_en
+                lookup = (pricing_lookup.get((name_he, sku))
+                          or pricing_lookup.get((cust_key, sku))
+                          or pricing_lookup.get((name_en, sku)))
+                if lookup:
+                    price, status = lookup
+                    if status == 'Pipeline':
+                        row.append('Pipeline')
+                    elif price:
+                        row.append(price)
+                        active_count += 1
+                    else:
+                        row.append(None)
                 else:
-                    clean.append(str(v))
-            result['portfolio']['rows'].append(clean)
+                    row.append(None)
+            row.append(active_count)
+            rows.append(row)
+
+        result['portfolio'] = {'headers': headers, 'rows': rows}
 
     # ── Config — always from original ────────────────────────────────────────
     wb_cfg = wb_orig or wb_src

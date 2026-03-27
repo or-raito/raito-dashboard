@@ -236,13 +236,22 @@ def _compute_cc_dynamic_data(data):
             for product, pdata in prods.items():
                 _add(20, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0))
 
-    # ── 2. Clamp negative totals to 0 ────────────────────────────────────
+    # ── 2. Clamp negative unit totals to 0 ───────────────────────────────
+    # If a customer's net units go negative in a month (e.g. pure return month),
+    # clamp units to 0.  Revenue is preserved when positive — a positive revenue
+    # with negative units indicates a credit note (return of product from a prior
+    # period whose invoice value is still recognised).  Only zero revenue when it
+    # is itself negative (i.e. an outright debit to Raito's account).
     for cid in _CC_CUSTOMER_META:
         for m in months:
             if u[cid][m] < 0:
-                u[cid][m] = 0;    rev[cid][m] = 0.0
-                tu[cid][m] = 0;   trev[cid][m] = 0.0
-                du[cid][m] = 0;   drev[cid][m] = 0.0
+                u[cid][m]  = 0
+                tu[cid][m] = 0
+                du[cid][m] = 0
+                # Zero negative revenue; keep positive (credit-note scenario)
+                if rev[cid][m]  < 0: rev[cid][m]  = 0.0
+                if trev[cid][m] < 0: trev[cid][m] = 0.0
+                if drev[cid][m] < 0: drev[cid][m] = 0.0
 
     # ── 3. JS number formatter ────────────────────────────────────────────
     def _jn(v, ndigits=2):

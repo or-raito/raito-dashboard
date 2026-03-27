@@ -3,6 +3,7 @@
 Raito Dashboard — Data Parsers
 All file parsing functions: Icedream, Ma'ayan, Karfree, Distributor Stock, Production.
 """
+from __future__ import annotations
 
 import re
 import math
@@ -291,6 +292,51 @@ def parse_all_icedreams():
                         results[month]['by_customer'][cust][p][k] += vals.get(k, 0)
         else:
             results[month] = data
+
+    # ── Supplement months with unattributed units from Format B XLS ──────
+    # Some weekly .xlsx files produce flat totals but empty by_customer
+    # (e.g. icedream_mar_w10_11.xlsx lacks bold customer-summary rows).
+    # The Format B .xls file (sales_week_12.xls) covers the same weeks with
+    # full per-customer data.  We take all week columns EXCEPT the LAST one
+    # (the last week is already attributed via the corresponding _w12.xlsx).
+    for f in sorted(folder.glob('*.xls')):
+        if f.name.startswith('~') or 'stock' in f.name.lower():
+            continue
+        format_b = parse_format_b_xls(f)
+        if not format_b:
+            continue
+        n_weeks = len(next(iter(format_b.values()), {}))
+        if n_weeks < 2:
+            continue  # nothing to supplement (no earlier weeks)
+        weeks_to_supplement = range(n_weeks - 1)  # all except last
+
+        for month_str, mdata in results.items():
+            flat_total = sum(v.get('units', 0) for v in mdata.get('totals', {}).values())
+            cust_total = sum(
+                sum(p.get('units', 0) for p in prods.values())
+                for prods in mdata.get('by_customer', {}).values()
+            )
+            if flat_total <= cust_total:
+                continue  # already fully attributed — nothing to supplement
+
+            # Merge early-week customer data from Format B into by_customer.
+            # Format B returns English chain names; they pass through
+            # extract_customer_name() unchanged and resolve via _CUSTOMER_EN_TO_CC_ID.
+            for chain_en, weeks in format_b.items():
+                for wk_i in weeks_to_supplement:
+                    wk_data = weeks.get(wk_i, {})
+                    for product, pd in wk_data.items():
+                        units = pd.get('units', 0)
+                        value = round(pd.get('value', 0.0), 2)
+                        if units == 0:
+                            continue
+                        if chain_en not in mdata['by_customer']:
+                            mdata['by_customer'][chain_en] = {}
+                        if product not in mdata['by_customer'][chain_en]:
+                            mdata['by_customer'][chain_en][product] = {'units': 0, 'value': 0.0, 'cartons': 0}
+                        mdata['by_customer'][chain_en][product]['units'] += units
+                        mdata['by_customer'][chain_en][product]['value'] += value
+
     return results
 
 
@@ -1118,7 +1164,9 @@ def consolidate_data():
         filtered_custs = {}
         for cust, pdata in month_data.get('icedreams_customers', {}).items():
             total_u = sum(v.get('units', 0) for v in pdata.values())
-            if total_u > 0:
+            # Allow through negative-unit customers (returns/credit notes) so CC can
+            # account for them — previously total_u > 0 silently dropped returns.
+            if total_u != 0:
                 for p, vals in pdata.items():
                     vals['value'] = round(vals.get('value', 0), 2)
                 filtered_custs[cust] = pdata

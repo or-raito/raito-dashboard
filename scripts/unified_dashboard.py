@@ -1212,7 +1212,7 @@ def _build_master_data_tab(master_data):
     ]},
     pricing: { label:'Pricing Entry', fields:[
       {key:'sku_key',       label:'Product',          type:'fk_select', lookup:'products', valKey:'sku_key', labelKey:'name_en', required:true},
-      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'key', labelKey:'name_he'},
+      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'name_en', labelKey:'name_en'},
       {key:'distributor',   label:'Distributor',      type:'fk_select', lookup:'distributors', valKey:'key', labelKey:'name'},
       {key:'commission_pct',label:'Commission (0-1)', type:'number'},
       {key:'sale_price',    label:'Sale Price (₪)',    type:'number'},
@@ -1681,7 +1681,16 @@ def _build_master_data_tab(master_data):
     } else {
       /* ── Offline mode: mutate local state ── */
       if(_mMode==='add') S[_mSheet].push(rec);
-      else S[_mSheet][_mIdx]=rec;
+      else { var old=S[_mSheet][_mIdx]; for(var k in rec) old[k]=rec[k]; rec=old; }
+      /* Auto-resolve product display fields for pricing */
+      if(_mSheet==='pricing' && rec.sku_key) {
+        var prod=S.products.find(function(p){return p.sku_key===rec.sku_key;});
+        if(prod) {
+          if(!rec.name_en) rec.name_en=prod.name_en||'';
+          if(!rec.name_he) rec.name_he=prod.name_he||'';
+          if(!rec.barcode) rec.barcode=prod.barcode||'';
+        }
+      }
       mdModalClose();
       mdRender(_mSheet);
       markDirty();
