@@ -429,6 +429,323 @@ def upload():
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# MASTER DATA API  (/api/*)
+#
+# Backed by a `master_data` table in Cloud SQL (same DB as sales data).
+# Each entity (brands, products, customers …) is stored as a JSONB array.
+# On first request the table is auto-created and seeded from the Excel file.
+# After that all reads and writes go straight to the DB — changes survive
+# container restarts and are shared across Cloud Run instances.
+#
+# Table DDL (auto-created):
+#   CREATE TABLE master_data (
+#       entity     TEXT PRIMARY KEY,
+#       data       JSONB NOT NULL DEFAULT '[]',
+#       updated_at TIMESTAMPTZ DEFAULT NOW()
+#   );
+# ══════════════════════════════════════════════════════════════════════════════
+
+import json as _json
+
+# Primary-key field for each entity (used by PUT / DELETE URL routing)
+_MD_PK = {
+    'brands':        'key',
+    'products':      'sku_key',
+    'manufacturers': 'key',
+    'distributors':  'key',
+    'customers':     'key',
+    'logistics':     'product_key',
+    'pricing':       'barcode',
+}
+
+_MD_ENTITIES = list(_MD_PK.keys())
+
+
+def _md_conn():
+    """Open a psycopg2 connection using the same DATABASE_URL the rest of the app uses."""
+    import psycopg2
+    url = os.environ.get('DATABASE_URL', 'postgresql://raito:raito@localhost:5432/raito')
+    conn = psycopg2.connect(url)
+    conn.autocommit = False
+    return conn
+
+
+def _md_ensure_table() -> None:
+    """Create master_data table if absent; seed from Excel if empty."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS master_data (
+                entity     TEXT PRIMARY KEY,
+                data       JSONB NOT NULL DEFAULT '[]',
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        conn.commit()
+        cur.execute("SELECT COUNT(*) FROM master_data")
+        if cur.fetchone()[0] == 0:
+            _md_seed(cur)
+            conn.commit()
+            log.info("master_data table seeded from Excel")
+    finally:
+        conn.close()
+
+
+def _md_seed(cur) -> None:
+    """Populate master_data table from the Excel master-data file."""
+    from master_data_parser import parse_master_data
+    md = parse_master_data() or {}
+    for entity in _MD_ENTITIES:
+        cur.execute("""
+            INSERT INTO master_data (entity, data, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (entity) DO UPDATE
+                SET data = EXCLUDED.data, updated_at = NOW()
+        """, (entity, _json.dumps(md.get(entity, []))))
+
+
+def _md_read(entity: str) -> list:
+    """Fetch one entity's data from Cloud SQL. Returns a Python list."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM master_data WHERE entity = %s", (entity,))
+        row = cur.fetchone()
+        return row[0] if row else []   # psycopg2 auto-decodes JSONB → Python
+    finally:
+        conn.close()
+
+
+def _md_read_all() -> dict:
+    """Fetch all entities in one round-trip."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT entity, data FROM master_data")
+        return {e: d for e, d in cur.fetchall()}
+    finally:
+        conn.close()
+
+
+def _md_write(entity: str, data: list) -> None:
+    """Upsert one entity's data back to Cloud SQL."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO master_data (entity, data, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (entity) DO UPDATE
+                SET data = EXCLUDED.data, updated_at = NOW()
+        """, (entity, _json.dumps(data)))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _md_rebuild_portfolio(md: dict) -> None:
+    """Recompute the portfolio matrix from current md state and save to DB."""
+    products = md.get('products', [])
+    customers = md.get('customers', [])
+    pricing   = md.get('pricing', [])
+    active_products = [p for p in products if p.get('status') in ('Active', 'New')]
+    if not active_products or not customers:
+        portfolio = {'headers': [], 'rows': []}
+    else:
+        pricing_lookup: dict = {}
+        for pr in pricing:
+            cust = pr.get('customer', '')
+            sku  = pr.get('sku_key', '')
+            if cust and sku:
+                pricing_lookup[(cust, sku)] = (pr.get('sale_price'), pr.get('status'))
+        headers = ['#', 'Customer', 'Distributor'] + [
+            p.get('name_en') or p.get('sku_key', '') for p in active_products
+        ]
+        rows = []
+        for i, cust in enumerate(sorted(customers, key=lambda c: c.get('name_en', '')), 1):
+            name_he  = cust.get('name_he', '')
+            name_en  = cust.get('name_en', '')
+            cust_key = cust.get('key', '')
+            cells: list = [i, name_en or name_he, cust.get('distributor', '')]
+            for prod in active_products:
+                sku = prod.get('sku_key', '')
+                lkp = (pricing_lookup.get((name_he, sku))
+                       or pricing_lookup.get((cust_key, sku))
+                       or pricing_lookup.get((name_en, sku)))
+                cells.append({'price': lkp[0], 'status': lkp[1]} if lkp else None)
+            rows.append(cells)
+        portfolio = {'headers': headers, 'rows': rows}
+    # Persist portfolio back to DB
+    _md_write('portfolio', portfolio)   # type: ignore[arg-type]
+    md['portfolio'] = portfolio
+
+
+# ── /api/health ───────────────────────────────────────────────────────────────
+
+@app.route('/api/health')
+def api_health():
+    try:
+        _md_ensure_table()
+        return jsonify({'status': 'ok', 'source': 'cloud-sql'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'detail': str(e)}), 500
+
+
+# ── /api/<entity>  GET (list) ─────────────────────────────────────────────────
+
+@app.route('/api/<string:entity>', methods=['GET'])
+def api_list(entity):
+    if entity not in _MD_PK:
+        return jsonify({'error': f'Unknown entity: {entity}'}), 404
+    try:
+        _md_ensure_table()
+        return jsonify(_md_read(entity))
+    except Exception as e:
+        log.error("api_list %s: %s", entity, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/<entity>  POST (create) ──────────────────────────────────────────────
+
+@app.route('/api/<string:entity>', methods=['POST'])
+def api_create(entity):
+    if entity not in _MD_PK:
+        return jsonify({'error': f'Unknown entity: {entity}'}), 404
+    try:
+        _md_ensure_table()
+        record   = request.get_json(force=True) or {}
+        pk_field = _MD_PK[entity]
+        pk_val   = record.get(pk_field)
+        items    = _md_read(entity)
+        if pk_val and any(r.get(pk_field) == pk_val for r in items):
+            return jsonify({'error': f'Duplicate key: {pk_val}'}), 409
+        items.append(record)
+        _md_write(entity, items)
+        # Rebuild portfolio if a relevant entity changed
+        if entity in ('products', 'customers', 'pricing'):
+            md = _md_read_all()
+            _md_rebuild_portfolio(md)
+        return jsonify(record), 201
+    except Exception as e:
+        log.error("api_create %s: %s", entity, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/<entity>/<pk>  PUT (update) ──────────────────────────────────────────
+
+@app.route('/api/<string:entity>/<path:pk>', methods=['PUT'])
+def api_update(entity, pk):
+    if entity not in _MD_PK:
+        return jsonify({'error': f'Unknown entity: {entity}'}), 404
+    try:
+        _md_ensure_table()
+        record   = request.get_json(force=True) or {}
+        pk_field = _MD_PK[entity]
+        items    = _md_read(entity)
+        for i, item in enumerate(items):
+            if str(item.get(pk_field, '')) == pk:
+                items[i] = record
+                _md_write(entity, items)
+                if entity in ('products', 'customers', 'pricing'):
+                    md = _md_read_all()
+                    _md_rebuild_portfolio(md)
+                return jsonify(record)
+        return jsonify({'error': f'Not found: {pk}'}), 404
+    except Exception as e:
+        log.error("api_update %s/%s: %s", entity, pk, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/<entity>/<pk>  DELETE ────────────────────────────────────────────────
+
+@app.route('/api/<string:entity>/<path:pk>', methods=['DELETE'])
+def api_delete(entity, pk):
+    if entity not in _MD_PK:
+        return jsonify({'error': f'Unknown entity: {entity}'}), 404
+    try:
+        _md_ensure_table()
+        pk_field = _MD_PK[entity]
+        items    = _md_read(entity)
+        new_items = [r for r in items if str(r.get(pk_field, '')) != pk]
+        if len(new_items) == len(items):
+            return jsonify({'error': f'Not found: {pk}'}), 404
+        _md_write(entity, new_items)
+        if entity in ('products', 'customers', 'pricing'):
+            md = _md_read_all()
+            _md_rebuild_portfolio(md)
+        return jsonify({'deleted': pk})
+    except Exception as e:
+        log.error("api_delete %s/%s: %s", entity, pk, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/portfolio  GET ───────────────────────────────────────────────────────
+
+@app.route('/api/portfolio', methods=['GET'])
+def api_portfolio():
+    try:
+        _md_ensure_table()
+        # portfolio is stored as its own row; if missing, compute it
+        conn = _md_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT data FROM master_data WHERE entity = 'portfolio'")
+            row = cur.fetchone()
+        finally:
+            conn.close()
+        if row:
+            return jsonify(row[0])
+        # Compute and store
+        md = _md_read_all()
+        _md_rebuild_portfolio(md)
+        return jsonify(md.get('portfolio', {}))
+    except Exception as e:
+        log.error("api_portfolio: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/lookup/<entity>  (FK dropdowns) ──────────────────────────────────────
+
+@app.route('/api/lookup/<string:entity>', methods=['GET'])
+def api_lookup(entity):
+    try:
+        _md_ensure_table()
+        items      = _md_read(entity)
+        pk_field   = _MD_PK.get(entity, 'key')
+        name_field = ('name' if entity in ('brands', 'manufacturers', 'distributors')
+                      else 'name_en')
+        return jsonify([
+            {'id': r.get(pk_field, ''), 'label': r.get(name_field) or r.get('key', '')}
+            for r in items
+        ])
+    except Exception as e:
+        log.error("api_lookup %s: %s", entity, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/rebuild  (regenerate dashboard from current DB state) ────────────────
+
+@app.route('/api/rebuild', methods=['POST'])
+def api_rebuild():
+    """Recompute portfolio, invalidate dashboard cache — next load reflects changes."""
+    global _cached_html
+    try:
+        _md_ensure_table()
+        md = _md_read_all()
+        _md_rebuild_portfolio(md)
+        from db.database_manager import reset_cache
+        reset_cache()
+        _cached_html = None
+        log.info("API rebuild triggered — dashboard cache invalidated")
+        return jsonify({'status': 'rebuilding',
+                        'message': 'Dashboard will regenerate on next page load'})
+    except Exception as e:
+        log.error("api_rebuild: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
 # ── Standalone mode (dev server) ──────────────────────────────────────────
 
 if __name__ == '__main__':
