@@ -4,9 +4,10 @@
 
 This is the Raito data/dashboard project. Quick orientation:
 
-- **What this is:** Israeli consumer goods brand (Turbo ice cream, Dani's Dream Cake). Two active distributors: Icedream + Ma'ayan. Dashboards track weekly sales.
-- **Main dashboard file:** `dashboards/customer centric dashboard 11.3.26.html` — edit this, then regenerate via `python3 scripts/unified_dashboard.py`, output goes to `docs/unified_dashboard.html` → copy to `github-deploy/index.html`.
-- **Current data state:** W12 (15/3/2026) is the latest week. W13 data not yet received.
+- **What this is:** Israeli consumer goods brand (Turbo ice cream, Dani's Dream Cake). Three active distributors: Icedream + Ma'ayan + Biscotti. Dashboards track weekly sales.
+- **CC tab source:** `scripts/cc_dashboard.py` — fully dynamic Python generator. The old HTML file (`dashboards/customer centric dashboard 11.3.26.html`) is legacy/unused since 25 Mar 2026.
+- **Build pipeline:** make changes in `scripts/` → `python3 scripts/unified_dashboard.py` → output to `docs/unified_dashboard.html` → copy to `github-deploy/index.html`.
+- **Current data state:** W12 (15/3/2026) is the latest week. W13 data not yet received. BO/CC are revenue-parity (0 unit gap).
 - **Briefing:** `RAITO_BRIEFING.md` — contains full architecture, data sources, decisions log, file map, and W13 update checklist. Always read it before making dashboard changes.
 
 ## Key rules
@@ -23,5 +24,5 @@ This is the Raito data/dashboard project. Quick orientation:
 
 ### Other rules
 - Never use flavor keywords alone (`שוקולד`, `מנגו`) to filter Icedream products — use strict `טורבו` OR `דרים קייק` filter only
-- Ma'ayan revenue: distribute proportionally from `_maayWkRev` totals (~₪13.80/unit avg) — source files have no per-line prices
+- Ma'ayan revenue: applied per-row at parse time via `_mayyan_chain_price()` from price DB (falls back to ₪13.80/unit). `by_account` stores `{product: {units, value}}` — do NOT re-price when reading `mayyan_accounts`. For weekly chart history (`weeklyDetailHistory`), distribute proportionally from `_maayWkRev` totals when no per-line data is available.
 - Always validate parsed totals against `_iceWkUnits` / `_maayWkUnits` dashboard values before writing to history

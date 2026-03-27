@@ -80,7 +80,7 @@ B2B prices vary per customer. Source of truth: `data/price data/price db - 24.2.
 Ma'ayan reports don't include revenue — calculated from units × per-chain price (falls back to ₪13.8 for unknown chains).
 Icedream reports include actual invoice values.
 
-**BO vs CC revenue gap (residual ~₪1k–9k/month):** Minor timing difference — BO uses latest data files, CC was built from files as of 11 Mar 2026. Not an error.
+**BO vs CC revenue parity (achieved 25 Mar 2026):** Both tabs consume the identical `data` object from `consolidate_data()` — sub-₪1 rounding residual only. No gap expected.
 
 ### Distributors
 
@@ -305,7 +305,7 @@ All scripts in `scripts/` directory:
 | **Dashboard Generators** | |
 | `dashboard.py` | BO tab content generator — KPI cards, SVG charts (revenue, units, flavor), donut charts, tables. All inline HTML with styles. |
 | `unified_dashboard.py` | **Main dashboard generator** — combines BO + CC + SP + MD tabs into single HTML. Sidebar nav, CSS theming, CC tab processing, password gate. Injects B2B prices from `pricing_engine` into SP Excel export JS. Run this to regenerate. |
-| `cc_dashboard.py` | CC tab generator — embedded HTML source + dynamic data injection from parsers. Uses `pricing_engine.get_customer_price` (migration in progress). |
+| `cc_dashboard.py` | CC tab generator — fully dynamic. `build_cc_tab(data)` accepts the shared `data` dict (same object as BO). All customer revenue/units/margins computed dynamically from parsed files — zero hardcoded price literals or static customer totals. Single pipeline complete (25 Mar 2026). |
 | `salepoint_dashboard.py` | **Sale Points tab generator** — builds SP HTML tab. Uses `pricing_engine` for all revenue calculations and `business_logic.enrich_salepoint` for pre-computed status/trend (Option A). Includes brand filter with engine-injected prices. |
 | `salepoint_excel.py` | **Sale Points Excel export** → `docs/sale_points_deep_dive.xlsx`. Uses `pricing_engine.get_b2b_price_safe` and delegates status/trend to `business_logic` (SSOT). Per-customer-group sheets with dark navy headers, alternating row fills. |
 | **Other** | |
@@ -367,10 +367,11 @@ All scripts in `scripts/` directory:
 - `parse_mayyan_file(filepath, price_table=None)` — Returns `{month: {totals, by_chain, by_account, by_customer_type, branches}}`. Supports both monthly (חודש) and weekly (שבועי) formats. When `price_table` is provided, computes actual value per row using per-chain prices.
 - `_load_mayyan_price_table()` — Loads latest `price data/price db*.xlsx`, returns `{product: {pricedb_customer: price}}` for Maayan rows only.
 - `_MAAYAN_CHAIN_TO_PRICEDB` — Dict mapping raw Maayan chain names (שם רשת) → price DB customer names.
-- `_mayyan_chain_price(price_table, chain_raw, product)` — Looks up actual price for a chain+product; falls back to `SELLING_PRICE_B2B` if not found.
-- `parse_all_mayyan()` — Loads price table once, passes to each `parse_mayyan_file()` call.
-- `parse_all_biscotti()` — Stub parser. Returns empty dict. Implement when report format is known.
-- `consolidate_data()` — Merges all sources. Uses actual Maayan `value` from parser when >0; falls back to units × `SELLING_PRICE_B2B` estimate.
+- `_mayyan_chain_price(price_table, chain_raw, product)` — Looks up actual price for a chain+product from price DB; falls back to `get_b2b_price_safe()` if not found. Called per row when building `by_account` to apply pricing at parse time.
+- `parse_all_mayyan()` — Loads price table once, passes to each `parse_mayyan_file()` call. `by_account` now stores `{product: {units: int, value: float}}` (pre-priced) instead of `{product: units_int}`.
+- `parse_all_icedreams()` — After processing all `.xlsx` files, checks for Format B `.xls` files (e.g. `sales_week_12.xls`) and merges early-week per-customer data (all except last week column) into `by_customer` for any month where flat totals exceed customer-attributed totals. This fills in months like March where a partial-period file (`icedream_mar_w10_11.xlsx`) has no customer summary rows.
+- `parse_all_biscotti()` — Parses `daniel_amit_weekly_biscotti.xlsx`. Multi-sheet: "סיכום כללי" + per-week sheets. Maps everything to `dream_cake_2` at `BISCOTTI_PRICE_DREAM_CAKE = ₪80.0`.
+- `consolidate_data()` — Merges all sources. `icedreams_customers` filter passes customers with `total_u != 0` (changed from `> 0` on 25 Mar 2026 — allows returns/credit-note customers through). Ma'ayan uses actual `value` from parser when >0; falls back to units × `get_b2b_price_safe()` estimate.
 
 ### Running
 
@@ -428,8 +429,8 @@ Generated dynamically by `dashboard.py` from parsed data.
 10. **Inventory** (overview only) — Karfree + Icedream + Ma'ayan stock.
 
 ### Tab 2: Customer Performance (CC)
-Source: `dashboards/customer centric dashboard 11.3.26.html` (hardcoded 19-customer data).
-Processed by `_read_cc_dashboard()`: dark→light theme conversion, CSS scoped under `#tab-cc`, Chart.js overrides. Header div and info-banner removed (24 Mar 2026) — tab starts directly with the filter bar. Body extraction regex starts from `<div class="filter-bar">`.
+Source: `scripts/cc_dashboard.py` — fully dynamic Python generator (migrated from static HTML on 25 Mar 2026).
+`build_cc_tab(data)` receives the same `data` dict as the BO tab and injects live `customers[]`, `productMix{}`, and `productPricing{}` JS constants. All revenue, units, avgPrice, grossMargin, opMargin, and momGrowth are computed dynamically from parsed transaction data — zero hardcoded price literals or static totals. Old HTML source file (`dashboards/customer centric dashboard 11.3.26.html`) is legacy/unused.
 
 **Filters:** Year (All Years / 2025 / 2026, default 2026) × Customer, Distributor, Status, Month (default All Months), Brand (Turbo / Dani's). Year filter controls which months are visible in the Month dropdown — selecting 2025 shows only Dec, selecting 2026 shows Jan/Feb/Mar. Weekly Sales Trend chart filters by both year AND month — selecting a specific month shows only weeks belonging to that month. Implemented via `ccSetYear()` and `_ccFilteredWeekIndices()` JS functions injected by `_read_cc_dashboard()`.
 
@@ -539,8 +540,6 @@ Generated by `salepoint_dashboard.py`. Displays a customer-level view of active,
 28. **Password protection** — Client-side login gate with hash check. Password: `raito2026`. Session-persisted via sessionStorage. Set via `DASHBOARD_PASSWORD` in `unified_dashboard.py`.
 29. **CC tab light theme** — Dark theme converted to light (Gridle-style) via string replacements in `_read_cc_dashboard()`. All CSS scoped under `#tab-cc` to prevent conflicts.
 30. **CC Weekly chart reordered** — Weekly Sales Trend chart moved below KPI grid via HTML string manipulation in `_read_cc_dashboard()`.
-21. **Export Excel button (Business Overview)** — SheetJS-based client-side 6-sheet Excel export button added to HTML dashboard header (15 Mar 2026). Generates `Raito_Business_Overview_DD.MM.YYYY.xlsx` with typed cells and number formatting, matching the Python-generated Excel structure.
-22. **Icedream stock file exclusion** — `parse_all_icedreams()` now skips files with 'stock' in the filename to prevent stock reports from being parsed as sales data.
 31. **MD tab CRUD + brand cards (17 Mar 2026)** — Master Data tab rebuilt as fully interactive editor. Brand cards with colour-coded accent bars, sub-navigation across 9 sections, inline add/edit/delete for all 7 editable sheets, portfolio matrix, config viewer.
 32. **MD tab unsaved-changes banner (17 Mar 2026)** — Yellow banner appears after any edit, reminding user to Save → replace export file → rebuild dashboard.
 33. **MD two-file parser strategy (17 Mar 2026)** — `master_data_parser.py` auto-detects `Raito_Master_Data_export.xlsx`. Export file is primary source for 7 operational sheets; original file always used for Portfolio + Config (not exported by dashboard Save).
@@ -601,15 +600,21 @@ Generated by `salepoint_dashboard.py`. Displays a customer-level view of active,
 88. **W13 ("22/3") removed from weeklyXLabels (25 Mar 2026)** — Biscotti W13 partial data (20 units) causes the combined weekly chart line to collapse near zero. "22/3" removed from `weeklyXLabels` in `cc_dashboard.py`. The commented-out line above the active definition serves as a reminder of the pre-W13 state. Re-add "22/3" only when full W13 data is available from all distributors.
 89. **Top Customers chart — Icedream prefix + bar alignment (25 Mar 2026)** — In `dashboard.py`: (1) Icedream customers now prefixed `"Icedream: {chain}"` to match `"Ma'ayan: ..."` and `"Biscotti: ..."` format. (2) `_bar_html()` label column changed from `min-width:100px` to `width:200px;min-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis` so all bars start at the same horizontal position. (3) Karfree inventory bars similarly fixed: label column `min-width:80px` → `width:140px;min-width:140px;white-space:nowrap`.
 90. **BO table alignment convention codified (25 Mar 2026)** — All numeric columns in BO tables must use `text-align:center` (never `right`). Two table types: (1) `.tbl` class tables — styled via CSS in `unified_dashboard.py`: default first 2 columns left, rest center. Product-only tables (single text column) use `class="tbl tbl-prod-rank"` so column 2+ overrides to center. (2) Inline-styled tables (no `.tbl` class, e.g. "By Distributor", "By Customer") — set `text-align:center` on every numeric `<th>` and `<td>` explicitly. Convention documented in `dashboard.py` docstring header. **Rule: when adding any new BO table, follow this convention.**
-91. **CC `customers[]` and `productMix{}` wired to live parsers (25 Mar 2026)** — Added `_compute_cc_dynamic_data()` to `scripts/cc_dashboard.py`. On every `python3 unified_dashboard.py` build, this function replaces the hardcoded JS arrays with live data parsed from files. Sources: Icedream Dec/Jan/Feb from `parse_all_icedreams()` by_customer; Icedream March from `parse_format_b_xls('data/icedreams/sales_week_12.xls')`; Ma'ayan all months via `by_account` (for all chains, not just דור אלון — required to correctly split Tiv Taam out of Private Market); Biscotti from `parse_all_biscotti()`. Ma'ayan revenue computed from units × `_CC_MAY_ICE_PRICE` fallback dict (validated per-chain prices bypassing price DB). Static fields (name, status, distributor, margins, `momGrowth`) kept in `_CC_CUSTOMER_META` Python dict and must be updated manually. `build_cc_tab()` applies injection via `re.sub` with `re.DOTALL`, falls back silently to hardcoded on any parser error. Accuracy: 14/18 customers unit-exact vs W12 hardcoded; 4 diff are the known AMPM/Alonit split (~144u) and Private Market/Sonol (~36u Dec) attribution differences — group totals always match. **For W13+: just drop new files into `data/icedreams/` and `data/mayyan/` — the parser auto-picks up new data. Update `fb_path` in `_compute_cc_dynamic_data()` to point to the new Format B XLS file. Update `momGrowth` values in `_CC_CUSTOMER_META` once the new full month is complete.**
+91. **CC `customers[]` and `productMix{}` wired to live parsers (25 Mar 2026)** — Added `_compute_cc_dynamic_data(data)` to `scripts/cc_dashboard.py`. Accepts the shared `data` dict — no independent file parsing. Sources: `icedreams_customers` for Icedream per-customer data; `mayyan_accounts` for Ma'ayan (all chains, correctly splits AMPM/Alonit and Tiv Taam/Private Market); `biscotti_customers` for Biscotti. Ma'ayan revenue comes pre-priced from `by_account` (applied at parse time via `_mayyan_chain_price()` per row). `build_cc_tab(data)` injects `customers[]`, `productMix{}`, and `productPricing{}` via `re.sub`. `_CC_CUSTOMER_META` retains only structural fields (name, status, distributor, dist_pct, activeSKUs, hasPricing, hasSales, brands) — all financial fields removed. avgPrice, grossMargin, opMargin, momGrowth computed dynamically from aggregated transaction data. **For W13+: drop new files into `data/icedreams/` and `data/mayyan/` — parsers auto-pick them up on next rebuild. No manual customer total updates needed.**
 92. **CC weekly chart hidden when customer filter is active (25 Mar 2026)** — The Weekly Sales Trend chart uses portfolio-level arrays (`_iceWkRev`, `_maayWkRev`) with no per-customer breakdown. When a specific customer was selected (e.g. Foot Locker), the chart showed misleading ₪599K portfolio peaks. Fix: at the top of the active `renderWeeklyChart = function()` override (in `cc_dashboard.py`), check `S.cust !== 'all'`. If true: hide `#weekly-chart-wrap`, show `#weekly-no-cust` info banner ("Weekly trend shows portfolio-level data — select All Customers to view"), destroy any existing chart instance, and return early. Both div elements are in the weekly panel HTML in `_CC_HTML`. **Architecture note:** the `function renderWeeklyChart()` declaration is dead code (hoisted but overridden by the assignment block). All chart logic and guards must live in the `renderWeeklyChart = function()` override, not the declaration.
 93. **SSOT Refactoring — Phase 1: Pricing & Business Logic Engines (25 Mar 2026)** — Created `scripts/pricing_engine.py` and `scripts/business_logic.py` as the Single Source of Truth for all pricing and status/trend logic. **Pricing engine** (`pricing_engine.py`): Two-tier API — `get_b2b_price(sku)` for SP/BO flat prices, `get_customer_price(sku, customer_en)` for CC negotiated prices. Absorbs all 14 previously scattered price declarations. Raises `KeyError` on unknown SKUs to prevent silent failures. Includes Ma'ayan price-DB integration (migrated from `parsers.py`). JS code-gen helpers inject prices into templates — no more `* 13.8` or `* 80.0` literals in JS. **Business logic engine** (`business_logic.py`): Canonical `compute_status()` and `compute_trend()` functions — Option A design (pre-compute in Python). SP dashboard now ships pre-computed status/trend in JSON (no JS-side re-derivation). Unified status taxonomy: "mar>0 AND any prior>0 → Active" (dashboard rule wins over Excel's stricter "feb>0" requirement). Both `salepoint_dashboard.py` and `salepoint_excel.py` refactored to import from engines. `unified_dashboard.py` SP Excel export JS also uses engine-injected prices.
 94. **SSOT Refactoring — Phase 2: Product Registry (25 Mar 2026)** — Created `scripts/registry.py` as the single source for product catalog, brand memberships, and customer hierarchy. `Product` class with `sku`, `name`, `brand`, `status`, `manufacturer`, `is_turbo()`, `is_danis()`. Derived lookups (`PRODUCT_NAMES`, `PRODUCT_SHORT`, `ACTIVE_SKUS`, `TURBO_SKUS`, `DANIS_SKUS`, `BRANDS`) auto-generated from the master `PRODUCTS` dict. `validate_sku()` raises on unknown SKUs — call at data-ingestion boundaries. **Customer hierarchy** (semantic rename from "chain"): `CUSTOMER_NAMES_EN` and `CUSTOMER_PREFIXES` moved from `config.py` to `registry.py`. `config.py` re-exports `CHAIN_NAMES_EN = CUSTOMER_NAMES_EN` for backward compat. Terminology: "Customer" = top-level entity (AMPM, Alonit), "Branch" = sub-customer / sale point. Prepared for future SQL migration.
 
+95. **Phase 4 — CC single data pipeline, zero hardcoding (25 Mar 2026)** — CC tab now consumes the exact same `data` dict as BO via `build_cc_tab(data)`. All static price literals removed from `_CC_CUSTOMER_META` (avgPrice, grossMargin, opMargin, momGrowth — all 20 entries). `_cc_customer_price()` function deleted. `by_account` format changed from `{product: units_int}` to `{product: {units: int, value: float}}` — pricing applied at parse time per row in `parse_all_mayyan()` via `_mayyan_chain_price()`. `_build_product_pricing_js()` generates `const productPricing = {...}` entirely from `load_mayyan_price_table()` and `get_customer_price()` — zero hardcoded literals. Added `_CC_ID_TO_PRICEDB_CUST`, `_CC_ID_TO_PRICING_EN`, `_CC_CUST_SKUS` mapping dicts. `salepoint_dashboard.py` and `salepoint_excel.py` updated for new `{units, value}` `by_account` format. `unified_dashboard.py` updated to pass `data` to `build_cc_tab(data)`.
+
+96. **CC KPI year filter fix (25 Mar 2026)** — When Year=2026 and Month=All Months, CC KPIs were including Dec 2025 revenue (showing ₪4M+ instead of correct ₪2.5M). Root cause: `getRevField(c)`, `getUnitField(c)`, `portfolioMonthly()`, and `renderKPIs()` all ignored `S.year` in total mode. Fixed: `getRevField` returns `r.jan+r.feb+(r.mar||0)` when year=2026; `getUnitField` likewise; `portfolioMonthly()` filters to year-matching months only; `renderKPIs()` `curRev`/`curUnits` use `list.reduce(getRevField)` for total mode. KPI labels: "All Months '26" / "Total '26".
+
+97. **BO/CC revenue parity — gap root causes fixed (25 Mar 2026)** — After Phase 4, a residual ₪50,190 / 1,154-unit gap remained. Two root causes found and fixed: (1) **March W10/W11 unattributed**: `icedream_mar_w10_11.xlsx` has no bold customer-summary rows → 1,278 units/₪48,509 landed in BO's flat `combined` totals but never in `icedreams_customers`. Fixed in `parse_all_icedreams()`: after all `.xlsx` files are parsed, scan for `.xls` Format B files and merge W0..W(N-2) per-customer data into `by_customer` for any month where flat totals exceed customer-attributed totals. (2) **Good Pharm Feb return filtered**: -124 units/+₪1,682 credit note was dropped by `consolidate_data()` `total_u > 0` guard. Fixed to `total_u != 0`. (3) **CC clamp updated**: clamp now zeroes units when negative but preserves positive revenue (credit-note scenario) — only zeros revenue when revenue itself is negative. Result: 0 unit gap, sub-₪1 rounding residual. Both BO and CC show 129,072 units / ₪2,536,266 for 2026.
+
 
 ---
 
-## Current Data State (as of March 24, 2026)
+## Current Data State (as of March 25, 2026)
 
 ### Sales
 
@@ -674,7 +679,7 @@ These customers don't appear in November — likely credits for initial stock. V
 
 - **דלק Jan**: CP (Sales Dashboard) shows 1,504 (corrected), raw Ma'ayan parse gives 1,524 — 20-unit correction applied historically
 - **טיב טעם Jan**: CP shows 944 (corrected), raw Ma'ayan parse gives 1,118 — 174-unit correction applied historically. Both corrections sum to correct chain totals — likely reclassification between branches.
-- **גוד פארם**: Active Jan only (Dec=0, Feb=0 — returns in Feb). Total = 1,128 units (Jan only)
+- **גוד פארם**: Jan active (1,128 units). Feb: 124-unit return (credit note, +₪1,682). Mar W10+W11: 104 units, W12: 52 units (156 total). Returns now pass through to CC after filter fix (25 Mar 2026).
 - **January duplicate**: Two files existed for January Icedream. `icefream - January - CUSTOMERS .xlsx` was identical to `icedream - January.xlsx` (20,778 each). CUSTOMERS file archived to prevent double-counting.
 - **February partial files**: Multiple partial Feb files were uploaded before the complete ones. All archived in `_archive/` subfolder.
 - **Upload file corruption**: Excel files uploaded via chat consistently become 0 bytes. Workaround: user places files directly in the workspace folder.
@@ -698,15 +703,15 @@ These customers don't appear in November — likely credits for initial stock. V
 
 ## Sales Dashboard (CC tab)
 
-**Current source:** `scripts/cc_dashboard.py` ⚠️ (migrated from `dashboards/customer centric dashboard 11.3.26.html` on 25 Mar 2026 — old HTML file is now legacy/unused)
-A customer-centric Sales Dashboard with hardcoded customer data (19 customers). It uses CP (Customer Performance) and PM (Product Mix) tabs from `Ice Cream Sales Dashboard.xlsx`.
+**Current source:** `scripts/cc_dashboard.py` (fully dynamic Python generator — old HTML source file `dashboards/customer centric dashboard 11.3.26.html` is legacy/unused since 25 Mar 2026).
+All customer data (revenue, units, margins) computed dynamically from `consolidate_data()` output — same pipeline as BO tab. Zero hardcoded price literals or static customer totals.
 
-**Current state (21 Mar 2026):**
-- Sales Data: Dec 2025 | Jan 2026 | Feb 2026 | Mar 2026 (W10-W12)
-- Weekly Data: W1–W12 (28/12/2025 – 15/3/2026), rolling 10-week window (`WEEKLY_WINDOW = 10`)
+**Current state (25 Mar 2026):**
+- Sales Data: Dec 2025 | Jan 2026 | Feb 2026 | Mar 2026 (W10-W12) — all dynamic
+- Weekly Data: W1–W12 (28/12/2025 – 15/3/2026), rolling 10-week window (`WEEKLY_WINDOW = 10`) — weekly arrays still hardcoded in `cc_dashboard.py`
 - Active Distributors: Icedream | Ma'ayan | Biscotti (live — 9 branches, 121 units Mar 2026)
-- Default View: March 2026 | All customers | All brands
-- Totals label: 4M Total (Dec/Jan/Feb/Mar)
+- Default View: Year 2026 | All Months | All customers | All brands
+- KPI year filter: active — "All Months '26" shows Jan+Feb+Mar only (Dec '25 excluded)
 
 **W12 weekly snapshot (Icedream, source: `icedream_mar_w12.xlsx` converted from `sales_week_12.xls`):**
 - Combined revenue: ₪111,979 | units: 3,067
@@ -804,41 +809,224 @@ Library: SheetJS (xlsx 0.18.5) via cdnjs CDN — client-side, no server needed. 
 
 1. Receive Format B `.xls` from Rozit Israel (Icedream W13)
 2. Receive Ma'ayan W12+W13 weekly report from Ma'ayan
-3. **CC — Parse & update `scripts/cc_dashboard.py`** ⚠️ (not the old HTML file):
-   - Parse Icedream using `xlrd` with strict `טורבו`/`דרים קייק` filter; map accounts → networks
-   - Parse Ma'ayan using `openpyxl` on `דוח_הפצה_גלידות_טורבו__אל_פירוט` sheet; distribute revenue proportionally from `_maayWkRev`
-   - Add `"22/3"` to `weeklyXLabels` — only once full W13 data available from all distributors (partial data collapses chart)
+3. **Drop new data files — BO and CC customer totals update automatically:**
+   - Save Icedream W13 data as `data/icedreams/icedream_mar_w13.xlsx` (Format A, for customer attribution)
+   - Save Ma'ayan W12+W13 as `data/mayyan/maayan_sales_week_12_13.xlsx` (weekly format)
+   - `parse_all_icedreams()` / `parse_all_mayyan()` auto-pick up all new files on next rebuild
+   - `_compute_cc_dynamic_data(data)` re-derives all customer revenue, units, margins, momGrowth automatically — no manual updates to `_CC_CUSTOMER_META`
+   - ⚠️ If the new `.xlsx` file for W13 has no customer summary rows (like `icedream_mar_w10_11.xlsx`), the `parse_all_icedreams()` Format B supplement logic will fill `by_customer` from the Format B `.xls` W0..W(N-2) columns automatically
+4. **CC weekly chart arrays — still manual in `scripts/cc_dashboard.py`:**
+   - Add `"22/3"` to `weeklyXLabels` — only once full W13 data available from all distributors
    - Append new values to `_iceWkRev`, `_iceWkUnits`, `_iceWkRevTurbo`, `_iceWkUnitsTurbo`, `_iceWkRevDanis`, `_iceWkUnitsDanis`
    - Add Ma'ayan W12 rows to `weeklyDetailHistory[1]` (the W12 entry, currently Icedream-only)
    - Add new static entry to `weeklyDetailHistory`: `{label:'W13|22/3/2026', rows:[...]}` with **both** Icedream and Ma'ayan rows
    - Update `weeklyDetailLabel` to `'שבוע 13 | 22/3/2026'`
-   - Update `weeklyDetail` with branch-level W13 data (if Format A available), else skip
-   - Update `mar` (or add `apr`) customer totals
-4. **BO — Extract `.xlsx` files for the parser:**
-   - Extract W13 Icedream data → save as `data/icedreams/icedream_mar_w13.xlsx`
-   - Extract W12+W13 Ma'ayan data → save as `data/mayyan/maayan_sales_week_12_13.xlsx` (or similar)
-   - `parse_all_icedreams()` / `parse_all_mayyan()` will auto-pick these up on next script run
+   - Update `weeklyDetail` with branch-level W13 data (if Format A available)
 5. Regenerate: `python3 scripts/unified_dashboard.py`
 6. Copy: `cp docs/unified_dashboard.html github-deploy/index.html`
 7. Push: `cd github-deploy && git push`
 
 > ⚠️ `DATA_LAST_WEEK` auto-updates from `weeklyXLabels.length` — no manual label changes needed.
 
-**CP tab methodology:**
-- Revenue + Units set directly from parsed source files
-- Ma'ayan revenue = units × weighted per-customer price (based on flavor mix × item price from price DB). Previously was flat ₪13.8 — corrected.
-- Icedream revenue = actual invoice values, excluding magadat
-
-**PM tab methodology (delta approach):**
-```
-old_Feb_flavor = max(0, PM_flavor - dec_raw_flavor - jan_raw_flavor)
-new_PM_flavor  = old_PM_flavor - old_Feb_flavor + new_Feb_flavor
-# Then scaled proportionally so PM total = CP total (exact match)
-```
-
-The Raito Business Overview dashboard uses dynamic parsing (not hardcoded) and may show slightly different numbers due to rounding and whether magadat is included per customer.
+**CC tab data methodology (fully dynamic as of 25 Mar 2026):**
+- All customer revenue and units derived from `consolidate_data()` output — same data object as BO tab
+- Icedream revenue = actual invoice values from XLSX files (sign-flipped: negative qty = sale)
+- Ma'ayan revenue = units × per-chain contract price from price DB (applied at parse time per row via `_mayyan_chain_price()`; falls back to `get_b2b_price_safe()` for unknown chains)
+- Biscotti revenue = units × ₪80.0 (`BISCOTTI_PRICE_DREAM_CAKE`)
+- magadat included in CC customer totals where applicable (it appears in Icedream customer breakdowns)
+- avgPrice, grossMargin, opMargin, momGrowth all computed post-aggregation — no static literals
+- Returns (negative-unit customers) now pass through the `icedreams_customers` filter and are handled in CC (clamp zeroes units, preserves positive credit-note revenue)
+- BO and CC are revenue-parity: 0 unit gap, sub-₪1 rounding residual (25 Mar 2026)
 
 ---
 
 
 
+
+---
+
+## Phase 4 — Cloud Infrastructure (Added 27 Mar 2026)
+
+### Overview
+
+The project has been migrated to a cloud-hosted, SQL-backed architecture. The live dashboard runs on Google Cloud Run, backed by Cloud SQL (PostgreSQL). Local Excel files remain the source of truth for ingestion, but all query-time data is served from PostgreSQL.
+
+**Live dashboard URL:** `https://raito-dashboard-20004010285.me-west1.run.app`
+**Upload page URL:** `https://raito-dashboard-20004010285.me-west1.run.app/upload`
+**GCP project:** `raito-house-of-brands`
+**Cloud SQL instance:** `raito-db` (region: `me-west1`, PostgreSQL 15)
+**Cloud Run service:** `raito-dashboard` (region: `me-west1`)
+**Artifact Registry:** `me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard`
+
+---
+
+### Authentication & Access
+
+**Dashboard access:** Protected by Google IAP (Identity-Aware Proxy). Only `@raito.ai` domain users can access. No `--allow-unauthenticated` flag — all traffic goes through IAP.
+
+**Cloud SQL (local dev):** Uses Cloud SQL Auth Proxy binary (`cloud-sql-proxy`) on port 5433 (port 5432 is in use locally):
+```bash
+./cloud-sql-proxy raito-house-of-brands:me-west1:raito-db --port 5433
+export DATABASE_URL="postgresql://raito:raito@localhost:5433/raito"
+```
+
+**ADC credentials:** Run once per machine: `gcloud auth application-default login`. Credentials saved to `~/.config/gcloud/application_default_credentials.json`. The proxy picks these up automatically — no JSON service account key needed (org policy `constraints/iam.disableServiceAccountKeyCreation` blocks key creation anyway).
+
+---
+
+### Database Schema (scripts/db/schema.sql)
+
+Four layers:
+
+**Layer 1 — Reference tables:** `distributors`, `products`, `customers`, `sale_points`
+**Layer 2 — Ingestion tracking:** `ingestion_batches` (tracks every file load — idempotency key)
+**Layer 3 — Sales transactions:** `sales_transactions` (one row per product per customer per month)
+**Layer 4 — Inventory:** `inventory_snapshots` (one row per product per distributor per date)
+
+Key constraints:
+- `ingestion_batches.source_file_name + distributor_id` — prevents double-ingestion
+- `inventory_snapshots`: UNIQUE on `(distributor_id, product_id, snapshot_date)`
+- `sales_transactions.ingestion_batch_id` → FK to `ingestion_batches` (CASCADE on --force)
+
+**`source_type` enum in `inventory_snapshots`:** `'warehouse'` (Karfree PDF) vs `'distributor'` (Icedream/Ma'ayan XLSX stock files)
+
+**`karfree` distributor row:** Inventory-only. No sales transactions. Added to `distributors` table as key `'karfree'`.
+
+---
+
+### SQL Pipeline Files (scripts/db/)
+
+| File | Role |
+|---|---|
+| `schema.sql` | Full schema DDL — drop and recreate all tables |
+| `migrate_inventory_schema.sql` | Standalone migration — adds `inventory_snapshots` + `karfree` distributor to existing DB |
+| `seed_reference_data.py` | Seeds `distributors`, `products`, `customers` from hardcoded Python dicts. Includes karfree. |
+| `migrate_transactions.py` | One-time bulk migration: parses all historical Excel files via `parsers.py`, inserts into PostgreSQL. Also migrates Icedream/Ma'ayan inventory snapshots. |
+| `database_manager.py` | Query layer for the Flask dashboard. `get_consolidated_data()` returns the same shape as `parsers.consolidate_data()` — both `warehouse` and `dist_inv` keys populated from DB. |
+| `raito_loader.py` | **Weekly ingestion CLI** — loads a single distributor file into Cloud SQL. See below. |
+| `db_dashboard.py` | Flask app — serves the dashboard from PostgreSQL data. Also hosts `/upload` and `/refresh`. |
+
+---
+
+### Flask App Routes (scripts/db/db_dashboard.py)
+
+| Route | Method | Description |
+|---|---|---|
+| `/` | GET | Serves unified dashboard HTML (cached in memory; regenerated on first request) |
+| `/refresh` | GET | Clears cache, re-queries PostgreSQL, regenerates dashboard HTML |
+| `/upload` | GET | Drag-and-drop file upload UI |
+| `/upload` | POST | Accepts distributor file, ingests into PostgreSQL, returns JSON summary |
+| `/health` | GET | Health check for Cloud Run |
+
+**Upload page behaviour:**
+- Auto-detects distributor and file type (sales vs stock) from filename patterns
+- Supports: Icedream, Ma'ayan, Biscotti (sales); Icedream stock, Ma'ayan stock, Karfree PDF (inventory)
+- `force=true` deletes existing batch (+ its child rows) before re-inserting
+- On success: invalidates dashboard HTML cache so next `/` visit shows fresh data
+
+---
+
+### raito_loader.py — Weekly Ingestion CLI
+
+**Location:** `scripts/db/raito_loader.py`
+**Run from:** Project root (`~/dataset/`) — NOT from `scripts/` or `scripts/db/`
+
+```bash
+# Standard weekly load (auto-detects distributor + type from filename)
+python3 scripts/db/raito_loader.py --target local --file data/icedreams/week14.xlsx
+
+# Force re-import (overwrites existing data for same period)
+python3 scripts/db/raito_loader.py --target local --file data/icedreams/week14.xlsx --force
+
+# Dry run (parse only, no DB writes)
+python3 scripts/db/raito_loader.py --target local --dry-run --file data/icedreams/week14.xlsx
+
+# Stock/inventory file
+python3 scripts/db/raito_loader.py --target local --file data/icedreams/stock26.3.xlsx
+
+# Explicit distributor override
+python3 scripts/db/raito_loader.py --target local --distributor mayyan --file data/mayyan/w13.xlsx
+```
+
+**`--target local`** uses `DATABASE_URL` env var (set to `postgresql://raito:raito@localhost:5433/raito` when using proxy).
+**`--target cloud`** uses `google-cloud-sql-connector` — currently NOT installable on Mac M4 or Linux ARM (package not found). Use `--target local` with the proxy instead.
+
+**Auto-detection patterns:**
+- Filename contains `icedream`, `ice_dream` → icedream
+- Filename contains `maayan`, `mayyan` → mayyan
+- Filename contains `biscotti`, `daniel` → biscotti
+- Filename contains `karfree` → karfree (always inventory)
+- Parent folder name is checked if filename is ambiguous
+- `stock`, `מלאי`, `inventory` in filename → inventory/stock type
+
+**Idempotency:** Batch key = `icedream_{month_str}` (e.g. `icedream_march`). Existing complete batches are skipped. Use `--force` to overwrite.
+
+**Critical bug fixed (27 Mar 2026):** `raito_loader.load_caches()` now also calls `migrate_transactions.load_caches()` — required because `build_transaction_row()` uses `migrate_transactions._product_cache` (its own module-level dict), which was never populated in the loader flow. Without this fix, all rows return `None` and 0 rows are inserted even though batches are created.
+
+**--force cascade (27 Mar 2026):** When `force=True`, `create_batch()` now deletes `sales_transactions` and `inventory_snapshots` child rows before deleting the parent `ingestion_batches` row (FK constraint enforcement).
+
+---
+
+### Docker Build & Deploy
+
+**Dockerfile** at project root. Build for Cloud Run (linux/amd64):
+
+```bash
+# Build (must have Docker Desktop running)
+cd ~/dataset
+docker build --platform linux/amd64 -t me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest .
+
+# Push to Artifact Registry
+docker push me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest
+
+# Deploy to Cloud Run
+gcloud run deploy raito-dashboard \
+  --image=me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest \
+  --region=me-west1 \
+  --project=raito-house-of-brands
+```
+
+**requirements.txt** — `google-cloud-sql-connector` intentionally excluded (not installable on ARM/Mac M4 or Linux ARM). Packages used: Flask, gunicorn, pandas, openpyxl, psycopg2-binary, pdfplumber, tqdm.
+
+**Gunicorn entrypoint:** `scripts.db.db_dashboard:app` (set in Dockerfile).
+
+**Cloud SQL connection in container:** Via Unix socket (`/cloudsql/project:region:instance/.s.PGSQL.5432`). Cloud Run revision must have `--add-cloudsql-instances=raito-house-of-brands:me-west1:raito-db` configured.
+
+---
+
+### Current Data State (as of 27 Mar 2026)
+
+| Distributor | Data in PostgreSQL | Latest period |
+|---|---|---|
+| Icedream (sales) | Dec 2025, Jan 2026, Feb 2026, Mar 2026 | W13 (22/3/2026) — 439 rows |
+| Ma'ayan (sales) | Dec 2025, Jan 2026, Feb 2026, Mar 2026 | W10-W11 |
+| Biscotti (sales) | Mar 2026 | Mar 2026 |
+| Icedream (stock) | snapshot 26/3/2026 | 8,387 units, 4 products |
+| Ma'ayan (stock) | snapshot 15/3/2026 | 8,710 units, 4 products |
+| Karfree (warehouse) | pending pdfplumber install | blocked |
+
+**W13 Icedream note:** File received as `data/icedreams/week13` (no extension). Copied to `data/icedreams/week13.xlsx` for parser compatibility. `parse_all_icedreams()` only globs `.xlsx` files — files without extension are silently skipped.
+
+---
+
+### W13 Update Checklist (SQL pipeline — supplement to existing checklist)
+
+In addition to the CC weekly chart array updates documented above:
+
+1. Load Icedream W13 sales: `python3 scripts/db/raito_loader.py --target local --file data/icedreams/week13.xlsx --force`
+2. Load Ma'ayan W13 when received: `python3 scripts/db/raito_loader.py --target local --file data/mayyan/maayan_w13.xlsx`
+3. Load any new stock files: `python3 scripts/db/raito_loader.py --target local --file data/icedreams/stock26.3.xlsx`
+4. Refresh live dashboard: `https://raito-dashboard-20004010285.me-west1.run.app/refresh`
+5. Alternatively: use the upload page at `/upload` to drag-and-drop files directly
+
+**Or via /upload page:** Navigate to `https://raito-dashboard-20004010285.me-west1.run.app/upload`, drag in the file, select distributor if auto-detection fails, click "Upload & Ingest". Dashboard cache is automatically invalidated on success.
+
+---
+
+### Known Issues & Decisions (Phase 4)
+
+1. **`google-cloud-sql-connector` not installable** on Mac M4 or Docker linux/amd64 — package returns "no versions found". Use Cloud SQL Auth Proxy binary instead for all local dev connections.
+2. **`raito_loader.py` must run from project root** — relative imports for `parsers`, `config`, `migrate_transactions` depend on the CWD being `~/dataset/`. Running via absolute path (`python3 ~/dataset/scripts/...`) breaks the import chain.
+3. **Files without `.xlsx` extension are invisible to parsers** — `parse_all_icedreams()` globs `*.xlsx` only. Always ensure distributor files have the correct extension before dropping into the data folder.
+4. **Icedream batch names are month-level** (e.g. `icedream_march`), not file-level — adding a new weekly file and running `--force` will re-ingest the entire month by combining all `.xlsx` files in the folder.
+5. **GitHub Pages still maintained** in parallel at `https://or-raito.github.io/raito-dashboard/` — generated by `python3 scripts/unified_dashboard.py` from local files. The Cloud Run dashboard reads from PostgreSQL; the GitHub Pages dashboard reads from local Excel files. These are two separate systems.
