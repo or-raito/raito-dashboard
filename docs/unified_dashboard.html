@@ -84,6 +84,94 @@ body {
 }
 .sidebar-export-btn:hover { background:#4f46e5; }
 .sidebar-export-btn svg { flex-shrink:0; }
+.sidebar-upload-btn {
+  width:100%; background:transparent; color:var(--primary); border:1.5px solid var(--primary);
+  padding:9px 16px; border-radius:10px; cursor:pointer;
+  font-weight:600; font-size:12px; transition:all 0.2s;
+  display:flex; align-items:center; justify-content:center; gap:7px;
+  margin-bottom:8px;
+}
+.sidebar-upload-btn:hover { background:rgba(99,102,241,0.07); }
+.sidebar-refresh-btn {
+  width:100%; background:transparent; color:var(--text-muted); border:1px solid var(--border-light);
+  padding:7px 16px; border-radius:10px; cursor:pointer;
+  font-weight:500; font-size:11px; transition:all 0.2s;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  margin-bottom:8px;
+}
+.sidebar-refresh-btn:hover { background:var(--surface); color:var(--text); border-color:var(--primary); }
+.sidebar-refresh-btn.spinning svg { animation:spin 1s linear infinite; }
+@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+/* ── Upload Modal ── */
+.upload-modal-overlay {
+  display:none; position:fixed; top:0; left:0; width:100vw; height:100vh;
+  background:rgba(0,0,0,0.4); z-index:9999; align-items:center; justify-content:center;
+}
+.upload-modal-overlay.active { display:flex; }
+.upload-modal {
+  background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,0.25);
+  width:460px; max-width:92vw; overflow:hidden; display:flex; flex-direction:column;
+}
+.upload-modal-header {
+  padding:20px 24px 12px; border-bottom:1px solid var(--border-light);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.upload-modal-header h3 { margin:0; font-size:15px; font-weight:700; color:var(--text); }
+.upload-modal-close {
+  background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:20px; line-height:1; padding:4px;
+}
+.upload-modal-close:hover { color:var(--text); }
+.upload-modal-body { padding:20px 24px; }
+.upl-drop-zone {
+  border:2px dashed var(--border-light); border-radius:12px; padding:28px 16px;
+  text-align:center; cursor:pointer; transition:all 0.2s; background:var(--surface);
+  margin-bottom:16px;
+}
+.upl-drop-zone:hover, .upl-drop-zone.drag-over {
+  border-color:var(--primary); background:#f0f0ff;
+}
+.upl-drop-zone .upl-icon { font-size:28px; margin-bottom:6px; }
+.upl-drop-zone .upl-text { font-size:13px; color:var(--text-muted); }
+.upl-drop-zone .upl-text span { color:var(--primary); font-weight:600; cursor:pointer; }
+.upl-file-name {
+  display:none; font-size:12px; color:var(--text); margin-top:8px; font-weight:500;
+  background:#eef2ff; border-radius:8px; padding:6px 10px;
+}
+.upl-field { margin-bottom:12px; }
+.upl-field label { display:block; font-size:11px; font-weight:700; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; }
+.upl-field select {
+  width:100%; padding:8px 10px; border:1px solid var(--border-light); border-radius:8px;
+  font-size:13px; color:var(--text); background:#fff; box-sizing:border-box;
+}
+.upl-toggle-row {
+  display:flex; align-items:flex-start; gap:10px; cursor:pointer; padding:8px 0;
+}
+.upl-toggle-row input { margin-top:2px; accent-color:var(--primary); }
+.upl-toggle-label { font-size:13px; color:var(--text); }
+.upl-toggle-label small { display:block; font-size:11px; color:var(--text-muted); margin-top:2px; }
+.upl-spinner { display:none; text-align:center; padding:10px 0; font-size:13px; color:var(--text-muted); }
+.upl-result { display:none; border-radius:10px; padding:12px 14px; font-size:12.5px; margin-top:12px; }
+.upl-result.success { background:#f0fff4; border:1px solid #68d391; color:#276749; }
+.upl-result.error   { background:#fff5f5; border:1px solid #fc8181; color:#9b2c2c; }
+.upl-result.skipped { background:#fffff0; border:1px solid #f6e05e; color:#744210; }
+.upl-result-title { font-weight:700; margin-bottom:6px; font-size:13px; }
+.upl-result table { border-collapse:collapse; width:100%; }
+.upl-result table td { padding:3px 6px; vertical-align:top; }
+.upl-result table td:first-child { font-weight:600; white-space:nowrap; padding-right:10px; }
+.upload-modal-footer {
+  padding:12px 24px 20px; border-top:1px solid var(--border-light);
+  display:flex; gap:8px; justify-content:flex-end;
+}
+.upload-modal-footer button {
+  padding:9px 20px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:none;
+}
+.upl-cancel { background:var(--surface); color:var(--text); }
+.upl-cancel:hover { background:#eee; }
+.upl-submit { background:var(--primary); color:#fff; }
+.upl-submit:hover { background:#4f46e5; }
+.upl-submit:disabled { opacity:0.5; cursor:not-allowed; }
 
 /* ── Export Modal ── */
 .export-modal-overlay {
@@ -546,6 +634,44 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   </div>
 </div>
 
+<!-- Upload Modal Overlay -->
+<div class="upload-modal-overlay" id="upload-modal-overlay" onclick="if(event.target===this)closeUploadModal()">
+  <div class="upload-modal">
+    <div class="upload-modal-header">
+      <h3>Upload Distributor File</h3>
+      <button class="upload-modal-close" onclick="closeUploadModal()">&times;</button>
+    </div>
+    <div class="upload-modal-body">
+      <div class="upl-drop-zone" id="upl-drop-zone" onclick="document.getElementById('upl-file-input').click()">
+        <div class="upl-icon">📂</div>
+        <div class="upl-text">Drag &amp; drop file here, or <span>browse</span></div>
+        <input type="file" id="upl-file-input" accept=".xlsx,.xls,.pdf" style="display:none">
+        <div class="upl-file-name" id="upl-file-name"></div>
+      </div>
+      <div class="upl-field">
+        <label>Distributor</label>
+        <select id="upl-distributor">
+          <option value="">Auto-detect from filename</option>
+          <option value="icedream">Icedream</option>
+          <option value="mayyan">Ma&apos;ayan</option>
+          <option value="biscotti">Biscotti</option>
+          <option value="karfree">Karfree (warehouse stock)</option>
+        </select>
+      </div>
+      <label class="upl-toggle-row">
+        <input type="checkbox" id="upl-force">
+        <div class="upl-toggle-label">Force re-import<small>Overwrite existing data for this period</small></div>
+      </label>
+      <div class="upl-spinner" id="upl-spinner">⏳ Uploading and ingesting data...</div>
+      <div class="upl-result" id="upl-result"></div>
+    </div>
+    <div class="upload-modal-footer">
+      <button class="upl-cancel" onclick="closeUploadModal()">Cancel</button>
+      <button class="upl-submit" id="upl-submit-btn" disabled onclick="doUploadModal()">Upload &amp; Ingest</button>
+    </div>
+  </div>
+</div>
+
 <div class="app-layout">
 
 <!-- Left Sidebar -->
@@ -583,11 +709,19 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
   </ul>
 
   <div class="sidebar-footer">
+    <button class="sidebar-upload-btn" onclick="showUploadModal()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload Data
+    </button>
     <button class="sidebar-export-btn" onclick="showExportModal()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Export Excel
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:8px;">Last updated: 27/03/2026 14:31</div>
+    <button class="sidebar-refresh-btn" id="refresh-btn" onclick="doRefresh()">
+      <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+      Refresh
+    </button>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 18:55</div>
   </div>
 </nav>
 
@@ -4022,7 +4156,7 @@ window.__SP_DATA__ = {"customers": [{"name": "Private Market", "distributor": "M
 <script>
 (function() {
   /* ── API Configuration ── */
-  var API_BASE = 'http://localhost:5555/api';
+  var API_BASE = '/api';
   var API_OK = false;  // detected at init
 
   /* ── Initial Data from Python (fallback) ── */
@@ -4681,7 +4815,69 @@ window.__SP_DATA__ = {"customers": [{"name": "Private Market", "distributor": "M
     markClean();
     showToast('Exported to Excel ✓');
   };
-  window.mdExportToExcel = window.mdSave;
+
+  /* ── Standalone export: builds a filtered workbook from current S state ── */
+  /* Called by the Export Excel modal (selSheets = array of sheet names).    */
+  /* Does NOT touch the API — works fully offline.                            */
+  window.mdExportToExcel = function(selSheets) {
+    if(typeof XLSX==='undefined'){alert('XLSX library not loaded');return;}
+    var all = !selSheets || selSheets.length === 0;
+    function want(name){ return all || selSheets.indexOf(name) !== -1; }
+
+    var wb = XLSX.utils.book_new();
+    function addWS(name, data, cols) {
+      if(!want(name) || !data || !data.length) return;
+      var aoa = [cols.map(function(c){return c.label;})];
+      data.forEach(function(r){
+        aoa.push(cols.map(function(c){ return r[c.key] != null ? r[c.key] : ''; }));
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+    }
+
+    addWS('Brands', S.brands, [
+      {key:'key',label:'Brand Key'},{key:'name',label:'Brand Name'},{key:'category',label:'Category'},
+      {key:'status',label:'Status'},{key:'launch_date',label:'Launch Date'},{key:'owner',label:'Owner'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Products', S.products, [
+      {key:'sku_key',label:'SKU Key'},{key:'barcode',label:'Barcode'},{key:'name_he',label:'Name HE'},
+      {key:'name_en',label:'Name EN'},{key:'brand',label:'Brand Key'},{key:'category',label:'Category'},
+      {key:'status',label:'Status'},{key:'launch_date',label:'Launch Date'},{key:'manufacturer',label:'Manufacturer'},{key:'cost',label:'Cost'}
+    ]);
+    addWS('Manufacturers', S.manufacturers, [
+      {key:'key',label:'Key'},{key:'name',label:'Name'},{key:'products',label:'Products'},
+      {key:'contact',label:'Contact'},{key:'location',label:'Location'},{key:'lead_time',label:'Lead Time'},
+      {key:'moq',label:'MOQ'},{key:'payment_terms',label:'Payment Terms'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Distributors', S.distributors, [
+      {key:'key',label:'Key'},{key:'name',label:'Name'},{key:'products',label:'Products'},
+      {key:'commission_pct',label:'Commission'},{key:'report_format',label:'Report Format'},
+      {key:'report_freq',label:'Report Freq'},{key:'contact',label:'Contact'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Customers', S.customers, [
+      {key:'key',label:'Customer Key'},{key:'name_he',label:'Name HE'},{key:'name_en',label:'Name EN'},
+      {key:'type',label:'Type'},{key:'distributor',label:'Distributor'},{key:'chain',label:'Chain/Group'},
+      {key:'status',label:'Status'},{key:'contact',label:'Contact'},{key:'phone',label:'Phone'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Logistics', S.logistics, [
+      {key:'product_key',label:'Product Key'},{key:'product_name',label:'Product Name'},
+      {key:'storage_type',label:'Storage Type'},{key:'temp',label:'Temp'},
+      {key:'units_per_carton',label:'Units/Carton'},{key:'cartons_per_pallet',label:'Cartons/Pallet'},
+      {key:'units_per_pallet',label:'Units/Pallet'},{key:'pallet_divisor',label:'Pallet Divisor'},
+      {key:'warehouse',label:'Warehouse'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Pricing', S.pricing, [
+      {key:'barcode',label:'Barcode'},{key:'sku_key',label:'SKU Key'},{key:'name_en',label:'Name EN'},
+      {key:'name_he',label:'Name HE'},{key:'customer',label:'Customer'},{key:'distributor',label:'Distributor'},
+      {key:'commission_pct',label:'Commission'},{key:'sale_price',label:'Sale Price'},{key:'cost',label:'Cost'},
+      {key:'gross_margin',label:'Gross Margin'},{key:'op_margin',label:'Op Margin'},
+      {key:'status',label:'Status'},{key:'last_updated',label:'Last Updated'}
+    ]);
+
+    if(wb.SheetNames.length === 0){ showToast('No sheets selected'); return; }
+    var d = new Date();
+    XLSX.writeFile(wb, 'Raito_Master_Data_' + d.getDate() + '.' + (d.getMonth()+1) + '.' + d.getFullYear() + '.xlsx');
+    showToast('Master Data exported ✓');
+  };
 
   /* ── Close modal on overlay click ── */
   document.getElementById('md-overlay').addEventListener('click', function(e){
@@ -4904,6 +5100,132 @@ function runExport() {
     mdExportToExcel(_emcGetSelected('mds'));
   }
   closeExportModal();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// UPLOAD MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+var _uplFile = null;
+
+function showUploadModal() {
+  // Reset state
+  _uplFile = null;
+  document.getElementById('upl-file-name').style.display = 'none';
+  document.getElementById('upl-file-name').textContent = '';
+  document.getElementById('upl-distributor').value = '';
+  document.getElementById('upl-force').checked = false;
+  document.getElementById('upl-spinner').style.display = 'none';
+  document.getElementById('upl-result').style.display = 'none';
+  document.getElementById('upl-result').className = 'upl-result';
+  document.getElementById('upl-submit-btn').disabled = true;
+  document.getElementById('upl-drop-zone').classList.remove('drag-over');
+  document.getElementById('upl-file-input').value = '';
+  document.getElementById('upload-modal-overlay').classList.add('active');
+  _uplBindEvents();
+}
+
+function closeUploadModal() {
+  document.getElementById('upload-modal-overlay').classList.remove('active');
+}
+
+function _uplBindEvents() {
+  var dz = document.getElementById('upl-drop-zone');
+  var fi = document.getElementById('upl-file-input');
+  // Remove old listeners by cloning
+  var newDz = dz.cloneNode(true);
+  dz.parentNode.replaceChild(newDz, dz);
+  var newFi = document.getElementById('upl-file-input');
+
+  newDz.addEventListener('dragover', function(e) { e.preventDefault(); newDz.classList.add('drag-over'); });
+  newDz.addEventListener('dragleave', function() { newDz.classList.remove('drag-over'); });
+  newDz.addEventListener('drop', function(e) {
+    e.preventDefault(); newDz.classList.remove('drag-over');
+    _uplSetFile(e.dataTransfer.files[0]);
+  });
+  newDz.addEventListener('click', function() { newFi.click(); });
+  newFi.addEventListener('change', function() { _uplSetFile(newFi.files[0]); });
+}
+
+function _uplSetFile(f) {
+  if (!f) return;
+  _uplFile = f;
+  var el = document.getElementById('upl-file-name');
+  el.textContent = '📄 ' + f.name + '  (' + (f.size / 1024).toFixed(0) + ' KB)';
+  el.style.display = 'block';
+  document.getElementById('upl-submit-btn').disabled = false;
+  document.getElementById('upl-result').style.display = 'none';
+}
+
+function _uplEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function doUploadModal() {
+  if (!_uplFile) return;
+  var submitBtn = document.getElementById('upl-submit-btn');
+  var spinner = document.getElementById('upl-spinner');
+  var result = document.getElementById('upl-result');
+
+  submitBtn.disabled = true;
+  spinner.style.display = 'block';
+  result.style.display = 'none';
+
+  var fd = new FormData();
+  fd.append('file', _uplFile, _uplFile.name);
+  fd.append('distributor', document.getElementById('upl-distributor').value);
+  fd.append('force', document.getElementById('upl-force').checked ? 'true' : 'false');
+
+  try {
+    var resp = await fetch('/upload', { method: 'POST', body: fd });
+    var data = await resp.json();
+    spinner.style.display = 'none';
+    result.style.display = 'block';
+
+    if (data.error) {
+      result.className = 'upl-result error';
+      result.innerHTML = '<div class="upl-result-title">✗ Error</div>' + _uplEsc(data.error);
+    } else if (data.batches_new === 0 && data.batches_skipped > 0) {
+      result.className = 'upl-result skipped';
+      result.innerHTML = '<div class="upl-result-title">⚠ Already ingested</div>' +
+        '<table>' +
+        '<tr><td>File</td><td>' + _uplEsc(data.filename) + '</td></tr>' +
+        '<tr><td>Skipped</td><td>' + data.batches_skipped + ' batch(es) already in DB</td></tr>' +
+        '<tr><td>Tip</td><td>Enable "Force re-import" to overwrite</td></tr>' +
+        '</table>';
+    } else {
+      result.className = 'upl-result success';
+      result.innerHTML = '<div class="upl-result-title">✓ Ingestion complete</div>' +
+        '<table>' +
+        '<tr><td>File</td><td>' + _uplEsc(data.filename) + '</td></tr>' +
+        '<tr><td>Distributor</td><td>' + _uplEsc(data.distributor) + '</td></tr>' +
+        '<tr><td>Type</td><td>' + _uplEsc(data.type) + '</td></tr>' +
+        '<tr><td>Rows</td><td>' + data.rows_processed.toLocaleString() + '</td></tr>' +
+        '<tr><td>New batches</td><td>' + data.batches_new + '</td></tr>' +
+        (data.batches_skipped ? '<tr><td>Skipped</td><td>' + data.batches_skipped + '</td></tr>' : '') +
+        '<tr><td>Time</td><td>' + data.elapsed_s.toFixed(1) + 's</td></tr>' +
+        '</table>' +
+        '<div style="margin-top:10px;font-size:12px">✅ Click <strong>Refresh</strong> in the sidebar to reload the dashboard.</div>';
+    }
+  } catch(err) {
+    spinner.style.display = 'none';
+    result.style.display = 'block';
+    result.className = 'upl-result error';
+    result.innerHTML = '<div class="upl-result-title">✗ Network error</div>' + _uplEsc(String(err));
+  }
+  submitBtn.disabled = false;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// REFRESH
+// ══════════════════════════════════════════════════════════════════════════════
+async function doRefresh() {
+  var btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  try {
+    await fetch('/refresh');
+  } catch(e) {}
+  window.location.reload();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -6934,17 +7256,8 @@ function spExportToExcel(selCustomers, selBrands, selDist) {
   XLSX.writeFile(wb,'Raito_Sale_Points_'+d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear()+'.xlsx');
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MASTER DATA EXPORT FUNCTION
-// ══════════════════════════════════════════════════════════════════════════════
-function mdExportToExcel(selSheets) {
-  if(typeof window.mdSave === 'function') {
-    // mdSave already handles the full master data export
-    window.mdSave();
-  } else {
-    alert('Master Data export not available.');
-  }
-}
+// mdExportToExcel is defined inside the Master Data IIFE (has access to S state).
+// The Export modal calls window.mdExportToExcel(selSheets) directly.
 
 </script>
 </body>
