@@ -721,7 +721,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       Refresh
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 17:27</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 18:02</div>
   </div>
 </nav>
 
@@ -4156,7 +4156,7 @@ window.__SP_DATA__ = {"customers": [{"name": "Private Market", "distributor": "M
 <script>
 (function() {
   /* ── API Configuration ── */
-  var API_BASE = 'http://localhost:5555/api';
+  var API_BASE = '/api';
   var API_OK = false;  // detected at init
 
   /* ── Initial Data from Python (fallback) ── */
@@ -4815,7 +4815,69 @@ window.__SP_DATA__ = {"customers": [{"name": "Private Market", "distributor": "M
     markClean();
     showToast('Exported to Excel ✓');
   };
-  window.mdExportToExcel = window.mdSave;
+
+  /* ── Standalone export: builds a filtered workbook from current S state ── */
+  /* Called by the Export Excel modal (selSheets = array of sheet names).    */
+  /* Does NOT touch the API — works fully offline.                            */
+  window.mdExportToExcel = function(selSheets) {
+    if(typeof XLSX==='undefined'){alert('XLSX library not loaded');return;}
+    var all = !selSheets || selSheets.length === 0;
+    function want(name){ return all || selSheets.indexOf(name) !== -1; }
+
+    var wb = XLSX.utils.book_new();
+    function addWS(name, data, cols) {
+      if(!want(name) || !data || !data.length) return;
+      var aoa = [cols.map(function(c){return c.label;})];
+      data.forEach(function(r){
+        aoa.push(cols.map(function(c){ return r[c.key] != null ? r[c.key] : ''; }));
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+    }
+
+    addWS('Brands', S.brands, [
+      {key:'key',label:'Brand Key'},{key:'name',label:'Brand Name'},{key:'category',label:'Category'},
+      {key:'status',label:'Status'},{key:'launch_date',label:'Launch Date'},{key:'owner',label:'Owner'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Products', S.products, [
+      {key:'sku_key',label:'SKU Key'},{key:'barcode',label:'Barcode'},{key:'name_he',label:'Name HE'},
+      {key:'name_en',label:'Name EN'},{key:'brand',label:'Brand Key'},{key:'category',label:'Category'},
+      {key:'status',label:'Status'},{key:'launch_date',label:'Launch Date'},{key:'manufacturer',label:'Manufacturer'},{key:'cost',label:'Cost'}
+    ]);
+    addWS('Manufacturers', S.manufacturers, [
+      {key:'key',label:'Key'},{key:'name',label:'Name'},{key:'products',label:'Products'},
+      {key:'contact',label:'Contact'},{key:'location',label:'Location'},{key:'lead_time',label:'Lead Time'},
+      {key:'moq',label:'MOQ'},{key:'payment_terms',label:'Payment Terms'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Distributors', S.distributors, [
+      {key:'key',label:'Key'},{key:'name',label:'Name'},{key:'products',label:'Products'},
+      {key:'commission_pct',label:'Commission'},{key:'report_format',label:'Report Format'},
+      {key:'report_freq',label:'Report Freq'},{key:'contact',label:'Contact'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Customers', S.customers, [
+      {key:'key',label:'Customer Key'},{key:'name_he',label:'Name HE'},{key:'name_en',label:'Name EN'},
+      {key:'type',label:'Type'},{key:'distributor',label:'Distributor'},{key:'chain',label:'Chain/Group'},
+      {key:'status',label:'Status'},{key:'contact',label:'Contact'},{key:'phone',label:'Phone'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Logistics', S.logistics, [
+      {key:'product_key',label:'Product Key'},{key:'product_name',label:'Product Name'},
+      {key:'storage_type',label:'Storage Type'},{key:'temp',label:'Temp'},
+      {key:'units_per_carton',label:'Units/Carton'},{key:'cartons_per_pallet',label:'Cartons/Pallet'},
+      {key:'units_per_pallet',label:'Units/Pallet'},{key:'pallet_divisor',label:'Pallet Divisor'},
+      {key:'warehouse',label:'Warehouse'},{key:'notes',label:'Notes'}
+    ]);
+    addWS('Pricing', S.pricing, [
+      {key:'barcode',label:'Barcode'},{key:'sku_key',label:'SKU Key'},{key:'name_en',label:'Name EN'},
+      {key:'name_he',label:'Name HE'},{key:'customer',label:'Customer'},{key:'distributor',label:'Distributor'},
+      {key:'commission_pct',label:'Commission'},{key:'sale_price',label:'Sale Price'},{key:'cost',label:'Cost'},
+      {key:'gross_margin',label:'Gross Margin'},{key:'op_margin',label:'Op Margin'},
+      {key:'status',label:'Status'},{key:'last_updated',label:'Last Updated'}
+    ]);
+
+    if(wb.SheetNames.length === 0){ showToast('No sheets selected'); return; }
+    var d = new Date();
+    XLSX.writeFile(wb, 'Raito_Master_Data_' + d.getDate() + '.' + (d.getMonth()+1) + '.' + d.getFullYear() + '.xlsx');
+    showToast('Master Data exported ✓');
+  };
 
   /* ── Close modal on overlay click ── */
   document.getElementById('md-overlay').addEventListener('click', function(e){
@@ -7194,17 +7256,8 @@ function spExportToExcel(selCustomers, selBrands, selDist) {
   XLSX.writeFile(wb,'Raito_Sale_Points_'+d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear()+'.xlsx');
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MASTER DATA EXPORT FUNCTION
-// ══════════════════════════════════════════════════════════════════════════════
-function mdExportToExcel(selSheets) {
-  if(typeof window.mdSave === 'function') {
-    // mdSave already handles the full master data export
-    window.mdSave();
-  } else {
-    alert('Master Data export not available.');
-  }
-}
+// mdExportToExcel is defined inside the Master Data IIFE (has access to S state).
+// The Export modal calls window.mdExportToExcel(selSheets) directly.
 
 </script>
 </body>
