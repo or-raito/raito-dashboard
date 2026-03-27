@@ -721,7 +721,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       Refresh
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 19:09</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 20:11</div>
   </div>
 </nav>
 
@@ -5194,6 +5194,11 @@ async function doUploadModal() {
         '</table>';
     } else {
       result.className = 'upl-result success';
+      var wkMsg = '';
+      if (data.weekly_override) {
+        var wk = data.weekly_override;
+        wkMsg = '<tr><td>Weekly update</td><td>W' + wk.week_num + ': ' + wk.units.toLocaleString() + ' units · ₪' + wk.revenue.toLocaleString('en-US', {minimumFractionDigits:0}) + '</td></tr>';
+      }
       result.innerHTML = '<div class="upl-result-title">✓ Ingestion complete</div>' +
         '<table>' +
         '<tr><td>File</td><td>' + _uplEsc(data.filename) + '</td></tr>' +
@@ -5202,6 +5207,7 @@ async function doUploadModal() {
         '<tr><td>Rows</td><td>' + data.rows_processed.toLocaleString() + '</td></tr>' +
         '<tr><td>New batches</td><td>' + data.batches_new + '</td></tr>' +
         (data.batches_skipped ? '<tr><td>Skipped</td><td>' + data.batches_skipped + '</td></tr>' : '') +
+        wkMsg +
         '<tr><td>Time</td><td>' + data.elapsed_s.toFixed(1) + 's</td></tr>' +
         '</table>' +
         '<div style="margin-top:10px;font-size:12px">✅ Click <strong>Refresh</strong> in the sidebar to reload the dashboard.</div>';
@@ -7010,6 +7016,48 @@ window.ccExportToExcel = function(selSheets, selCustomers, selBrands) {
   XLSX.writeFile(wb,`Sales Dashboard - Raito ${dd}.${mm}.${yy}.xlsx`);
 }
 
+// ── Dynamic weekly chart override from Cloud SQL ───────────────────────────────
+// Fetch latest uploaded weekly data and override hardcoded arrays
+(function() {
+  fetch('/api/weekly-overrides')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data) return;
+      // Apply Icedream overrides
+      if (data.icedream) {
+        Object.entries(data.icedream).forEach(function([wk, vals]) {
+          var idx = parseInt(wk) - 1;
+          if (idx >= 0 && idx < _iceWkRev.length) {
+            if (vals.units > 0) {
+              _iceWkRev[idx]   = vals.revenue;
+              _iceWkUnits[idx] = vals.units;
+            }
+          }
+        });
+      }
+      // Apply Mayyan overrides
+      if (data.mayyan) {
+        Object.entries(data.mayyan).forEach(function([wk, vals]) {
+          if (vals.units > 0) {
+            _maayWkRev[parseInt(wk)]   = vals.revenue;
+            _maayWkUnits[parseInt(wk)] = vals.units;
+          }
+        });
+      }
+      // Apply Biscotti overrides
+      if (data.biscotti) {
+        Object.entries(data.biscotti).forEach(function([wk, vals]) {
+          if (vals.units > 0) {
+            _biscWkRev[parseInt(wk)]   = vals.revenue;
+            _biscWkUnits[parseInt(wk)] = vals.units;
+          }
+        });
+      }
+      // Re-render chart with fresh data
+      if (typeof renderWeeklyChart === 'function') renderWeeklyChart();
+    })
+    .catch(function(){});  // Silently fail — static data still shown
+})();
 
 
 
