@@ -721,7 +721,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       Refresh
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 20:11</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 20:23</div>
   </div>
 </nav>
 
@@ -6270,16 +6270,45 @@ function _mkWeeklyDatasets(mode) {
   }
 
   if (dk === 'both') {
-    // Combined: ice + maay (turbo) + bisc (danis) — null-safe per distributor's scope
-    const combined = iceData.map((v, i) => (v ?? 0) + (maayData[i] ?? 0) + (biscData[i] ?? 0));
-    return [{
-      label: 'All Distributors',
-      data: combined,
-      borderColor: '#5D5FEF',
-      backgroundColor: 'rgba(93,95,239,0.08)',
-      borderWidth: 2.5, fill: true, tension: 0.4,
-      pointRadius: 5, pointBackgroundColor:'#5D5FEF', pointBorderColor:'#fff', pointBorderWidth:2, pointHoverRadius: 7, spanGaps: false
-    }];
+    // Show each distributor as its own line so data gaps don't hide individual distributors
+    const dsList = [];
+    // Icedreams — always present (null where no data)
+    if (S.brand !== 'danis') {
+      dsList.push({
+        label: 'Icedreams',
+        data: [...iceData],
+        borderColor: '#4f8ef7',
+        backgroundColor: 'rgba(93,95,239,0.08)',
+        borderWidth: 2.5, fill: false, tension: 0.3,
+        pointRadius: iceData.map(v => v !== null ? 4 : 0),
+        pointHoverRadius: 7, spanGaps: false
+      });
+    }
+    // Ma'ayan — turbo only (no danis)
+    if (S.brand !== 'danis') {
+      dsList.push({
+        label: "Ma'ayan",
+        data: maayData,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.08)',
+        borderWidth: 2.5, fill: false, tension: 0.3,
+        pointRadius: maayData.map(v => v !== null ? 4 : 0),
+        pointHoverRadius: 7, spanGaps: false
+      });
+    }
+    // Biscotti — danis only (no turbo)
+    if (S.brand !== 'turbo') {
+      dsList.push({
+        label: 'Biscotti',
+        data: biscData,
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,0.08)',
+        borderWidth: 2.5, fill: false, tension: 0.3,
+        pointRadius: biscData.map(v => v !== null ? 4 : 0),
+        pointHoverRadius: 7, spanGaps: false
+      });
+    }
+    return dsList;
   }
 
   return [];  // 'none'
@@ -6294,8 +6323,14 @@ function _updateWeeklyLegend(dk) {
     return;
   }
   if (dk === 'both') {
-    el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>All Distributors (28/12–22/3)${brandTag} — W1–W5: Icedreams · W6–W11: Icedreams + Ma'ayan · W12+: Icedreams + Biscotti</div>`;
+    const parts = [];
+    if (S.brand !== 'danis') parts.push(
+      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedreams (W1–W13)${brandTag}</div>`);
+    if (S.brand !== 'danis') parts.push(
+      `<div class="wleg-item"><div class="wleg-line" style="background:#22c55e"></div>Ma\'ayan (W6–W11)${brandTag}</div>`);
+    if (S.brand !== 'turbo') parts.push(
+      `<div class="wleg-item"><div class="wleg-line" style="background:#f59e0b"></div>Biscotti (W12–W13) · Dani\'s only</div>`);
+    el.innerHTML = parts.join('');
     return;
   }
   if (dk === 'ice') {
