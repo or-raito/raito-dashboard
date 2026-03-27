@@ -123,6 +123,108 @@ def health():
     return {'status': 'ok'}
 
 
+# ── Weekly Override Helpers ───────────────────────────────────────────────────
+
+_WEEK_LABELS = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3","22/3"]
+
+def _extract_week_override(distributor, filepath):
+    """Extract week number and net totals from an uploaded distributor file.
+
+    For Icedream files: reads D1 for week number (e.g. 'שבוע 13 2026' → 13),
+    then sums col C (units) and D (revenue) for product rows (excluding סה"כ).
+
+    Returns: {'week_num': int, 'units': int, 'revenue': float, 'label': str}
+    or None if no data found.
+    """
+    from openpyxl import load_workbook
+
+    if distributor not in ('icedream', 'mayyan', 'biscotti'):
+        return None
+
+    try:
+        if distributor == 'icedream':
+            wb = load_workbook(filepath)
+            ws = wb.active
+
+            # Read D1 for week header (e.g. 'שבוע 13 2026')
+            d1_val = str(ws['D1'].value or '').strip()
+            week_num = None
+            if 'שבוע' in d1_val:
+                # Extract number after 'שבוע'
+                import re
+                m = re.search(r'שבוע\s+(\d+)', d1_val)
+                if m:
+                    week_num = int(m.group(1))
+
+            if week_num is None or week_num < 1 or week_num > 52:
+                wb.close()
+                return None
+
+            # Sum net totals: col B=product, col C=units(cartons), col D=revenue(ILS)
+            # Icedream weekly files: negative values = sales, positive = returns.
+            # We abs() both qty and revenue so sales are positive.
+            # Skip header row 2 (שם חשבון / שם פריט / כמות / בש"ח) and סה"כ subtotals.
+            total_units = 0
+            total_revenue = 0.0
+
+            for row_idx in range(3, ws.max_row + 1):  # row 2 is column headers
+                item_name = ws.cell(row_idx, 2).value  # col B = product name
+                qty       = ws.cell(row_idx, 3).value  # col C = quantity (cartons, negative=sales)
+                rev       = ws.cell(row_idx, 4).value  # col D = revenue ILS (negative=sales)
+
+                if not item_name:
+                    continue
+                item_str = str(item_name).strip()
+                # Skip leading-apostrophe formatting artifact and subtotal rows
+                if item_str.startswith("'"):
+                    item_str = item_str[1:]
+                if 'סה"כ' in item_str or not item_str:
+                    continue
+
+                # Only count Raito products (טורבו or דרים קייק)
+                if 'טורבו' not in item_str and 'דרים קייק' not in item_str:
+                    continue
+
+                if qty is not None:
+                    try:
+                        q = float(qty)
+                        if q != 0:
+                            # Icedream sign convention: negative = sale, positive = return
+                            # Flip sign: -q turns sales positive, returns negative
+                            from parsers import extract_units_per_carton
+                            upc = extract_units_per_carton(item_str) or 1
+                            total_units += int(round(-q * upc))
+                    except (ValueError, TypeError):
+                        pass
+
+                if rev is not None:
+                    try:
+                        r = float(rev)
+                        if r != 0:
+                            total_revenue += -r  # flip: negative sale → positive revenue
+                    except (ValueError, TypeError):
+                        pass
+
+            wb.close()
+
+            # Only return if we have net positive units
+            if total_units > 0:
+                label = _WEEK_LABELS[week_num - 1] if 1 <= week_num <= len(_WEEK_LABELS) else f"W{week_num}"
+                return {
+                    'week_num': week_num,
+                    'units': int(total_units),
+                    'revenue': round(total_revenue, 2),
+                    'label': label,
+                }
+
+        # For mayyan and biscotti, skip for now (as per spec)
+
+    except Exception as e:
+        log.warning(f"Failed to extract week override for {distributor}: {e}")
+
+    return None
+
+
 # ── Upload page ───────────────────────────────────────────────────────────────
 
 _UPLOAD_HTML = """<!DOCTYPE html>
@@ -402,12 +504,43 @@ def upload():
             conn.commit()
             elapsed = (datetime.now() - started_at).total_seconds()
 
+            # Extract and store weekly override (Icedream/Mayyan/Biscotti)
+            weekly_override = None
+            if not is_stock and distributor in ('icedream', 'mayyan', 'biscotti'):
+                wo = _extract_week_override(distributor, tmp_path)
+                if wo:
+                    # Store in weekly_chart_overrides table
+                    _wo_ensure_table()
+                    wo_conn = _md_conn()
+                    try:
+                        wo_cur = wo_conn.cursor()
+                        wo_cur.execute("""
+                            INSERT INTO weekly_chart_overrides
+                            (distributor, week_num, units, revenue, label, source_file, updated_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                            ON CONFLICT (distributor, week_num)
+                            DO UPDATE SET
+                                units = EXCLUDED.units,
+                                revenue = EXCLUDED.revenue,
+                                label = EXCLUDED.label,
+                                source_file = EXCLUDED.source_file,
+                                updated_at = NOW()
+                        """, (distributor, wo['week_num'], wo['units'], wo['revenue'], wo['label'], safe_name))
+                        wo_conn.commit()
+                        weekly_override = wo
+                        log.info(f"Weekly override stored: {distributor} W{wo['week_num']}: {wo['units']} units, ₪{wo['revenue']}")
+                    except Exception as e:
+                        log.error(f"Failed to store weekly override: {e}")
+                    finally:
+                        wo_cur.close()
+                        wo_conn.close()
+
             # Invalidate dashboard cache so next visit shows fresh data
             if batches_new > 0:
                 global _cached_html
                 _cached_html = None
 
-            return jsonify({
+            response = {
                 'filename': safe_name,
                 'distributor': distributor,
                 'type': file_type,
@@ -415,7 +548,11 @@ def upload():
                 'batches_new': batches_new,
                 'batches_skipped': batches_skipped,
                 'elapsed_s': elapsed,
-            })
+            }
+            if weekly_override:
+                response['weekly_override'] = weekly_override
+
+            return jsonify(response)
 
         except Exception as e:
             conn.rollback()
@@ -469,6 +606,30 @@ def _md_conn():
     conn = psycopg2.connect(url)
     conn.autocommit = False
     return conn
+
+
+def _wo_ensure_table() -> None:
+    """Create weekly_chart_overrides table if absent."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS weekly_chart_overrides (
+                id          SERIAL PRIMARY KEY,
+                distributor TEXT NOT NULL,
+                week_num    SMALLINT NOT NULL,
+                units       INT NOT NULL DEFAULT 0,
+                revenue     NUMERIC(12,2) NOT NULL DEFAULT 0,
+                label       TEXT,
+                source_file TEXT,
+                updated_at  TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(distributor, week_num)
+            )
+        """)
+        conn.commit()
+        log.info("weekly_chart_overrides table ensured")
+    finally:
+        conn.close()
 
 
 def _md_ensure_table() -> None:
@@ -722,6 +883,81 @@ def api_lookup(entity):
         ])
     except Exception as e:
         log.error("api_lookup %s: %s", entity, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/weekly-overrides  (dynamic chart data) ───────────────────────────────
+
+@app.route('/api/weekly-overrides', methods=['GET'])
+def api_weekly_overrides_get():
+    """Fetch all weekly chart override data grouped by distributor."""
+    try:
+        _wo_ensure_table()
+        conn = _md_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT distributor, week_num, units, revenue
+                FROM weekly_chart_overrides
+                ORDER BY distributor, week_num
+            """)
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+
+        # Structure as {distributor: {week: {units, revenue}}}
+        result = {}
+        for dist, wk, units, revenue in rows:
+            if dist not in result:
+                result[dist] = {}
+            result[dist][str(wk)] = {
+                'units': int(units),
+                'revenue': float(revenue)
+            }
+        return jsonify(result)
+    except Exception as e:
+        log.error("api_weekly_overrides_get: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/weekly-overrides', methods=['POST'])
+def api_weekly_overrides_post():
+    """Store or update a weekly override from an uploaded file."""
+    try:
+        _wo_ensure_table()
+        data = request.get_json(force=True) or {}
+        distributor = data.get('distributor', '').strip()
+        week_num = data.get('week_num')
+        units = data.get('units', 0)
+        revenue = data.get('revenue', 0)
+        label = data.get('label', '')
+        source_file = data.get('source_file', '')
+
+        if not distributor or week_num is None:
+            return jsonify({'error': 'Missing distributor or week_num'}), 400
+
+        conn = _md_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO weekly_chart_overrides
+                (distributor, week_num, units, revenue, label, source_file, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (distributor, week_num)
+                DO UPDATE SET
+                    units = EXCLUDED.units,
+                    revenue = EXCLUDED.revenue,
+                    label = EXCLUDED.label,
+                    source_file = EXCLUDED.source_file,
+                    updated_at = NOW()
+            """, (distributor, week_num, units, revenue, label, source_file))
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({'ok': True, 'week_num': week_num})
+    except Exception as e:
+        log.error("api_weekly_overrides_post: %s", e)
         return jsonify({'error': str(e)}), 500
 
 

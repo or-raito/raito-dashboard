@@ -3057,6 +3057,11 @@ async function doUploadModal() {{
         '</table>';
     }} else {{
       result.className = 'upl-result success';
+      var wkMsg = '';
+      if (data.weekly_override) {{
+        var wk = data.weekly_override;
+        wkMsg = '<tr><td>Weekly update</td><td>W' + wk.week_num + ': ' + wk.units.toLocaleString() + ' units · ₪' + wk.revenue.toLocaleString('en-US', {{minimumFractionDigits:0}}) + '</td></tr>';
+      }}
       result.innerHTML = '<div class="upl-result-title">✓ Ingestion complete</div>' +
         '<table>' +
         '<tr><td>File</td><td>' + _uplEsc(data.filename) + '</td></tr>' +
@@ -3065,6 +3070,7 @@ async function doUploadModal() {{
         '<tr><td>Rows</td><td>' + data.rows_processed.toLocaleString() + '</td></tr>' +
         '<tr><td>New batches</td><td>' + data.batches_new + '</td></tr>' +
         (data.batches_skipped ? '<tr><td>Skipped</td><td>' + data.batches_skipped + '</td></tr>' : '') +
+        wkMsg +
         '<tr><td>Time</td><td>' + data.elapsed_s.toFixed(1) + 's</td></tr>' +
         '</table>' +
         '<div style="margin-top:10px;font-size:12px">✅ Click <strong>Refresh</strong> in the sidebar to reload the dashboard.</div>';

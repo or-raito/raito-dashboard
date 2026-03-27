@@ -1904,7 +1904,7 @@ function closeDrawer(){
 //   1 = "ינ'26"  (Jan 2026 — monthly total, displayed as dot)
 //   2–10 = "ש'1"–"ש'9"  (weekly, 2026)
 // Source: icedream_weekly_sales.xls  +  CP tab monthly totals  +  maay_feb_full.xlsx
-const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3"];
+const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3","22/3"];
 
 // ── Inactive customers: dynamic period config ─────────────────────────────
 // DATA_LAST_WEEK auto-derived from weeklyXLabels length — update by adding labels above
@@ -2117,9 +2117,17 @@ function renderWeeklyChart() {
   const datasets = _mkWeeklyDatasets(mode);
   _updateWeeklyLegend(dk);
 
-  // Apply rolling window: always show last WEEKLY_WINDOW weeks
-  const winLabels = weeklyXLabels.slice(-WEEKLY_WINDOW);
-  const winDatasets = datasets.map(ds => ({...ds, data: ds.data.slice(-WEEKLY_WINDOW)}));
+  // Dynamic rolling window: find last index that has ANY real data across all distributors,
+  // then show exactly WEEKLY_WINDOW weeks ending there — auto-advances when new data arrives.
+  const _allData = datasets.flatMap(ds => ds.data);
+  let _lastDataIdx = weeklyXLabels.length - 1;
+  while (_lastDataIdx > 0 &&
+         datasets.every(ds => ds.data[_lastDataIdx] == null || ds.data[_lastDataIdx] === 0)) {
+    _lastDataIdx--;
+  }
+  const _startIdx = Math.max(0, _lastDataIdx - WEEKLY_WINDOW + 1);
+  const winLabels   = weeklyXLabels.slice(_startIdx, _lastDataIdx + 1);
+  const winDatasets = datasets.map(ds => ({...ds, data: ds.data.slice(_startIdx, _lastDataIdx + 1)}));
 
   // Dynamic Y-axis max: scan visible data, add 20% headroom, round up to a clean magnitude
   const _flatVals = winDatasets.flatMap(ds => ds.data).filter(v => v != null && isFinite(v) && v > 0);
@@ -2792,6 +2800,48 @@ function exportToExcel(selSheets, selCustomers, selBrands) {
   XLSX.writeFile(wb,`Sales Dashboard - Raito ${dd}.${mm}.${yy}.xlsx`);
 }
 
+// ── Dynamic weekly chart override from Cloud SQL ───────────────────────────────
+// Fetch latest uploaded weekly data and override hardcoded arrays
+(function() {
+  fetch('/api/weekly-overrides')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data) return;
+      // Apply Icedream overrides
+      if (data.icedream) {
+        Object.entries(data.icedream).forEach(function([wk, vals]) {
+          var idx = parseInt(wk) - 1;
+          if (idx >= 0 && idx < _iceWkRev.length) {
+            if (vals.units > 0) {
+              _iceWkRev[idx]   = vals.revenue;
+              _iceWkUnits[idx] = vals.units;
+            }
+          }
+        });
+      }
+      // Apply Mayyan overrides
+      if (data.mayyan) {
+        Object.entries(data.mayyan).forEach(function([wk, vals]) {
+          if (vals.units > 0) {
+            _maayWkRev[parseInt(wk)]   = vals.revenue;
+            _maayWkUnits[parseInt(wk)] = vals.units;
+          }
+        });
+      }
+      // Apply Biscotti overrides
+      if (data.biscotti) {
+        Object.entries(data.biscotti).forEach(function([wk, vals]) {
+          if (vals.units > 0) {
+            _biscWkRev[parseInt(wk)]   = vals.revenue;
+            _biscWkUnits[parseInt(wk)] = vals.units;
+          }
+        });
+      }
+      // Re-render chart with fresh data
+      if (typeof renderWeeklyChart === 'function') renderWeeklyChart();
+    })
+    .catch(function(){});  // Silently fail — static data still shown
+})();
 
 </script>
 </body>

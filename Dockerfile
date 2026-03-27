@@ -24,9 +24,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Ensure scripts/ is on the Python path so imports like
-# `from config import ...` and `from db.database_manager import ...` work
-ENV PYTHONPATH="/app/scripts:/app"
+# Ensure scripts/ and scripts/db/ are on the Python path so imports like
+# `from config import ...`, `from db.database_manager import ...` and
+# `from migrate_transactions import ...` (used inside raito_loader.py) all work
+ENV PYTHONPATH="/app/scripts:/app/scripts/db:/app"
 
 # Create docs/ directory for dashboard output (if generators write to disk)
 RUN mkdir -p /app/docs
