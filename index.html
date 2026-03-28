@@ -578,6 +578,147 @@ body {
 #tab-md .tbl td { padding:10px 14px; border-bottom:1px solid var(--border-light); }
 #tab-md .tbl tr:last-child td { border-bottom:none; }
 #tab-md .tbl tbody tr:hover { background:var(--surface2); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — @media (max-width: 768px)
+   Desktop layout is unchanged. This block only activates on small screens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Bottom Tab Bar (replaces sidebar on mobile) ── */
+.mobile-tab-bar {
+  display:none;  /* hidden on desktop */
+}
+
+@media (max-width:768px) {
+
+  /* ── Hide sidebar, show bottom tab bar ── */
+  .sidebar { display:none !important; }
+
+  .main-content {
+    margin-left:0 !important;
+    max-width:100vw !important;
+    padding-bottom:64px;  /* room for bottom tab bar */
+  }
+
+  .mobile-tab-bar {
+    display:flex !important;
+    position:fixed; bottom:0; left:0; right:0; z-index:200;
+    height:60px;
+    background:var(--card);
+    border-top:1px solid var(--border-light);
+    box-shadow:0 -2px 12px rgba(0,0,0,0.06);
+    align-items:stretch; justify-content:space-around;
+    padding:0 4px;
+    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+  }
+  .mobile-tab-bar .mtab {
+    flex:1; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:3px;
+    background:none; border:none; cursor:pointer;
+    color:var(--text-muted); font-size:9px; font-weight:600;
+    letter-spacing:0.3px; text-transform:uppercase; padding:4px 0;
+    transition:color 0.15s;
+  }
+  .mobile-tab-bar .mtab svg { width:20px; height:20px; opacity:0.5; }
+  .mobile-tab-bar .mtab.active { color:var(--primary); }
+  .mobile-tab-bar .mtab.active svg { opacity:1; stroke:var(--primary); }
+
+  /* ── Global layout fixes ── */
+  body { font-size:13px; }
+
+  /* ── BO Tab Mobile ── */
+  #tab-bo .fbar {
+    padding:10px 12px !important;
+    gap:6px !important;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  #tab-bo .fbar span { font-size:10px !important; }
+  #tab-bo .ctr { padding:12px !important; }
+  #tab-bo .kpis { grid-template-columns:repeat(2,1fr) !important; gap:8px !important; }
+  #tab-bo .kpi { padding:10px 8px !important; min-height:70px !important; }
+  #tab-bo .kpi .big-number { font-size:18px !important; }
+  #tab-bo .kpi-title { font-size:9px !important; }
+  #tab-bo .card { padding:12px !important; margin-bottom:10px !important; border-radius:14px !important; }
+  #tab-bo .card h3 { font-size:13px !important; }
+  #tab-bo .tbl-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  #tab-bo .tbl { min-width:600px; }
+  #tab-bo .card.half { flex:none !important; width:100% !important; }
+
+  /* BO SVG charts — fill container width */
+  #tab-bo svg { width:100% !important; height:auto !important; }
+
+  /* BO two-column chart layouts → stack */
+  #tab-bo .chart-row,
+  #tab-bo div[style*="display:flex"][style*="gap"] {
+    flex-direction:column !important;
+  }
+
+  /* ── CC Tab Mobile ── */
+  #tab-cc .kpi-grid { grid-template-columns:repeat(2,1fr) !important; gap:8px !important; }
+  #tab-cc .kpi-card { padding:10px !important; }
+  #tab-cc .kpi-value { font-size:18px !important; }
+  #tab-cc .kpi-label { font-size:9px !important; }
+  #tab-cc .main { padding:12px !important; }
+  #tab-cc .filter-bar {
+    padding:10px 12px !important;
+    flex-direction:row !important; flex-wrap:wrap !important;
+    gap:6px 12px !important;
+  }
+  #tab-cc .filter-bar select, #tab-cc .filter-bar input { font-size:12px !important; min-width:0 !important; }
+  #tab-cc .fgroup { flex-wrap:nowrap; min-width:0; }
+  #tab-cc .panel, #tab-cc .weekly-panel, #tab-cc .tpanel, #tab-cc .inactive-panel {
+    padding:12px !important; border-radius:14px !important;
+  }
+  #tab-cc table.dt, #tab-cc .itable { min-width:600px; }
+  #tab-cc .panel { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  /* CC drawer → full-screen overlay on mobile */
+  #tab-cc .drawer {
+    width:100vw !important; left:0 !important; right:0 !important;
+    border-radius:16px 16px 0 0 !important;
+  }
+
+  /* ── SP Tab Mobile ── */
+  #sp-app { padding:0 !important; }
+  #sp-app .sp-topbar {
+    flex-direction:column !important; align-items:flex-start !important;
+    gap:10px !important; padding:12px !important;
+  }
+  #sp-app .sp-kpis { flex-wrap:wrap !important; gap:8px !important; }
+  #sp-app .sp-kpi { min-width:80px !important; flex:1 !important; }
+  #sp-app .sp-body { padding:0 8px !important; }
+  .sp-tbl { min-width:700px !important; }
+  #sp-app .sp-body { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  #sp-brand-bar { flex-wrap:wrap !important; padding:8px !important; gap:6px !important; }
+  #sp-brand-bar .sp-brand-btn { font-size:11px !important; padding:6px 10px !important; }
+
+  /* ── MD Tab Mobile ── */
+  #tab-md .md-body { padding:12px !important; }
+  #tab-md .md-subnav { flex-wrap:wrap !important; padding:8px 12px !important; gap:4px !important; }
+  #tab-md .md-stab { font-size:11px !important; padding:6px 10px !important; }
+  #tab-md .ctr { padding:12px !important; }
+  #tab-md .card { padding:16px !important; }
+  #tab-md .md-brand-cards { grid-template-columns:repeat(2,1fr) !important; gap:10px !important; }
+  #tab-md .md-topbar { flex-direction:column !important; align-items:flex-start !important; gap:8px !important; padding:12px !important; }
+  #tab-md .tbl { min-width:500px; }
+  #tab-md .card { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+  /* ── Modals fullscreen on mobile ── */
+  .upload-modal, .export-modal { width:100vw !important; max-width:100vw !important; border-radius:16px 16px 0 0 !important; }
+
+  /* ── Password gate mobile ── */
+  #login-gate div { width:90vw !important; max-width:90vw !important; padding:24px 20px !important; }
+
+}
+
+/* Small phones — single column KPIs */
+@media (max-width:400px) {
+  #tab-bo .kpis { grid-template-columns:1fr !important; }
+  #tab-cc .kpi-grid { grid-template-columns:1fr !important; }
+  #tab-md .md-brand-cards { grid-template-columns:1fr !important; }
+}
+
 </style>
 </head>
 <body>
@@ -721,7 +862,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
       <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       Refresh
     </button>
-    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 27/03/2026 20:23</div>
+    <div style="text-align:center; font-size:10px; color:var(--text-muted); margin-top:4px;">Last updated: 28/03/2026 19:36</div>
   </div>
 </nav>
 
@@ -2743,10 +2884,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </div>
         <div style="display:flex;gap:8px">
             <div style="background:#f1f5f9;border-radius:10px;padding:6px 14px;font-size:12px;color:#64748b">
-                <span style="font-weight:600;color:#1e293b">12</span> / 78 days elapsed
+                <span style="font-weight:600;color:#1e293b">13</span> / 78 days elapsed
             </div>
             <div style="background:#f1f5f9;border-radius:10px;padding:6px 14px;font-size:12px;color:#64748b">
-                <span style="font-weight:600;color:#1e293b">66</span> days remaining
+                <span style="font-weight:600;color:#1e293b">65</span> days remaining
             </div>
         </div>
     </div>
@@ -2775,10 +2916,10 @@ if(sessionStorage.getItem('raito-auth')==='1'){document.getElementById('login-ga
         </div>
         <!-- Time Progress Ring -->
         <div style="background:#fff;border:1px solid #f1f5f9;border-radius:16px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04);display:flex;align-items:center;gap:14px">
-            <svg width="80" height="80" viewBox="0 0 80 80"><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f1f5f9" stroke-width="6"/><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f59e0b" stroke-width="6" stroke-dasharray="232.47766" stroke-dashoffset="196.7" stroke-linecap="round" transform="rotate(-90 40.0 40.0)" style="transition:stroke-dashoffset 0.5s"/><text x="40.0" y="41.0" text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="700" fill="#f59e0b">15%</text></svg>
+            <svg width="80" height="80" viewBox="0 0 80 80"><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f1f5f9" stroke-width="6"/><circle cx="40.0" cy="40.0" r="37.0" fill="none" stroke="#f59e0b" stroke-width="6" stroke-dasharray="232.47766" stroke-dashoffset="193.7" stroke-linecap="round" transform="rotate(-90 40.0 40.0)" style="transition:stroke-dashoffset 0.5s"/><text x="40.0" y="41.0" text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="700" fill="#f59e0b">17%</text></svg>
             <div>
                 <div style="font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px">Time Elapsed</div>
-                <div style="font-size:13px;font-weight:600;color:#1e293b;margin-top:2px">66 days left</div>
+                <div style="font-size:13px;font-weight:600;color:#1e293b;margin-top:2px">65 days left</div>
             </div>
         </div>
         <!-- Avg Goal per Agent -->
@@ -6146,14 +6287,14 @@ const _maayMonUnits = { dec: 61775,   jan: 30088   };
 // Danis revenue validated exactly. Yingo W2 validated by user.
 // W10 (1/3/2026): Yango Deli 445u/₪13788, Domino\'s Pizza 164u/₪1869, Naomi\'s Farm 116u/₪6173, וולט -30u return (excluded from gross)
 // Combined (Turbo + Danis)  — W11 source: icedream_15_3 | W12 source: icedream_mar_w12.xlsx (19/3/2026) | W13 pending
-const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979, null];
-const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067, null];
+const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979, 13493];
+const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067, 970];
 // Turbo (ice cream) only
-const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872, null];
-const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182, null];
+const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872, 13493];
+const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182, 970];
 // Danis (dream cake) only — validated exact match all weeks
-const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106, null];
-const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885, null];
+const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106, 0];
+const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885, 0];
 // Returns tracked separately
 const _iceWkRetRev   = [0, 8278, 1309, 2392, 0, 233, 1890, 1925, 0, 1125, null, 0, null];
 const _iceWkRetUnits = [0, 117, 51, 204, 0, 7, 114, 33, 0, 30, null, 0, null];
@@ -7350,6 +7491,42 @@ function spExportToExcel(selCustomers, selBrands, selDist) {
 // mdExportToExcel is defined inside the Master Data IIFE (has access to S state).
 // The Export modal calls window.mdExportToExcel(selSheets) directly.
 
+// ── Mobile tab bar active-state sync ──
+function mobileTabSync(tabId) {
+  document.querySelectorAll('.mobile-tab-bar .mtab').forEach(b => b.classList.remove('active'));
+  var btn = document.querySelector('.mobile-tab-bar .mtab[data-tab="' + tabId + '"]');
+  if (btn) btn.classList.add('active');
+}
+// Patch switchTab to also update mobile bar
+var _origSwitchTab = switchTab;
+switchTab = function(tabId) {
+  _origSwitchTab(tabId);
+  mobileTabSync(tabId);
+};
+// Init
+document.addEventListener('DOMContentLoaded', function() { mobileTabSync('bo'); });
+
 </script>
+
+<!-- Mobile Bottom Tab Bar (hidden on desktop via CSS) -->
+<nav class="mobile-tab-bar">
+  <button class="mtab active" data-tab="bo" onclick="switchTab('bo')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    Overview
+  </button>
+  <button class="mtab" data-tab="cc" onclick="switchTab('cc')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+    Customers
+  </button>
+  <button class="mtab" data-tab="sp" onclick="switchTab('sp')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    Sale Points
+  </button>
+  <button class="mtab" data-tab="md" onclick="switchTab('md')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    Data
+  </button>
+</nav>
+
 </body>
 </html>
