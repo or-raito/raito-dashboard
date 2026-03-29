@@ -924,6 +924,7 @@ def _build_master_data_tab(master_data):
           <option value="all">All Statuses</option>
           <option>Active</option><option>Planned</option><option>Discontinued</option>
         </select>
+        <input type="text" id="srch-products" placeholder="🔍 Search name, SKU..." oninput="mdRender('products')" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:200px;outline:none;">
       </div>
       <div class="md-card-header">
         <div style="display:flex;align-items:center">
@@ -989,6 +990,7 @@ def _build_master_data_tab(master_data):
         </select>
         <label>Distributor</label>
         <select id="flt-cust-dist" onchange="mdRender('customers')"><option value="all">All Distributors</option></select>
+        <input type="text" id="srch-customers" placeholder="🔍 Search name..." oninput="mdRender('customers')" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:200px;outline:none;">
       </div>
       <div class="md-card-header">
         <div style="display:flex;align-items:center">
@@ -1017,6 +1019,7 @@ def _build_master_data_tab(master_data):
         </select>
         <label>Distributor</label>
         <select id="flt-pricing-dist" onchange="mdRender('pricing')"><option value="all">All Distributors</option></select>
+        <input type="text" id="srch-pricing" placeholder="🔍 Search customer, SKU..." oninput="mdRender('pricing')" style="padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;width:210px;outline:none;">
       </div>
       <div class="md-card-header">
         <div style="display:flex;align-items:center">
@@ -1294,6 +1297,7 @@ def _build_master_data_tab(master_data):
     }[sec];
     if(fn) fn();
   }
+  window.mdRender = mdRender;  // expose globally for onchange= handlers
 
   /* ── BRANDS ── */
   // Per-brand accent colours (cycles if more brands added)
@@ -1365,10 +1369,12 @@ def _build_master_data_tab(master_data):
   /* ── PRODUCTS ── */
   function rProducts() {
     var bf=getVal('flt-products-brand'), sf=getVal('flt-products-status');
+    var sq=(getVal('srch-products')||'').toLowerCase().trim();
     populateSel('flt-products-brand', uniqueVals(S.products,'brand'), 'All Brands', bf);
     var data=S.products.filter(function(p){
       if(bf&&bf!=='all'&&p.brand!==bf) return false;
       if(sf&&sf!=='all'&&p.status!==sf) return false;
+      if(sq && !((p.sku_key||'').toLowerCase().includes(sq)||(p.name_he||'').toLowerCase().includes(sq)||(p.name_en||'').toLowerCase().includes(sq))) return false;
       return true;
     });
     var rows='';
@@ -1430,11 +1436,13 @@ def _build_master_data_tab(master_data):
   /* ── CUSTOMERS ── */
   function rCustomers() {
     var tf=getVal('flt-cust-type'), sf=getVal('flt-cust-status'), df=getVal('flt-cust-dist');
+    var sq=(getVal('srch-customers')||'').toLowerCase().trim();
     populateSel('flt-cust-dist', uniqueVals(S.customers,'distributor'), 'All Distributors', df);
     var data=S.customers.filter(function(c){
       if(tf&&tf!=='all'&&c.type!==tf) return false;
       if(sf&&sf!=='all'&&c.status!==sf) return false;
       if(df&&df!=='all'&&c.distributor!==df) return false;
+      if(sq && !((c.name_he||'').toLowerCase().includes(sq)||(c.name_en||'').toLowerCase().includes(sq)||(c.key||'').toLowerCase().includes(sq))) return false;
       return true;
     });
     var rows='';
@@ -1457,12 +1465,14 @@ def _build_master_data_tab(master_data):
   /* ── PRICING ── */
   function rPricing() {
     var sf=getVal('flt-pricing-sku'), stf=getVal('flt-pricing-status'), df=getVal('flt-pricing-dist');
+    var sq=(getVal('srch-pricing')||'').toLowerCase().trim();
     populateSel('flt-pricing-sku',  uniqueVals(S.pricing,'sku_key'),    'All SKUs',         sf);
     populateSel('flt-pricing-dist', uniqueVals(S.pricing,'distributor'),'All Distributors', df);
     var data=S.pricing.filter(function(p){
       if(sf&&sf!=='all'&&p.sku_key!==sf) return false;
       if(stf&&stf!=='all'&&p.status!==stf) return false;
       if(df&&df!=='all'&&p.distributor!==df) return false;
+      if(sq && !((p.customer||'').toLowerCase().includes(sq)||(p.sku_key||'').toLowerCase().includes(sq)||(p.name_en||'').toLowerCase().includes(sq))) return false;
       return true;
     });
     var rows='';
@@ -1609,11 +1619,20 @@ def _build_master_data_tab(master_data):
         html+='<option value="">— Select —</option>';
         /* Pre-populate from local state as fallback */
         var srcArr = S[f.lookup] || [];
+        var fkHasMatch = false;
+        var fkOpts = '';
         srcArr.forEach(function(item){
           var v = item[f.valKey]||'';
           var lbl = item[f.labelKey]||v;
-          html+='<option value="'+esc(v)+'"'+(String(val)===String(v)?' selected':'')+'>'+esc(v)+' — '+esc(lbl)+'</option>';
+          var sel = String(val)===String(v);
+          if(sel) fkHasMatch = true;
+          fkOpts+='<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(v)+' — '+esc(lbl)+'</option>';
         });
+        /* If stored value doesn't match any lookup key, add it as current so it shows */
+        if(!fkHasMatch && val) {
+          html+='<option value="'+esc(val)+'" selected>'+esc(val)+'</option>';
+        }
+        html+=fkOpts;
         html+='</select>';
         if(API_OK) fkLoads.push({key:f.key, lookup:f.lookup, valKey:f.valKey, labelKey:f.labelKey, curVal:val});
       } else if(f.type==='select'){

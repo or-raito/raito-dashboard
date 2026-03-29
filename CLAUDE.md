@@ -38,6 +38,24 @@ Key traps that have already burned us:
 - **Ma'ayan revenue:** Calculated **row-by-row** using `_mayyan_chain_price(price_table, chain_raw, product)` from the price DB. Never use a flat average (₪13.80 is only the absolute last-resort fallback for unknown chains). Always call `_load_mayyan_price_table()` first.
 - **Weekly overrides (`_extract_week_overrides` in `db_dashboard.py`):** Must reuse `parsers.py` functions — `parse_mayyan_file()`, `_load_mayyan_price_table()`, `_mayyan_chain_price()`. Do not re-implement parsing inline.
 
+### Dev workflow — always use dev branch first
+**Never make code changes directly on `main`. Always work in dev and test locally before deploying.**
+1. `git checkout dev` before starting any work
+2. Start local Flask server: `cd ~/dataset/scripts && source ~/dataset/venv/bin/activate && python3 db/db_dashboard.py` → test at `localhost:8080`
+3. Changes to `scripts/*.py` files are picked up on next request (Flask debug mode auto-reloads)
+4. For static JS/CSS changes in `unified_dashboard.py` or `cc_dashboard.py`: run `python3 unified_dashboard.py` to regenerate, then reload browser
+5. When satisfied, commit to dev: `git add <files> && git commit -m "..."` and push
+6. Merge to main + deploy only when tested: `git checkout main && git merge dev && git push origin main`
+7. Deploy commands (use the Artifact Registry path — NOT `gcr.io/raito-dashboard/...`):
+   ```
+   docker build --platform linux/amd64 -t me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest .
+   docker push me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest
+   gcloud run deploy raito-dashboard --image=me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest --region=me-west1 --platform managed
+   ```
+
+### Master Data tab — known FK data mismatches
+The `distributor` field in pricing/customer records stores display names (`'Icedream'`, `"Ma'ayan"`) while the Distributors lookup table uses keys (`'icedreams'`, `'mayyan_froz'`). The edit modal handles this via a fallback: if no lookup key matches the stored value, it adds the current value as a selected option. Do NOT try to normalize these keys in `master_data_parser.py` without also updating the Excel source data — the display names come from the source Excel and changing them breaks parity.
+
 ### Other rules
 - Never use flavor keywords alone (`שוקולד`, `מנגו`) to filter Icedream products — use strict `טורבו` OR `דרים קייק` filter only
 - Ma'ayan revenue: applied per-row at parse time via `_mayyan_chain_price()` from price DB (falls back to ₪13.80/unit). `by_account` stores `{product: {units, value}}` — do NOT re-price when reading `mayyan_accounts`. For weekly chart history (`weeklyDetailHistory`), distribute proportionally from `_maayWkRev` totals when no per-line data is available.
