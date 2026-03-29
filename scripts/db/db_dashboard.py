@@ -1124,14 +1124,30 @@ def api_rebuild():
         _md_ensure_table()
         md = _md_read_all()
         _md_rebuild_portfolio(md)
-        from db.database_manager import reset_cache
-        reset_cache()
         _cached_html = None
         log.info("API rebuild triggered — dashboard cache invalidated")
         return jsonify({'status': 'rebuilding',
                         'message': 'Dashboard will regenerate on next page load'})
     except Exception as e:
         log.error("api_rebuild: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/reseed', methods=['POST'])
+def api_reseed():
+    """Force-reseed all master_data entities from the current Excel file."""
+    global _cached_html
+    try:
+        conn = _md_conn()
+        cur = conn.cursor()
+        _md_seed(cur)
+        conn.commit()
+        conn.close()
+        _cached_html = None
+        log.info("master_data reseeded from Excel")
+        return jsonify({'status': 'ok', 'message': 'Master data reseeded from Excel. Refresh the page.'})
+    except Exception as e:
+        log.error("api_reseed: %s", e)
         return jsonify({'error': str(e)}), 500
 
 
