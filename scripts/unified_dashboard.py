@@ -1651,6 +1651,7 @@ def _build_master_data_tab(master_data):
     /* Async-populate FK selects from API if available */
     fkLoads.forEach(function(fl){
       apiCall('GET', '/lookup/'+fl.lookup).then(function(items){
+        if(!items||!items.length) return;  // keep embedded fallback if API returns empty
         var sel = document.getElementById('fk-sel-'+fl.key);
         if(!sel) return;
         sel.innerHTML = '<option value="">— Select —</option>';
@@ -1658,11 +1659,18 @@ def _build_master_data_tab(master_data):
           var v=item[fl.valKey]||'';
           var lbl=item[fl.labelKey]||v;
           var opt=document.createElement('option');
-          opt.value=v; opt.textContent=v+' — '+lbl;
+          opt.value=v; opt.textContent=lbl||v;
           if(String(fl.curVal)===String(v)) opt.selected=true;
           sel.appendChild(opt);
         });
-      }).catch(function(){});  // Fallback already in DOM
+        /* If curVal didn't match any option, add it as current */
+        var hasMatch = Array.from(sel.options).some(function(o){ return o.value===String(fl.curVal); });
+        if(!hasMatch && fl.curVal) {
+          var fb=document.createElement('option');
+          fb.value=String(fl.curVal); fb.textContent=String(fl.curVal); fb.selected=true;
+          sel.insertBefore(fb, sel.options[1]);
+        }
+      }).catch(function(){});  // Fallback already in DOM on error
     });
   }
 
