@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated output — rebuilt from scripts, never commit
+docs/unified_dashboard.html
+docs/raito_salepoints_deep_dive.xlsx
+
+# Sensitive / large files
+cloud-sql-proxy
+raito_dump*.sql
+*.tmp
+*.tmp.xlsx
+*.tmp.xlsb
+*.tmp.xlsb.cpgz
+
+# Claude / Cowork metadata
+.auto-memory/
+.claude/
+
+# IDE
+.vscode/
+.idea/

@@ -41,25 +41,35 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ── Geo Layer Blueprint ───────────────────────────────────────────────────
+# Registers /api/geo/municipalities, /api/geo/choropleth, /api/geo/pos
+try:
+    from geo_api import geo_blueprint
+    app.register_blueprint(geo_blueprint)
+    log.info("Geo API blueprint registered (/api/geo/*)")
+except Exception as _geo_err:
+    log.warning(f"Geo API blueprint not loaded (run migration first): {_geo_err}")
+
 
 def _generate_dashboard_html():
-    """Pull data from PostgreSQL, run all dashboard generators, return HTML string.
+    """Parse Excel data files and run all dashboard generators, return HTML string.
 
-    This is the same pipeline as the old main(), but returns HTML instead of
-    writing to disk. Imports are deferred to avoid import-time DB connections.
+    Uses parsers.consolidate_data() (Excel-based SSOT) — same pipeline as the
+    local build. Does NOT require sales_transactions or any Phase-4 SQL tables.
+    Uploaded files copied to data/ subfolders via _copy_to_data_folder() are
+    automatically picked up on the next call to this function.
     """
-    from config import OUTPUT_DIR
     from master_data_parser import parse_master_data
     from unified_dashboard import (
         generate_unified_dashboard,
         DASHBOARD_PASSWORD,
         _js_hash,
     )
-    from db.database_manager import get_consolidated_data
+    from parsers import consolidate_data
 
-    # 1. Load data from PostgreSQL
-    log.info("Loading consolidated data from PostgreSQL...")
-    data = get_consolidated_data()
+    # 1. Parse all distributor Excel files from the data/ folder
+    log.info("Parsing distributor Excel files...")
+    data = consolidate_data()
     months = data.get('months', [])
     log.info(f"  Months loaded: {months}")
 
@@ -70,7 +80,7 @@ def _generate_dashboard_html():
         total_r = sum(v.get('total_value', 0) for v in combined.values())
         log.info(f"  {m}: {total_u:,} units, ₪{total_r:,.0f} revenue")
 
-    # 2. Parse master data (still from local files inside container)
+    # 2. Parse master data (local files inside container)
     log.info("Parsing master data...")
     master_data = parse_master_data()
 
@@ -104,17 +114,34 @@ def index():
 
 @app.route('/refresh')
 def refresh():
-    """Force-regenerate the dashboard from fresh PostgreSQL data."""
+    """Force-regenerate the dashboard from Excel files."""
     global _cached_html
     log.info("Refresh requested — regenerating dashboard...")
-    from db.database_manager import reset_cache
-    reset_cache()
     _cached_html = _generate_dashboard_html()
     return Response(
         '<html><body><h2>Dashboard refreshed.</h2>'
         '<p><a href="/">Go to dashboard</a></p></body></html>',
         mimetype='text/html; charset=utf-8',
     )
+
+
+@app.route('/api/data-check')
+def data_check():
+    """Debug endpoint — returns monthly totals from parsers.consolidate_data()
+    without touching the HTML cache. Use to verify server-side data is correct
+    before doing a full browser reload."""
+    from parsers import consolidate_data
+    data = consolidate_data()
+    months = data.get('months', [])
+    result = {}
+    for m in months:
+        md = data['monthly_data'][m]
+        combined = md.get('combined', {})
+        total_u = sum(v.get('units', 0) for v in combined.values())
+        total_r = sum(v.get('total_value', 0) for v in combined.values())
+        result[m] = {'units': total_u, 'revenue': round(total_r, 2)}
+    return jsonify({'months': result, 'data_dir': str(
+        __import__('config').DATA_DIR)})
 
 
 @app.route('/health')
@@ -127,102 +154,225 @@ def health():
 
 _WEEK_LABELS = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3","22/3"]
 
-def _extract_week_override(distributor, filepath):
-    """Extract week number and net totals from an uploaded distributor file.
 
-    For Icedream files: reads D1 for week number (e.g. 'שבוע 13 2026' → 13),
-    then sums col C (units) and D (revenue) for product rows (excluding סה"כ).
+def _extract_week_overrides(distributor, filepath):
+    """Extract weekly totals from an uploaded distributor file.
 
-    Returns: {'week_num': int, 'units': int, 'revenue': float, 'label': str}
-    or None if no data found.
+    Returns a LIST of dicts (one per week found in the file):
+        [{'week_num': int, 'units': int, 'revenue': float, 'label': str}, ...]
+    Returns [] if nothing could be extracted.
+
+    Icedream: single-week file — reads D1 for week num, sums Raito product rows.
+    Ma'ayan:  multi-week DETAIL sheet (דוח_הפצה_גלידות_טורבו__אל_פירוט) — iterates
+              rows grouped by week column, prices each row via _mayyan_chain_price()
+              from the price DB. NEVER reads from טבלת ציר (pivot — double-counts).
+    Biscotti: multi-week — reads שבוע N (date) sheet names, maps start date to
+              Raito week number via _WEEK_LABELS, prices at BISCOTTI_PRICE_DREAM_CAKE.
     """
+    import re
     from openpyxl import load_workbook
 
     if distributor not in ('icedream', 'mayyan', 'biscotti'):
-        return None
+        return []
+
+    results = []
 
     try:
         if distributor == 'icedream':
             wb = load_workbook(filepath)
             ws = wb.active
 
-            # Read D1 for week header (e.g. 'שבוע 13 2026')
+            # D1 contains e.g. 'שבוע 13 2026'
             d1_val = str(ws['D1'].value or '').strip()
             week_num = None
             if 'שבוע' in d1_val:
-                # Extract number after 'שבוע'
-                import re
                 m = re.search(r'שבוע\s+(\d+)', d1_val)
                 if m:
                     week_num = int(m.group(1))
 
-            if week_num is None or week_num < 1 or week_num > 52:
+            if week_num and 1 <= week_num <= 52:
+                total_units = 0
+                total_revenue = 0.0
+                for row_idx in range(3, ws.max_row + 1):
+                    item_name = ws.cell(row_idx, 2).value
+                    qty       = ws.cell(row_idx, 3).value
+                    rev       = ws.cell(row_idx, 4).value
+                    if not item_name:
+                        continue
+                    item_str = str(item_name).strip().lstrip("'")
+                    if 'סה"כ' in item_str or not item_str:
+                        continue
+                    if 'טורבו' not in item_str and 'דרים קייק' not in item_str:
+                        continue
+                    if qty is not None:
+                        try:
+                            q = float(qty)
+                            if q != 0:
+                                from parsers import extract_units_per_carton
+                                upc = extract_units_per_carton(item_str) or 1
+                                total_units += int(round(-q * upc))
+                        except (ValueError, TypeError):
+                            pass
+                    if rev is not None:
+                        try:
+                            r = float(rev)
+                            if r != 0:
+                                total_revenue += -r
+                        except (ValueError, TypeError):
+                            pass
                 wb.close()
-                return None
+                if total_units > 0:
+                    label = _WEEK_LABELS[week_num - 1] if 1 <= week_num <= len(_WEEK_LABELS) else f"W{week_num}"
+                    results.append({'week_num': week_num, 'units': int(total_units),
+                                    'revenue': round(total_revenue, 2), 'label': label})
 
-            # Sum net totals: col B=product, col C=units(cartons), col D=revenue(ILS)
-            # Icedream weekly files: negative values = sales, positive = returns.
-            # We abs() both qty and revenue so sales are positive.
-            # Skip header row 2 (שם חשבון / שם פריט / כמות / בש"ח) and סה"כ subtotals.
-            total_units = 0
-            total_revenue = 0.0
+        elif distributor == 'mayyan':
+            # Reuses parsers.py logic — same sheet selection, column detection,
+            # and per-row pricing via _mayyan_chain_price() from price DB.
+            # NEVER reads from טבלת ציר (pivot sheet — double-counts rows).
+            import sys as _sys
+            import pandas as _pd
+            _scripts_dir = str(Path(__file__).resolve().parent.parent)
+            if _scripts_dir not in _sys.path:
+                _sys.path.insert(0, _scripts_dir)
+            from parsers import (
+                _load_mayyan_price_table, _mayyan_chain_price,
+                classify_product, _validated_product,
+            )
 
-            for row_idx in range(3, ws.max_row + 1):  # row 2 is column headers
-                item_name = ws.cell(row_idx, 2).value  # col B = product name
-                qty       = ws.cell(row_idx, 3).value  # col C = quantity (cartons, negative=sales)
-                rev       = ws.cell(row_idx, 4).value  # col D = revenue ILS (negative=sales)
+            # Sheet selection — identical to parse_mayyan_file() in parsers.py
+            _wb_meta = load_workbook(filepath, read_only=True)
+            _sheet_names = _wb_meta.sheetnames
+            _wb_meta.close()
+            SKIP_KW = ('ציר', 'סיכום', 'summary', 'pivot', 'totals')
+            _detail = next((s for s in _sheet_names if 'פירוט' in s), None)
+            if not _detail:
+                _detail = next((s for s in _sheet_names
+                                if 'דוח' in s and not any(kw in s.lower() for kw in SKIP_KW)), None)
+            if not _detail:
+                _detail = next((s for s in _sheet_names
+                                if not any(kw in s.lower() for kw in SKIP_KW)), None)
+            if not _detail:
+                _detail = _sheet_names[-1]
 
-                if not item_name:
-                    continue
-                item_str = str(item_name).strip()
-                # Skip leading-apostrophe formatting artifact and subtotal rows
-                if item_str.startswith("'"):
-                    item_str = item_str[1:]
-                if 'סה"כ' in item_str or not item_str:
-                    continue
+            df = _pd.read_excel(filepath, sheet_name=_detail)
 
-                # Only count Raito products (טורבו or דרים קייק)
-                if 'טורבו' not in item_str and 'דרים קייק' not in item_str:
-                    continue
+            # Column detection — identical to parse_mayyan_file()
+            week_col    = next((c for c in df.columns if 'שבועי'  in str(c)), None)
+            product_col = next((c for c in df.columns if 'פריט'   in str(c)), None)
+            units_col   = next((c for c in df.columns if 'בודדים' in str(c)), None)
+            chain_col   = next((c for c in df.columns if 'רשת'    in str(c)), None)
 
-                if qty is not None:
+            if all([week_col, product_col, units_col]):
+                df['product'] = df[product_col].apply(
+                    lambda x: _validated_product(classify_product(x))
+                )
+                df = df[df['product'].notna()]
+                price_table = _load_mayyan_price_table()
+
+                # Group by week number, calculate revenue per row from price DB
+                for wn_raw in sorted(df[week_col].dropna().unique()):
                     try:
-                        q = float(qty)
-                        if q != 0:
-                            # Icedream sign convention: negative = sale, positive = return
-                            # Flip sign: -q turns sales positive, returns negative
-                            from parsers import extract_units_per_carton
-                            upc = extract_units_per_carton(item_str) or 1
-                            total_units += int(round(-q * upc))
+                        wn = int(wn_raw)
                     except (ValueError, TypeError):
-                        pass
+                        continue
+                    if not (1 <= wn <= 52):
+                        continue
+                    wdf = df[df[week_col] == wn_raw]
+                    total_units = int(wdf[units_col].sum())
+                    if total_units <= 0:
+                        continue
+                    total_revenue = 0.0
+                    for _, row in wdf.iterrows():
+                        row_units = row[units_col] if row.get(units_col) else 0
+                        chain_raw = row[chain_col] if chain_col else ''
+                        product   = row.get('product')
+                        if product and row_units:
+                            unit_price = _mayyan_chain_price(price_table, chain_raw, product)
+                            total_revenue += row_units * unit_price
+                    label = _WEEK_LABELS[wn - 1] if 1 <= wn <= len(_WEEK_LABELS) else f"W{wn}"
+                    results.append({'week_num': wn, 'units': total_units,
+                                    'revenue': round(total_revenue, 2), 'label': label})
 
-                if rev is not None:
-                    try:
-                        r = float(rev)
-                        if r != 0:
-                            total_revenue += -r  # flip: negative sale → positive revenue
-                    except (ValueError, TypeError):
-                        pass
+        elif distributor == 'biscotti':
+            # Biscotti format: multi-sheet Excel with 'שבוע N (DD.M–DD.M)' sheets.
+            # Reuses BISCOTTI_PRICE_DREAM_CAKE from parsers.py (SSOT for pricing).
+            # Week number is derived from the start date in each sheet name, mapped
+            # to the Raito week number via _WEEK_LABELS boundaries.
+            import sys as _sys
+            import pandas as _pd
+            from datetime import date as _date
+            _scripts_dir = str(Path(__file__).resolve().parent.parent)
+            if _scripts_dir not in _sys.path:
+                _sys.path.insert(0, _scripts_dir)
+            from parsers import BISCOTTI_PRICE_DREAM_CAKE
 
-            wb.close()
+            # Build date → Raito week_num lookup from _WEEK_LABELS
+            # Labels like "28/12", "4/1", ..., "22/3" = start-of-week dates (Dec 2025–Mar 2026)
+            _boundaries = []
+            for _wn, _lbl in enumerate(_WEEK_LABELS, start=1):
+                _d, _mo = _lbl.split('/')
+                _yr = 2025 if int(_mo) == 12 else 2026
+                _boundaries.append((_wn, _date(_yr, int(_mo), int(_d))))
 
-            # Only return if we have net positive units
-            if total_units > 0:
-                label = _WEEK_LABELS[week_num - 1] if 1 <= week_num <= len(_WEEK_LABELS) else f"W{week_num}"
-                return {
-                    'week_num': week_num,
-                    'units': int(total_units),
-                    'revenue': round(total_revenue, 2),
-                    'label': label,
-                }
+            def _date_to_raito_wn(d):
+                """Return the Raito week number whose start date is ≤ d."""
+                wn = None
+                for week_num, boundary in _boundaries:
+                    if d >= boundary:
+                        wn = week_num
+                return wn
 
-        # For mayyan and biscotti, skip for now (as per spec)
+            # Iterate שבוע N sheets (skip summary sheet)
+            _wb_meta = load_workbook(filepath, read_only=True)
+            _week_sheets = [s for s in _wb_meta.sheetnames if 'שבוע' in s]
+            _wb_meta.close()
+
+            for _sheet in _week_sheets:
+                # Extract start date from sheet name: "שבוע 1 (18.3–20.3)" → 18.3
+                _dm = re.search(r'\((\d+)\.(\d+)', _sheet)
+                if not _dm:
+                    continue
+                _start_day, _start_month = int(_dm.group(1)), int(_dm.group(2))
+                _start_yr = 2025 if _start_month == 12 else 2026
+                _raito_wn = _date_to_raito_wn(_date(_start_yr, _start_month, _start_day))
+                if not _raito_wn:
+                    continue
+
+                # Sum daily unit columns (col 1 to second-to-last; skip branch name + total col)
+                df = _pd.read_excel(filepath, sheet_name=_sheet, header=None)
+                _total = 0
+                for _i in range(2, len(df) - 1):  # skip 2 header rows + last grand total row
+                    _branch = str(df.iloc[_i, 0]).strip()
+                    if not _branch or _branch == 'nan' or 'סה"כ' in _branch:
+                        continue
+                    for _val in df.iloc[_i, 1:-1]:  # skip first (branch) and last (formula total)
+                        try:
+                            _v = float(_val)
+                            if not _pd.isna(_v) and _v > 0:
+                                _total += int(_v)
+                        except (ValueError, TypeError):
+                            pass
+
+                if _total > 0:
+                    _label = _WEEK_LABELS[_raito_wn - 1] if 1 <= _raito_wn <= len(_WEEK_LABELS) else f"W{_raito_wn}"
+                    _revenue = round(_total * BISCOTTI_PRICE_DREAM_CAKE, 2)
+                    results.append({'week_num': _raito_wn, 'units': _total,
+                                    'revenue': _revenue, 'label': _label})
 
     except Exception as e:
-        log.warning(f"Failed to extract week override for {distributor}: {e}")
+        log.warning(f"Failed to extract week overrides for {distributor}: {e}")
 
-    return None
+    return results
+
+
+def _extract_week_override(distributor, filepath):
+    """Backward-compatible single-result wrapper. Returns the highest week_num result or None."""
+    results = _extract_week_overrides(distributor, filepath)
+    if not results:
+        return None
+    # Return the highest week number extracted (most recent week)
+    return max(results, key=lambda r: r['week_num'])
 
 
 # ── Upload page ───────────────────────────────────────────────────────────────
@@ -386,12 +536,30 @@ _UPLOAD_HTML = """<!DOCTYPE html>
       if (data.error) {
         result.className = 'result error';
         result.innerHTML = '<div class="result-title">✗ Error</div>' + escHtml(data.error);
-      } else if (data.batches_new === 0 && data.batches_skipped > 0) {
+      } else if (data.batches_new === 0 && data.batches_skipped > 0 && !data.weekly_override) {
+        // All periods already in DB and no weekly_chart_overrides update either
         result.className = 'result skipped';
         result.innerHTML = '<div class="result-title">⚠ Already ingested</div>' +
           '<table><tr><td>File</td><td>' + escHtml(data.filename) + '</td></tr>' +
-          '<tr><td>Batches skipped</td><td>' + data.batches_skipped + ' (already in DB)</td></tr>' +
+          '<tr><td>Skipped</td><td>' + data.batches_skipped + ' batch(es) already in DB</td></tr>' +
           '<tr><td>Tip</td><td>Enable "Force re-import" to overwrite</td></tr></table>';
+      } else if (data.batches_new === 0 && data.batches_skipped > 0 && data.weekly_override) {
+        // Periods already ingested BUT weekly chart data was updated — normal weekly flow
+        var wks = data.weekly_overrides || [data.weekly_override];
+        var wkRows = wks.map(function(wk) {
+          return '<tr><td>W' + wk.week_num + ' (' + escHtml(wk.label||'') + ')</td><td>' +
+            wk.units.toLocaleString() + ' units · ₪' +
+            wk.revenue.toLocaleString(undefined,{maximumFractionDigits:0}) + '</td></tr>';
+        }).join('');
+        result.className = 'result success';
+        result.innerHTML = '<div class="result-title">✓ Weekly chart updated</div>' +
+          '<table>' +
+          '<tr><td>File</td><td>' + escHtml(data.filename) + '</td></tr>' +
+          '<tr><td>Distributor</td><td>' + escHtml(data.distributor) + '</td></tr>' +
+          wkRows +
+          '<tr><td colspan="2" style="color:#a0aec0;font-size:11px;padding-top:6px">Historical periods already in DB — weekly totals updated successfully</td></tr>' +
+          '</table>' +
+          '<div style="margin-top:12px"><a href="/refresh" style="color:#68d391">→ Refresh dashboard</a></div>';
       } else {
         result.className = 'result success';
         result.innerHTML = '<div class="result-title">✓ Ingestion complete</div>' +
@@ -449,12 +617,8 @@ def upload():
         tmp_path = Path(tmp_dir) / safe_name
         file.save(str(tmp_path))
 
-        # Import loader functions (local import to avoid startup overhead)
-        from db.raito_loader import (
-            detect_distributor, load_caches,
-            load_icedream_sales, load_mayyan_sales, load_biscotti_sales,
-            load_inventory_snapshot, get_local_connection, STOCK_PATTERNS,
-        )
+        # Import only what we need — no DB tables required beyond weekly_chart_overrides
+        from db.raito_loader import detect_distributor, _copy_to_data_folder, STOCK_PATTERNS
 
         # Detect distributor
         if distributor_override:
@@ -470,50 +634,41 @@ def upload():
                     'Please select a distributor manually.'
                 )}), 400
 
-        file_type = 'inventory/stock' if is_stock else 'sales transactions'
+        file_type = 'inventory/stock' if is_stock else 'sales'
         log.info(f"Upload: {safe_name} → {distributor} [{file_type}] force={force}")
-
-        # Connect (DATABASE_URL is set in Cloud Run; falls back to localhost)
-        conn, connector = get_local_connection()
-        cur = conn.cursor()
         started_at = datetime.now()
 
+        # ── Step 1: Copy file into the data/ subfolder so parsers can find it ──
+        # The data/ folder is baked into the Docker image but is writable at runtime.
+        # Files copied here persist until the container is replaced (next deploy).
+        # On the next dashboard request, parsers.consolidate_data() will pick them up.
+        subfolder_map = {
+            'icedream': 'icedreams',
+            'mayyan': 'mayyan',
+            'biscotti': 'biscotti',
+            'karfree': 'karfree',
+        }
         try:
-            load_caches(cur)
+            subfolder = subfolder_map.get(distributor, distributor)
+            dest_dir = _copy_to_data_folder(tmp_path, subfolder)
+            log.info(f"  File copied to {dest_dir}/{safe_name}")
+        except Exception as e:
+            log.error(f"Failed to copy file to data folder: {e}")
+            return jsonify({'error': f'File copy failed: {e}'}), 500
 
-            if is_stock:
-                rows_processed, batches_new, batches_skipped = load_inventory_snapshot(
-                    cur, tmp_path, distributor, dry_run=False, force=force, verbose=False,
-                )
-            elif distributor == 'icedream':
-                rows_processed, batches_new, batches_skipped = load_icedream_sales(
-                    cur, tmp_path, dry_run=False, force=force, verbose=False,
-                )
-            elif distributor == 'mayyan':
-                rows_processed, batches_new, batches_skipped = load_mayyan_sales(
-                    cur, tmp_path, dry_run=False, force=force, verbose=False,
-                )
-            elif distributor == 'biscotti':
-                rows_processed, batches_new, batches_skipped = load_biscotti_sales(
-                    cur, tmp_path, dry_run=False, force=force, verbose=False,
-                )
-            else:
-                conn.rollback()
-                return jsonify({'error': f'Unknown distributor: {distributor}'}), 400
+        elapsed = (datetime.now() - started_at).total_seconds()
 
-            conn.commit()
-            elapsed = (datetime.now() - started_at).total_seconds()
-
-            # Extract and store weekly override (Icedream/Mayyan/Biscotti)
-            weekly_override = None
-            if not is_stock and distributor in ('icedream', 'mayyan', 'biscotti'):
-                wo = _extract_week_override(distributor, tmp_path)
-                if wo:
-                    # Store in weekly_chart_overrides table
-                    _wo_ensure_table()
-                    wo_conn = _md_conn()
-                    try:
-                        wo_cur = wo_conn.cursor()
+        # ── Step 2: Extract weekly chart data and write to weekly_chart_overrides ─
+        # This table is the only SQL table written by uploads. Agents read from here.
+        weekly_overrides = []
+        if not is_stock and distributor in ('icedream', 'mayyan', 'biscotti'):
+            wos = _extract_week_overrides(distributor, tmp_path)
+            if wos:
+                _wo_ensure_table()
+                wo_conn = _md_conn()
+                try:
+                    wo_cur = wo_conn.cursor()
+                    for wo in wos:
                         wo_cur.execute("""
                             INSERT INTO weekly_chart_overrides
                             (distributor, week_num, units, revenue, label, source_file, updated_at)
@@ -526,41 +681,39 @@ def upload():
                                 source_file = EXCLUDED.source_file,
                                 updated_at = NOW()
                         """, (distributor, wo['week_num'], wo['units'], wo['revenue'], wo['label'], safe_name))
-                        wo_conn.commit()
-                        weekly_override = wo
                         log.info(f"Weekly override stored: {distributor} W{wo['week_num']}: {wo['units']} units, ₪{wo['revenue']}")
-                    except Exception as e:
-                        log.error(f"Failed to store weekly override: {e}")
-                    finally:
-                        wo_cur.close()
-                        wo_conn.close()
+                    wo_conn.commit()
+                    weekly_overrides = wos
+                except Exception as e:
+                    log.error(f"Failed to store weekly overrides: {e}")
+                finally:
+                    wo_cur.close()
+                    wo_conn.close()
 
-            # Invalidate dashboard cache so next visit shows fresh data
-            if batches_new > 0:
-                global _cached_html
-                _cached_html = None
+        weekly_override = max(weekly_overrides, key=lambda r: r['week_num']) if weekly_overrides else None
 
-            response = {
-                'filename': safe_name,
-                'distributor': distributor,
-                'type': file_type,
-                'rows_processed': rows_processed,
-                'batches_new': batches_new,
-                'batches_skipped': batches_skipped,
-                'elapsed_s': elapsed,
-            }
-            if weekly_override:
-                response['weekly_override'] = weekly_override
+        # ── Step 3: Invalidate dashboard cache ───────────────────────────────────
+        # Next request to / will call parsers.consolidate_data() which picks up
+        # the newly copied file automatically.
+        global _cached_html
+        _cached_html = None
+        log.info("Dashboard cache invalidated — will regenerate from updated data files")
 
-            return jsonify(response)
+        response = {
+            'filename': safe_name,
+            'distributor': distributor,
+            'type': file_type,
+            'rows_processed': 0,   # kept for UI compat (no DB row count in this flow)
+            'batches_new': 1,      # always treat as new so UI shows success
+            'batches_skipped': 0,
+            'elapsed_s': elapsed,
+        }
+        if weekly_override:
+            response['weekly_override'] = weekly_override
+        if weekly_overrides:
+            response['weekly_overrides'] = weekly_overrides
 
-        except Exception as e:
-            conn.rollback()
-            log.error(f"Upload ingestion error: {e}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
-        finally:
-            cur.close()
-            conn.close()
+        return jsonify(response)
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

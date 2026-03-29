@@ -20,6 +20,7 @@ from master_data_parser import parse_master_data
 from salepoint_dashboard import build_salepoint_tab
 from salepoint_excel import generate_salepoint_excel
 from cc_dashboard import build_cc_tab
+from geo_dashboard import build_geo_tab
 from pricing_engine import get_b2b_price_safe
 
 
@@ -2246,6 +2247,9 @@ def generate_unified_dashboard(data, master_data=None):
     # ── Build Sale Points Tab ──
     salepoint_content = build_salepoint_tab(data)
 
+    # ── Build Geo Tab (Tab 5) ──
+    geo_content = build_geo_tab(data)
+
     # ── Unified HTML ──
     html = f"""<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -2626,6 +2630,379 @@ body {{
 #tab-md .tbl td {{ padding:10px 14px; border-bottom:1px solid var(--border-light); }}
 #tab-md .tbl tr:last-child td {{ border-bottom:none; }}
 #tab-md .tbl tbody tr:hover {{ background:var(--surface2); }}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — @media (max-width: 768px)
+   Desktop layout is unchanged. This block only activates on small screens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Hidden on desktop */
+.mobile-tab-bar {{ display:none; }}
+.mobile-header {{ display:none; }}
+
+@media (max-width:768px) {{
+
+  /* ── Hide sidebar, show mobile chrome ── */
+  .sidebar {{ display:none !important; }}
+
+  .main-content {{
+    margin-left:0 !important;
+    max-width:100vw !important;
+    padding-top:56px !important;   /* room for mobile header */
+    padding-bottom:80px !important; /* room for bottom tab bar */
+  }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     MOBILE HEADER — sticky top bar with logo + page title
+     ════════════════════════════════════════════════════════════════════════ */
+  .mobile-header {{
+    display:flex !important;
+    position:fixed; top:0; left:0; right:0; z-index:200;
+    height:56px;
+    background:rgba(255,255,255,0.92);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);
+    backdrop-filter:saturate(180%) blur(20px);
+    border-bottom:1px solid rgba(0,0,0,0.06);
+    align-items:center;
+    padding:0 16px;
+    gap:12px;
+  }}
+  .mobile-header .mh-logo {{
+    width:32px; height:32px; background:var(--primary); border-radius:10px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }}
+  .mobile-header .mh-logo span {{
+    color:#fff; font-weight:800; font-size:16px;
+  }}
+  .mobile-header .mh-title {{
+    font-size:17px; font-weight:700; color:var(--text);
+    flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }}
+  .mobile-header .mh-actions {{
+    display:flex; gap:6px; flex-shrink:0;
+  }}
+  .mobile-header .mh-btn {{
+    width:36px; height:36px; border-radius:10px; border:none;
+    background:var(--surface); display:flex; align-items:center;
+    justify-content:center; cursor:pointer; color:var(--text-muted);
+    transition:background 0.15s, color 0.15s;
+  }}
+  .mobile-header .mh-btn:active {{
+    background:var(--border); color:var(--text);
+  }}
+  .mobile-header .mh-btn svg {{ width:18px; height:18px; }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     BOTTOM TAB BAR — iOS-style with pill active indicator
+     ════════════════════════════════════════════════════════════════════════ */
+  .mobile-tab-bar {{
+    display:flex !important;
+    position:fixed; bottom:0; left:0; right:0; z-index:200;
+    height:72px;
+    background:rgba(255,255,255,0.92);
+    -webkit-backdrop-filter:saturate(180%) blur(20px);
+    backdrop-filter:saturate(180%) blur(20px);
+    border-top:1px solid rgba(0,0,0,0.06);
+    align-items:center; justify-content:space-around;
+    padding:0 8px;
+    padding-bottom:env(safe-area-inset-bottom, 8px);
+  }}
+  .mobile-tab-bar .mtab {{
+    flex:1; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:4px;
+    background:none; border:none; cursor:pointer;
+    color:var(--text-muted); font-size:10px; font-weight:600;
+    letter-spacing:0.2px; padding:8px 4px;
+    transition:color 0.2s; position:relative;
+    -webkit-tap-highlight-color:transparent;
+    min-height:48px;
+  }}
+  .mobile-tab-bar .mtab .mtab-icon {{
+    width:40px; height:28px; border-radius:14px;
+    display:flex; align-items:center; justify-content:center;
+    transition:background 0.25s, transform 0.2s;
+  }}
+  .mobile-tab-bar .mtab .mtab-icon svg {{
+    width:20px; height:20px; opacity:0.55;
+    transition:opacity 0.2s, stroke 0.2s;
+  }}
+  .mobile-tab-bar .mtab.active .mtab-icon {{
+    background:rgba(93,95,239,0.12);
+    transform:scale(1.05);
+  }}
+  .mobile-tab-bar .mtab.active .mtab-icon svg {{
+    opacity:1; stroke:var(--primary);
+  }}
+  .mobile-tab-bar .mtab.active {{
+    color:var(--primary);
+  }}
+  .mobile-tab-bar .mtab:active .mtab-icon {{
+    transform:scale(0.92);
+  }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     GLOBAL MOBILE RESETS
+     ════════════════════════════════════════════════════════════════════════ */
+  body {{ font-size:14px; -webkit-text-size-adjust:100%; }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     BO TAB — Business Overview
+     ════════════════════════════════════════════════════════════════════════ */
+
+  /* Filter bar → horizontal scroll chips */
+  #tab-bo .fbar {{
+    padding:12px 16px !important;
+    gap:8px !important;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+    flex-wrap:nowrap !important;
+    scrollbar-width:none;
+  }}
+  #tab-bo .fbar::-webkit-scrollbar {{ display:none; }}
+  #tab-bo .fbar span {{
+    font-size:11px !important;
+    white-space:nowrap !important;
+    padding:7px 14px !important;
+    border-radius:20px !important;
+    min-height:34px !important;
+    display:inline-flex !important; align-items:center !important;
+  }}
+
+  /* Content container */
+  #tab-bo .ctr {{ padding:16px !important; }}
+
+  /* KPI cards — 2 columns, spacious */
+  #tab-bo .kpis {{
+    grid-template-columns:repeat(2,1fr) !important;
+    gap:10px !important;
+    margin-bottom:16px !important;
+  }}
+  #tab-bo .kpi {{
+    padding:14px 12px !important;
+    min-height:80px !important;
+    border-radius:16px !important;
+  }}
+  #tab-bo .kpi .big-number {{ font-size:20px !important; line-height:1.2 !important; }}
+  #tab-bo .kpi-title {{ font-size:10px !important; letter-spacing:0.3px !important; }}
+
+  /* Cards — consistent mobile styling */
+  #tab-bo .card {{
+    padding:16px !important;
+    margin-bottom:12px !important;
+    border-radius:16px !important;
+  }}
+  #tab-bo .card h3 {{ font-size:14px !important; margin-bottom:12px !important; }}
+
+  /* Tables — scrollable with hint */
+  #tab-bo .tbl-wrap {{ overflow-x:auto; -webkit-overflow-scrolling:touch; }}
+  #tab-bo .tbl {{ min-width:560px; }}
+  #tab-bo .tbl th {{ font-size:10px !important; padding:8px 10px !important; }}
+  #tab-bo .tbl td {{ font-size:12px !important; padding:8px 10px !important; }}
+
+  /* Half cards → full width stacked */
+  #tab-bo .card.half {{ flex:none !important; width:100% !important; }}
+
+  /* SVG charts — responsive */
+  #tab-bo svg {{ width:100% !important; height:auto !important; }}
+
+  /* Two-column chart layouts → stack */
+  #tab-bo .chart-row,
+  #tab-bo div[style*="display:flex"][style*="gap"] {{
+    flex-direction:column !important;
+  }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     CC TAB — Customer Centric
+     ════════════════════════════════════════════════════════════════════════ */
+
+  /* KPI grid */
+  #tab-cc .kpi-grid {{
+    grid-template-columns:repeat(2,1fr) !important;
+    gap:10px !important;
+  }}
+  #tab-cc .kpi-card {{
+    padding:14px 10px !important;
+    min-height:90px !important;
+    border-radius:16px !important;
+  }}
+  #tab-cc .kpi-value {{ font-size:20px !important; line-height:1.2 !important; }}
+  #tab-cc .kpi-label {{ font-size:10px !important; }}
+  #tab-cc .main {{ padding:16px !important; }}
+
+  /* Filter bar — horizontal scroll */
+  #tab-cc .filter-bar {{
+    padding:10px 16px !important;
+    flex-direction:row !important; flex-wrap:nowrap !important;
+    gap:8px !important;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }}
+  #tab-cc .filter-bar::-webkit-scrollbar {{ display:none; }}
+  #tab-cc .filter-bar select, #tab-cc .filter-bar input {{
+    font-size:13px !important; min-width:0 !important;
+    padding:8px 12px !important; border-radius:10px !important;
+    min-height:36px !important;
+  }}
+  #tab-cc .filter-bar label {{ white-space:nowrap !important; font-size:10px !important; }}
+  #tab-cc .fgroup {{ flex-wrap:nowrap; min-width:0; flex-shrink:0; }}
+
+  /* Panels — spacious */
+  #tab-cc .panel, #tab-cc .weekly-panel, #tab-cc .tpanel, #tab-cc .inactive-panel {{
+    padding:16px !important; border-radius:16px !important; margin-bottom:12px !important;
+  }}
+
+  /* Tables — horizontal scroll */
+  #tab-cc table.dt, #tab-cc .itable {{ min-width:560px; }}
+  #tab-cc .panel {{ overflow-x:auto; -webkit-overflow-scrolling:touch; }}
+
+  /* Drawer → full-screen overlay on mobile */
+  #tab-cc .drawer {{
+    width:100vw !important; left:0 !important; right:0 !important;
+    border-radius:20px 20px 0 0 !important;
+    padding-top:12px !important;
+  }}
+  /* Drawer handle indicator */
+  #tab-cc .drawer::before {{
+    content:''; display:block;
+    width:36px; height:4px; border-radius:2px;
+    background:var(--border); margin:0 auto 12px;
+  }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     SP TAB — Sale Points
+     ════════════════════════════════════════════════════════════════════════ */
+  #sp-app {{ padding:0 !important; }}
+  #sp-app .sp-topbar {{
+    flex-direction:column !important; align-items:stretch !important;
+    gap:12px !important; padding:16px !important;
+  }}
+  #sp-app .sp-topbar h2 {{ font-size:18px !important; }}
+
+  /* SP KPIs — 2x2 grid */
+  #sp-app .sp-kpis {{
+    display:grid !important;
+    grid-template-columns:repeat(2,1fr) !important;
+    gap:10px !important;
+  }}
+  #sp-app .sp-kpi {{
+    min-width:0 !important; flex:none !important;
+    padding:12px !important; border-radius:12px !important;
+    background:var(--surface) !important;
+    text-align:center !important;
+  }}
+  #sp-app .sp-kpi .sp-kpi-n {{ font-size:20px !important; }}
+  #sp-app .sp-kpi .sp-kpi-l {{ font-size:10px !important; }}
+
+  /* SP body — content area */
+  #sp-app .sp-body {{
+    padding:0 12px 16px !important;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+  }}
+
+  /* SP table */
+  .sp-tbl {{ min-width:640px !important; }}
+  .sp-tbl th {{ font-size:10px !important; padding:8px !important; }}
+  .sp-tbl td {{ font-size:12px !important; padding:8px !important; }}
+
+  /* Brand bar — scrollable pills */
+  #sp-brand-bar {{
+    flex-wrap:nowrap !important;
+    padding:10px 12px !important;
+    gap:8px !important;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }}
+  #sp-brand-bar::-webkit-scrollbar {{ display:none; }}
+  #sp-brand-bar .sp-brand-btn {{
+    font-size:12px !important;
+    padding:8px 16px !important;
+    border-radius:20px !important;
+    white-space:nowrap !important;
+    min-height:36px !important;
+  }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     MD TAB — Master Data
+     ════════════════════════════════════════════════════════════════════════ */
+  #tab-md .md-body {{ padding:16px !important; }}
+
+  /* Sub-nav — horizontal scroll pills */
+  #tab-md .md-subnav {{
+    flex-wrap:nowrap !important;
+    padding:10px 16px !important;
+    gap:8px !important;
+    overflow-x:auto !important;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }}
+  #tab-md .md-subnav::-webkit-scrollbar {{ display:none; }}
+  #tab-md .md-stab {{
+    font-size:12px !important;
+    padding:8px 16px !important;
+    white-space:nowrap !important;
+    border-radius:20px !important;
+    min-height:36px !important;
+  }}
+
+  #tab-md .ctr {{ padding:16px !important; }}
+  #tab-md .card {{
+    padding:16px !important;
+    border-radius:16px !important;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+  }}
+
+  /* Brand cards — 2-col grid */
+  #tab-md .md-brand-cards {{
+    grid-template-columns:repeat(2,1fr) !important;
+    gap:10px !important;
+  }}
+  #tab-md .md-topbar {{
+    flex-direction:column !important; align-items:stretch !important;
+    gap:10px !important; padding:16px !important;
+  }}
+  #tab-md .tbl {{ min-width:480px; }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     MODALS — slide-up sheets on mobile
+     ════════════════════════════════════════════════════════════════════════ */
+  .upload-modal, .export-modal {{
+    width:100vw !important; max-width:100vw !important;
+    border-radius:20px 20px 0 0 !important;
+    padding:24px 20px !important;
+    max-height:85vh !important;
+    overflow-y:auto !important;
+  }}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PASSWORD GATE — mobile adjustments
+     ════════════════════════════════════════════════════════════════════════ */
+  #login-gate div {{
+    width:92vw !important; max-width:92vw !important;
+    padding:32px 24px !important;
+    border-radius:20px !important;
+  }}
+  #login-gate input {{
+    padding:14px 16px !important;
+    font-size:16px !important; /* prevents iOS zoom on focus */
+  }}
+  #login-gate button {{
+    padding:14px !important;
+    font-size:15px !important;
+  }}
+
+}}
+
+/* ── Small phones — single column KPIs ── */
+@media (max-width:400px) {{
+  #tab-bo .kpis {{ grid-template-columns:1fr !important; }}
+  #tab-cc .kpi-grid {{ grid-template-columns:1fr !important; }}
+  #tab-md .md-brand-cards {{ grid-template-columns:1fr !important; }}
+  .mobile-header .mh-title {{ font-size:15px; }}
+  #sp-app .sp-kpis {{ grid-template-columns:1fr !important; }}
+}}
+
 </style>
 </head>
 <body>
@@ -2744,6 +3121,9 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
     <li><a onclick="switchTab('sp')" id="nav-sp">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
       Sale Points</a></li>
+    <li><a onclick="switchTab('geo')" id="nav-geo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+      Geo Analysis</a></li>
     <li><a onclick="switchTab('ap')" id="nav-ap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
       Agent Plan</a></li>
@@ -2804,6 +3184,9 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
   {master_data_content}
 </div>
 
+<!-- Geo Analysis Tab -->
+{geo_content}
+
 </div><!-- /main-content -->
 </div><!-- /app-layout -->
 
@@ -2815,7 +3198,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
 
 function switchTab(tabId) {{
   // Hide all tabs
-  ['bo', 'cc', 'sp', 'ap', 'md'].forEach(t => {{
+  ['bo', 'cc', 'sp', 'ap', 'md', 'geo'].forEach(t => {{
     var tab = document.getElementById('tab-' + t);
     if (tab) tab.classList.remove('active');
   }});
@@ -3047,7 +3430,8 @@ async function doUploadModal() {{
     if (data.error) {{
       result.className = 'upl-result error';
       result.innerHTML = '<div class="upl-result-title">✗ Error</div>' + _uplEsc(data.error);
-    }} else if (data.batches_new === 0 && data.batches_skipped > 0) {{
+    }} else if (data.batches_new === 0 && data.batches_skipped > 0 && !data.weekly_override) {{
+      // All periods already in DB and no weekly chart update either
       result.className = 'upl-result skipped';
       result.innerHTML = '<div class="upl-result-title">⚠ Already ingested</div>' +
         '<table>' +
@@ -3055,6 +3439,23 @@ async function doUploadModal() {{
         '<tr><td>Skipped</td><td>' + data.batches_skipped + ' batch(es) already in DB</td></tr>' +
         '<tr><td>Tip</td><td>Enable "Force re-import" to overwrite</td></tr>' +
         '</table>';
+    }} else if (data.batches_new === 0 && data.batches_skipped > 0 && data.weekly_override) {{
+      // Historical periods already ingested but weekly chart data was updated — normal weekly flow
+      var wks = data.weekly_overrides || [data.weekly_override];
+      var wkRows = wks.map(function(wk) {{
+        return '<tr><td>W' + wk.week_num + ' (' + _uplEsc(wk.label||'') + ')</td><td>' +
+          wk.units.toLocaleString() + ' units · ₪' +
+          wk.revenue.toLocaleString('en-US', {{maximumFractionDigits:0}}) + '</td></tr>';
+      }}).join('');
+      result.className = 'upl-result success';
+      result.innerHTML = '<div class="upl-result-title">✓ Weekly chart updated</div>' +
+        '<table>' +
+        '<tr><td>File</td><td>' + _uplEsc(data.filename) + '</td></tr>' +
+        '<tr><td>Distributor</td><td>' + _uplEsc(data.distributor) + '</td></tr>' +
+        wkRows +
+        '<tr><td style="color:#a0aec0;font-size:11px" colspan="2">Historical periods already in DB — weekly totals updated</td></tr>' +
+        '</table>' +
+        '<div style="margin-top:10px;font-size:12px">✅ Click <strong>Refresh</strong> in the sidebar to reload the dashboard.</div>';
     }} else {{
       result.className = 'upl-result success';
       var wkMsg = '';
@@ -3367,7 +3768,74 @@ function spExportToExcel(selCustomers, selBrands, selDist) {{
 // mdExportToExcel is defined inside the Master Data IIFE (has access to S state).
 // The Export modal calls window.mdExportToExcel(selSheets) directly.
 
+// ── Mobile chrome sync (header title + tab bar active state) ──
+var _mobileTabNames = {{
+  'bo': 'Overview',
+  'cc': 'Customers',
+  'sp': 'Sale Points',
+  'md': 'Master Data'
+}};
+function mobileTabSync(tabId) {{
+  // Update bottom tab bar active state
+  document.querySelectorAll('.mobile-tab-bar .mtab').forEach(function(b) {{ b.classList.remove('active'); }});
+  var btn = document.querySelector('.mobile-tab-bar .mtab[data-tab="' + tabId + '"]');
+  if (btn) btn.classList.add('active');
+  // Update header title
+  var titleEl = document.getElementById('mobile-page-title');
+  if (titleEl && _mobileTabNames[tabId]) titleEl.textContent = _mobileTabNames[tabId];
+}}
+// Patch switchTab to also update mobile chrome
+var _origSwitchTab = switchTab;
+switchTab = function(tabId) {{
+  _origSwitchTab(tabId);
+  mobileTabSync(tabId);
+  // Scroll to top on tab switch (mobile UX)
+  if (window.innerWidth <= 768) window.scrollTo(0, 0);
+}};
+// Init
+document.addEventListener('DOMContentLoaded', function() {{ mobileTabSync('bo'); }});
+
 </script>
+
+<!-- Mobile Header (hidden on desktop via CSS) -->
+<header class="mobile-header">
+  <div class="mh-logo"><span>R</span></div>
+  <div class="mh-title" id="mobile-page-title">Overview</div>
+  <div class="mh-actions">
+    <button class="mh-btn" onclick="location.reload()" title="Refresh">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- Mobile Bottom Tab Bar (hidden on desktop via CSS) -->
+<nav class="mobile-tab-bar">
+  <button class="mtab active" data-tab="bo" onclick="switchTab('bo')">
+    <span class="mtab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
+    </span>
+    Overview
+  </button>
+  <button class="mtab" data-tab="cc" onclick="switchTab('cc')">
+    <span class="mtab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+    </span>
+    Customers
+  </button>
+  <button class="mtab" data-tab="sp" onclick="switchTab('sp')">
+    <span class="mtab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    </span>
+    Points
+  </button>
+  <button class="mtab" data-tab="md" onclick="switchTab('md')">
+    <span class="mtab-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+    </span>
+    Data
+  </button>
+</nav>
+
 </body>
 </html>
 """

@@ -444,6 +444,8 @@ def parse_mayyan_file(filepath, price_table=None):
       4. Last sheet as final fallback
     """
     import pandas as pd
+    if price_table is None:
+        price_table = _load_mayyan_price_table()
     wb_meta = load_workbook(filepath, read_only=True)
     sheet_names = wb_meta.sheetnames
     wb_meta.close()
@@ -664,6 +666,28 @@ def parse_all_mayyan():
         for month, mdata in data.items():
             if month not in results:
                 results[month] = mdata
+            else:
+                # Merge: accumulate totals and by_account across multiple files for the same month
+                existing = results[month]
+                # Merge totals
+                for sku, vals in mdata.get('totals', {}).items():
+                    if sku not in existing.setdefault('totals', {}):
+                        existing['totals'][sku] = {'units': 0, 'value': 0.0}
+                    existing['totals'][sku]['units'] += vals.get('units', 0)
+                    existing['totals'][sku]['value'] = round(
+                        existing['totals'][sku]['value'] + vals.get('value', 0.0), 2)
+                # Merge by_account
+                for key, products in mdata.get('by_account', {}).items():
+                    if key not in existing.setdefault('by_account', {}):
+                        existing['by_account'][key] = {}
+                    for sku, vals in products.items():
+                        if sku not in existing['by_account'][key]:
+                            existing['by_account'][key][sku] = {'units': 0, 'value': 0.0}
+                        existing['by_account'][key][sku]['units'] += vals.get('units', 0)
+                        existing['by_account'][key][sku]['value'] = round(
+                            existing['by_account'][key][sku]['value'] + vals.get('value', 0.0), 2)
+                # Merge branches
+                existing.setdefault('branches', set()).update(mdata.get('branches', set()))
     return results
 
 
