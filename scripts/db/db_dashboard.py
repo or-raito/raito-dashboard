@@ -1035,8 +1035,10 @@ def api_portfolio():
             conn.close()
         if row:
             pf = row[0]
-            # Return cached only if it actually has content
-            if pf and pf.get('headers'):
+            # Return cached only if it has the correct v2 format (headers[2] == 'Customer (EN)')
+            # Old format had ['#','Customer','Distributor',...] — force rebuild on stale cache
+            hdrs = pf.get('headers') if pf else None
+            if hdrs and len(hdrs) > 2 and hdrs[2] == 'Customer (EN)':
                 return jsonify(pf)
         # Missing or empty — compute fresh from current entity data
         md = _md_read_all()
