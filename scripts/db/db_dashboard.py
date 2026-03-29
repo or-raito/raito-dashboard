@@ -1001,7 +1001,7 @@ def api_delete(entity, pk):
 def api_portfolio():
     try:
         _md_ensure_table()
-        # portfolio is stored as its own row; if missing, compute it
+        # portfolio is stored as its own row; if missing or empty, compute it
         conn = _md_conn()
         try:
             cur = conn.cursor()
@@ -1010,8 +1010,11 @@ def api_portfolio():
         finally:
             conn.close()
         if row:
-            return jsonify(row[0])
-        # Compute and store
+            pf = row[0]
+            # Return cached only if it actually has content
+            if pf and pf.get('headers'):
+                return jsonify(pf)
+        # Missing or empty — compute fresh from current entity data
         md = _md_read_all()
         _md_rebuild_portfolio(md)
         return jsonify(md.get('portfolio', {}))
@@ -1024,16 +1027,10 @@ def api_portfolio():
 
 @app.route('/api/lookup/<string:entity>', methods=['GET'])
 def api_lookup(entity):
+    """Return raw entity data — same shape as /api/<entity> so JS schemas match."""
     try:
         _md_ensure_table()
-        items      = _md_read(entity)
-        pk_field   = _MD_PK.get(entity, 'key')
-        name_field = ('name' if entity in ('brands', 'manufacturers', 'distributors')
-                      else 'name_en')
-        return jsonify([
-            {'id': r.get(pk_field, ''), 'label': r.get(name_field) or r.get('key', '')}
-            for r in items
-        ])
+        return jsonify(_md_read(entity))
     except Exception as e:
         log.error("api_lookup %s: %s", entity, e)
         return jsonify({'error': str(e)}), 500
@@ -1143,6 +1140,9 @@ def api_reseed():
         _md_seed(cur)
         conn.commit()
         conn.close()
+        # Rebuild portfolio so it reflects the freshly seeded data
+        md = _md_read_all()
+        _md_rebuild_portfolio(md)
         _cached_html = None
         log.info("master_data reseeded from Excel")
         return jsonify({'status': 'ok', 'message': 'Master data reseeded from Excel. Refresh the page.'})
