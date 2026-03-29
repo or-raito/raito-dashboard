@@ -860,7 +860,15 @@ def _md_write(entity: str, data: list) -> None:
 
 
 def _md_rebuild_portfolio(md: dict) -> None:
-    """Recompute the portfolio matrix from current md state and save to DB."""
+    """Recompute the portfolio matrix from current md state and save to DB.
+
+    Row format matches master_data_parser.py exactly so the JS renderer works:
+      [i, name_he, name_en, type, distributor, status, price1, ..., active_count]
+    Headers:
+      ['#', 'Customer', 'Customer (EN)', 'Type', 'Distributor', 'Status',
+       sku1_name, ..., 'Active SKUs']
+    Prices are numeric, 'Pipeline', or None — never nested objects.
+    """
     products = md.get('products', [])
     customers = md.get('customers', [])
     pricing   = md.get('pricing', [])
@@ -873,23 +881,39 @@ def _md_rebuild_portfolio(md: dict) -> None:
             cust = pr.get('customer', '')
             sku  = pr.get('sku_key', '')
             if cust and sku:
-                pricing_lookup[(cust, sku)] = (pr.get('sale_price'), pr.get('status'))
-        headers = ['#', 'Customer', 'Distributor'] + [
-            p.get('name_en') or p.get('sku_key', '') for p in active_products
-        ]
+                pricing_lookup[(cust, sku)] = (pr.get('sale_price'), pr.get('status', 'Active'))
+        headers = ['#', 'Customer', 'Customer (EN)', 'Type', 'Distributor', 'Status']
+        for prod in active_products:
+            headers.append(prod.get('name_en') or prod.get('sku_key', ''))
+        headers.append('Active SKUs')
         rows = []
         for i, cust in enumerate(sorted(customers, key=lambda c: c.get('name_en', '')), 1):
             name_he  = cust.get('name_he', '')
             name_en  = cust.get('name_en', '')
             cust_key = cust.get('key', '')
-            cells: list = [i, name_en or name_he, cust.get('distributor', '')]
+            row: list = [i, name_he, name_en,
+                         cust.get('type', ''),
+                         cust.get('distributor', ''),
+                         cust.get('status', '')]
+            active_count = 0
             for prod in active_products:
                 sku = prod.get('sku_key', '')
                 lkp = (pricing_lookup.get((name_he, sku))
                        or pricing_lookup.get((cust_key, sku))
                        or pricing_lookup.get((name_en, sku)))
-                cells.append({'price': lkp[0], 'status': lkp[1]} if lkp else None)
-            rows.append(cells)
+                if lkp:
+                    price, status = lkp
+                    if status == 'Pipeline':
+                        row.append('Pipeline')
+                    elif price:
+                        row.append(price)
+                        active_count += 1
+                    else:
+                        row.append(None)
+                else:
+                    row.append(None)
+            row.append(active_count)
+            rows.append(row)
         portfolio = {'headers': headers, 'rows': rows}
     # Persist portfolio back to DB
     _md_write('portfolio', portfolio)   # type: ignore[arg-type]
