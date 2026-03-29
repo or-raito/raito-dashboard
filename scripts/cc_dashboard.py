@@ -964,7 +964,7 @@ renderWeeklyChart = function() {
 
 # ── Embedded CC HTML Source ────────────────────────────────────────────────────
 # Raw copy of: dashboards/customer centric dashboard 11.3.26.html
-# Last data update: W12 (15/3/2026), Biscotti W12-W13 (22/3/2026)
+# Last data update: Ma'ayan W13 (29/3/2026), Biscotti W12-W13 (22/3/2026)
 # To update: edit arrays _iceWkRev, _iceWkUnits, customers[], weeklyDetailHistory[], etc.
 _CC_HTML = r"""<!DOCTYPE html>
 <html lang="he" dir="ltr">
@@ -1129,7 +1129,7 @@ table.skut td{padding:5px 7px;border-bottom:1px solid rgba(46,51,72,0.35);color:
     <div class="ph">
       <div>
         <div class="pt">Weekly Sales Trend — Icedreams · Ma'ayan · Biscotti</div>
-        <div class="ps" id="chart-subtitle">28/12–22/3 2026 · Each point = week start (Sunday) · Icedreams W1–W13 · Ma'ayan W6–W11 · Biscotti W12–W13 · Rolling 10-week window</div>
+        <div class="ps" id="chart-subtitle">28/12–22/3 2026 · Each point = week start (Sunday) · Icedreams W1–W13 · Ma'ayan W6–W13 · Biscotti W12–W13 · Rolling 10-week window</div>
       </div>
       <div class="tab-grp">
         <button class="tab on" id="wb-rev" onclick="setWeeklyMode('rev')">Revenue ₪</button>
@@ -1930,22 +1930,22 @@ const _maayMonUnits = { dec: 61775,   jan: 30088   };
 // Danis revenue validated exactly. Yingo W2 validated by user.
 // W10 (1/3/2026): ינגו 445u/₪13788, דומינוס 164u/₪1869, חוות נעמי 116u/₪6173, וולט -30u return (excluded from gross)
 // Combined (Turbo + Danis)  — W11 source: icedream_15_3 | W12 source: icedream_mar_w12.xlsx (19/3/2026) | W13 pending
-const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979, null];
-const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067, null];
+const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979, 13493];
+const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067, 970];
 // Turbo (ice cream) only
-const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872, null];
-const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182, null];
+const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872, 13493];
+const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182, 970];
 // Danis (dream cake) only — validated exact match all weeks
-const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106, null];
-const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885, null];
+const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106, 0];
+const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885, 0];
 // Returns tracked separately
 const _iceWkRetRev   = [0, 8278, 1309, 2392, 0, 233, 1890, 1925, 0, 1125, null, 0, null];
 const _iceWkRetUnits = [0, 117, 51, 204, 0, 7, 114, 33, 0, 30, null, 0, null];
 
-// Mayyan weekly — source: דוח_הפצה_גלידות_טורבו__אל_פירוט (detail sheet), net כמות בודדים × ₪13.8
-// W6–W9: maay_feb_full.xlsx | W10–W11: maayan_sales_week_10_11.xlsx
-const _maayWkRev   = { 6: 135406, 7: 106260, 8: 240106, 9: 122351, 10: 99415, 11: 109572 };
-const _maayWkUnits = { 6: 9812,   7: 7700,   8: 17399,  9: 8866,   10: 7204,  11: 7940   };
+// Mayyan weekly — source: דוח_הפצה_גלידות_טורבו__אל_פירוט (detail sheet), net כמות בודדים × chain price
+// W6–W9: maay_feb_full.xlsx | W10–W11: maayan_sales_week_10_11.xlsx | W12–W13: week12_13.xlsx
+const _maayWkRev   = { 6: 135406, 7: 106260, 8: 240106, 9: 122351, 10: 99415, 11: 109572, 12: 67672, 13: 142182 };
+const _maayWkUnits = { 6: 9812,   7: 7700,   8: 17399,  9: 8866,   10: 7204,  11: 7940,   12: 4970,  13: 10410  };
 
 // Biscotti weekly — source: daniel_amit_weekly_biscotti.xlsx (24/3/2026)
 // Dream Cake (dream_cake_2) only. Sale price ₪80/unit, 0% commission.
@@ -2054,16 +2054,45 @@ function _mkWeeklyDatasets(mode) {
   }
 
   if (dk === 'both') {
-    // Combined: ice + maay (turbo) + bisc (danis) — null-safe per distributor's scope
-    const combined = iceData.map((v, i) => (v ?? 0) + (maayData[i] ?? 0) + (biscData[i] ?? 0));
-    return [{
-      label: 'All Distributors',
-      data: combined,
-      borderColor: '#a78bfa',
-      backgroundColor: 'rgba(167,139,250,0.1)',
-      borderWidth: 2.5, fill: true, tension: 0.3,
-      pointRadius: 4, pointHoverRadius: 7, spanGaps: false
-    }];
+    // Show each distributor as its own line so data gaps don't hide individual distributors
+    const dsList = [];
+    // Icedreams — always present (null where no data)
+    if (S.brand !== 'danis') {
+      dsList.push({
+        label: 'Icedreams',
+        data: [...iceData],
+        borderColor: '#4f8ef7',
+        backgroundColor: 'rgba(79,142,247,0.08)',
+        borderWidth: 2.5, fill: false, tension: 0.3,
+        pointRadius: iceData.map(v => v !== null ? 4 : 0),
+        pointHoverRadius: 7, spanGaps: false
+      });
+    }
+    // Ma'ayan — turbo only (no danis)
+    if (S.brand !== 'danis') {
+      dsList.push({
+        label: "Ma'ayan",
+        data: maayData,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.08)',
+        borderWidth: 2.5, fill: false, tension: 0.3,
+        pointRadius: maayData.map(v => v !== null ? 4 : 0),
+        pointHoverRadius: 7, spanGaps: false
+      });
+    }
+    // Biscotti — danis only (no turbo)
+    if (S.brand !== 'turbo') {
+      dsList.push({
+        label: 'Biscotti',
+        data: biscData,
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,0.08)',
+        borderWidth: 2.5, fill: false, tension: 0.3,
+        pointRadius: biscData.map(v => v !== null ? 4 : 0),
+        pointHoverRadius: 7, spanGaps: false
+      });
+    }
+    return dsList;
   }
 
   return [];  // 'none'
@@ -2078,8 +2107,14 @@ function _updateWeeklyLegend(dk) {
     return;
   }
   if (dk === 'both') {
-    el.innerHTML =
-      `<div class="wleg-item"><div class="wleg-line" style="background:#a78bfa"></div>All Distributors (28/12–22/3)${brandTag} — W1–W5: Icedreams · W6–W11: Icedreams + Ma'ayan · W12+: Icedreams + Biscotti</div>`;
+    const parts = [];
+    if (S.brand !== 'danis') parts.push(
+      `<div class="wleg-item"><div class="wleg-line" style="background:#4f8ef7"></div>Icedreams (W1–W13)${brandTag}</div>`);
+    if (S.brand !== 'danis') parts.push(
+      `<div class="wleg-item"><div class="wleg-line" style="background:#22c55e"></div>Ma\'ayan (W6–W13)${brandTag}</div>`);
+    if (S.brand !== 'turbo') parts.push(
+      `<div class="wleg-item"><div class="wleg-line" style="background:#f59e0b"></div>Biscotti (W12–W13) · Dani\'s only</div>`);
+    el.innerHTML = parts.join('');
     return;
   }
   if (dk === 'ice') {
