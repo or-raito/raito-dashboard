@@ -979,10 +979,7 @@ def _build_master_data_tab(master_data):
     <div class="md-section-card">
       <div class="md-filter-bar">
         <label>Type</label>
-        <select id="flt-cust-type" onchange="mdRender('customers')">
-          <option value="all">All Types</option>
-          <option>Retail</option><option>B2B</option><option>Online</option><option>HoReCa</option>
-        </select>
+        <select id="flt-cust-type" onchange="mdRender('customers')"><option value="all">All Types</option></select>
         <label>Status</label>
         <select id="flt-cust-status" onchange="mdRender('customers')">
           <option value="all">All Statuses</option>
@@ -1437,6 +1434,7 @@ def _build_master_data_tab(master_data):
   function rCustomers() {
     var tf=getVal('flt-cust-type'), sf=getVal('flt-cust-status'), df=getVal('flt-cust-dist');
     var sq=(getVal('srch-customers')||'').toLowerCase().trim();
+    populateSel('flt-cust-type', uniqueVals(S.customers,'type'), 'All Types', tf);
     populateSel('flt-cust-dist', uniqueVals(S.customers,'distributor'), 'All Distributors', df);
     var data=S.customers.filter(function(c){
       if(tf&&tf!=='all'&&c.type!==tf) return false;
@@ -1626,7 +1624,7 @@ def _build_master_data_tab(master_data):
           var lbl = item[f.labelKey]||v;
           var sel = String(val)===String(v);
           if(sel) fkHasMatch = true;
-          fkOpts+='<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(v)+' — '+esc(lbl)+'</option>';
+          fkOpts+='<option value="'+esc(v)+'"'+(sel?' selected':'')+'>'+esc(lbl||v)+'</option>';
         });
         /* If stored value doesn't match any lookup key, add it as current so it shows */
         if(!fkHasMatch && val) {
