@@ -970,22 +970,43 @@ def get_distributor_inventory():
 # Biscotti Dream Cake price — sourced from pricing_engine (SSOT)
 BISCOTTI_PRICE_DREAM_CAKE = get_b2b_price_safe('dream_cake_2')
 
-def _parse_biscotti_file(filepath):
-    """Parse Daniel Amit weekly Biscotti report.
+def _normalize_biscotti_branch(name: str) -> str:
+    """Roll up Biscotti branch legal names to their parent customer name.
 
-    Format: Multi-sheet Excel.
-      - 'סיכום כללי' sheet: summary across all weeks, rows = branches, last col = total
-      - 'שבוע N (...)' sheets: one per week with daily columns
+    Wolt Market branches (וולט מרקט-X) → וולט מרקט
+    Naomi's Farm branches (חוות נעמי*) → חוות נעמי
+    חן כרמלה למסחר בע"מ → כרמלה  (same physical customer as Icedream's כרמלה)
+    All others kept as-is.
+    """
+    if name.startswith('וולט מרקט'):
+        return 'וולט מרקט'
+    if name.startswith('חוות נעמי'):
+        return 'חוות נעמי'
+    if 'כרמלה' in name:
+        return 'כרמלה'
+    return name
+
+
+def _parse_biscotti_file(filepath):
+    """Parse Biscotti weekly sales report.
+
+    Supports two formats:
+      Format A (daniel_amit_weekly_biscotti.xlsx) — Multi-sheet:
+        'סיכום כללי': row 2=headers (col 0=סניף, last=סה"כ), data rows 3..N-2
+        'שבוע N': per-week daily columns, col 0=branch, last=total
+      Format B (week13.xlsx and future) — Single sheet, 3 columns:
+        Row 0: headers (מספר לקוח | שם לקוח | כמות)
+        Data rows 1..N-2, last row = grand total (סה"כ)
+        Col 0 = customer number (ignored), col 1 = customer name, col 2 = quantity
 
     Returns {month_key: {'totals': {product: {'units', 'value'}},
                          'by_customer': {branch: {product: {'units', 'value'}}}}}
-    All data maps to March 2026 (dates 18.3+).
+    All data maps to March 2026.
     """
     import os
     xl = pd.ExcelFile(filepath)
     print(f"  [Biscotti] {os.path.basename(filepath)} → sheets: {xl.sheet_names}")
 
-    # Try to use the summary sheet first; fall back to aggregating week sheets
     SUMMARY_KEYWORD = 'סיכום'
     WEEK_KEYWORD = 'שבוע'
 
@@ -996,14 +1017,32 @@ def _parse_biscotti_file(filepath):
 
     if summary_sheet:
         df = pd.read_excel(filepath, sheet_name=summary_sheet, header=None)
-        # Row 2 = headers: col 0 = "סניף", last col = "סה"כ"
-        # Data rows: 3 to second-to-last (last row is the grand total "סה"כ")
-        total_col = df.shape[1] - 1
-        for i in range(3, len(df) - 1):
-            branch = str(df.iloc[i, 0]).strip()
-            total = df.iloc[i, total_col]
-            if branch and branch != 'nan' and total and str(total) != 'nan':
-                branch_totals[branch] = int(total)
+
+        # Detect Format B: 3 columns, header row has 'שם לקוח' or 'כמות' in col 1/2
+        is_format_b = (df.shape[1] == 3 and
+                       not week_sheets and
+                       str(df.iloc[0, 1]).strip() in ('שם לקוח', 'כמות') or
+                       (df.shape[1] == 3 and not week_sheets and
+                        str(df.iloc[0, 0]).strip() == 'מספר לקוח'))
+
+        if is_format_b:
+            # Format B: col 0=customer_num, col 1=name, col 2=quantity
+            # Header at row 0, data rows 1..N-2, last row = grand total
+            for i in range(1, len(df) - 1):
+                name = str(df.iloc[i, 1]).strip()
+                qty  = df.iloc[i, 2]
+                if name and name != 'nan' and qty and str(qty) != 'nan':
+                    norm = _normalize_biscotti_branch(name)
+                    branch_totals[norm] = branch_totals.get(norm, 0) + int(qty)
+        else:
+            # Format A: row 2=headers, col 0=branch, last col=total, data rows 3..N-2
+            total_col = df.shape[1] - 1
+            for i in range(3, len(df) - 1):
+                branch = str(df.iloc[i, 0]).strip()
+                total = df.iloc[i, total_col]
+                if branch and branch != 'nan' and total and str(total) != 'nan':
+                    branch_totals[branch] = branch_totals.get(branch, 0) + int(total)
+
     elif week_sheets:
         # Aggregate across all week sheets
         for sheet in week_sheets:
