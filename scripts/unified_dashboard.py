@@ -1113,12 +1113,12 @@ def _build_master_data_tab(master_data):
   /* ── API entity → table field mapping ── */
   var ENTITY_MAP = {
     brands:        {pk:'key'},
-    products:      {pk:'sku_key',   fkFields:{brand:'brand_key', manufacturer:'manufacturer_key'}},
+    products:      {pk:'sku_key'},
     manufacturers: {pk:'key'},
     distributors:  {pk:'key'},
-    customers:     {pk:'key',       fkFields:{distributor:'distributor_key'}},
+    customers:     {pk:'key'},
     logistics:     {pk:'id'},
-    pricing:       {pk:'id',        fkFields:{customer:'customer_key', distributor:'distributor_key', sku_key:'sku_key'}}
+    pricing:       {pk:'id'}
   };
 
   /* ── API helper ── */
