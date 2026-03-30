@@ -1,4 +1,10 @@
-altgraph @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/altgraph-0.17.2-py2.py3-none-any.whl
-future @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/future-0.18.2-py3-none-any.whl
-macholib @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/macholib-1.15.2-py2.py3-none-any.whl
-six @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/six-1.15.0-py2.py3-none-any.whl
+# Raito project dependencies
+flask>=3.0.0
+gunicorn>=21.0.0
+psycopg2-binary>=2.9.9
+openpyxl>=3.1.2
+xlsxwriter>=3.2.0
+pandas>=2.0.0
+google-cloud-storage>=2.14.0
+google-cloud-logging>=3.9.0
+sendgrid>=6.11.0

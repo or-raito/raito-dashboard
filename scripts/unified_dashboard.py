@@ -3244,6 +3244,21 @@ function switchTab(tabId) {{
       setTimeout(renderAll, 100);
     }}
   }}
+
+  // Resize Google Map when Geo tab becomes visible
+  // (map may have initialized with 0 dimensions while tab was hidden)
+  if (tabId === 'geo' && typeof _geoMap !== 'undefined' && _geoMap) {{
+    setTimeout(function() {{
+      google.maps.event.trigger(_geoMap, 'resize');
+      _geoMap.setCenter({{ lat: 31.5, lng: 34.9 }});
+      _geoMap.setZoom(8);
+      // Load data on first view
+      if (!window._geoDataLoaded) {{
+        window._geoDataLoaded = true;
+        if (typeof geoUpdateMap === 'function') geoUpdateMap();
+      }}
+    }}, 150);
+  }}
 }}
 
 // ── Export Modal Logic ──────────────────────────────────────────────────────
