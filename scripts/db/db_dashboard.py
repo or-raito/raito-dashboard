@@ -1026,14 +1026,9 @@ def api_portfolio():
 def api_lookup(entity):
     try:
         _md_ensure_table()
-        items      = _md_read(entity)
-        pk_field   = _MD_PK.get(entity, 'key')
-        name_field = ('name' if entity in ('brands', 'manufacturers', 'distributors')
-                      else 'name_en')
-        return jsonify([
-            {'id': r.get(pk_field, ''), 'label': r.get(name_field) or r.get('key', '')}
-            for r in items
-        ])
+        items = _md_read(entity)
+        # Return full records so the JS SCHEMAS' valKey/labelKey work directly
+        return jsonify(items)
     except Exception as e:
         log.error("api_lookup %s: %s", entity, e)
         return jsonify({'error': str(e)}), 500
