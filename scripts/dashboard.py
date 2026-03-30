@@ -1552,9 +1552,10 @@ def _build_month_section(data, month_list, section_id, active_products):
             ctv = sum(pdata.get(p, {}).get('value', 0) for p in bisc_pl)
             if ctu == 0:
                 continue
+            cust_en = extract_customer_name(cust)
             bisc_h_cols = ''.join(f'<td>{_fmt((pdata.get(p) or {}).get("units", 0))}</td>' for p in bisc_pl)
             bisc_v_cols = ''.join(f'<td>{_fc((pdata.get(p) or {}).get("value", 0))}</td>' for p in bisc_pl)
-            r = f'<td>{mh}</td><td><b>{cust}</b></td>{bisc_h_cols}{bisc_v_cols}<td class="tot">{_fmt(ctu)}</td><td class="tot">{_fc(ctv)}</td>'
+            r = f'<td>{mh}</td><td><b>{cust_en}</b></td>{bisc_h_cols}{bisc_v_cols}<td class="tot">{_fmt(ctu)}</td><td class="tot">{_fc(ctv)}</td>'
             bisc_rows_data.append((ctv, f'<tr>{r}</tr>'))
     bisc_rows_data.sort(key=lambda x: x[0], reverse=True)
 
