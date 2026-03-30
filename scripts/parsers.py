@@ -87,107 +87,10 @@ def detect_month_from_sheet(ws):
 
 # ── Icedreams Parser ─────────────────────────────────────────────────────
 
-def _icedream_week_to_month(week_num: int, year: int = 2026) -> str:
-    """Map an Icedream week number to a month string.
-
-    Uses Jan 1 as the base (week 1 starts Jan 1).  Weeks 10-13 → March 2026, etc.
-    """
-    from datetime import date, timedelta
-    base = date(year, 1, 1)
-    week_start = base + timedelta(weeks=week_num - 1)
-    month_map = {
-        (1, 2026): 'January 2026', (2, 2026): 'February 2026',
-        (3, 2026): 'March 2026',   (4, 2026): 'April 2026',
-        (5, 2026): 'May 2026',     (12, 2025): 'December 2025',
-    }
-    return month_map.get((week_start.month, week_start.year),
-                         f'{week_start.month}/{week_start.year}')
-
-
-def _parse_icedreams_compact(ws, wb):
-    """Parse an Icedream compact weekly XLSX (cols: A=account, B=item, C=qty, D=value).
-
-    This format is used for week13.xlsx and similar single-week exports.  Row 1 carries
-    the week label (e.g. 'שבוע 13 2026' in col D), row 2 is the column-header row.
-    Data starts at row 3.
-    """
-    # Detect month from the week label in D1
-    header_text = str(ws.cell(row=1, column=4).value or '')
-    month = None
-    m = re.search(r'שבוע\s+(\d+)\s+(\d{4})', header_text)
-    if m:
-        month = _icedream_week_to_month(int(m.group(1)), int(m.group(2)))
-    if not month:
-        month = detect_month_from_sheet(ws) or 'Unknown'
-
-    data = {'month': month, 'by_customer': {}, 'totals': {}}
-    current_account = None
-
-    for row_idx in range(3, ws.max_row + 1):
-        col_a = ws.cell(row=row_idx, column=1).value
-        col_b = ws.cell(row=row_idx, column=2).value
-        col_c = ws.cell(row=row_idx, column=3).value  # quantity
-        col_d = ws.cell(row=row_idx, column=4).value  # value
-
-        # New account block starts when col A is non-empty
-        if col_a is not None:
-            account_raw = str(col_a).strip()
-            # Strip the delivery-type suffix (e.g. '*...*ת.משלוח')
-            account_raw = re.sub(r'\*ת\.\s*משלוח$', '', account_raw).strip('* ')
-            current_account = account_raw or current_account
-
-        item_name = str(col_b).strip() if col_b else ''
-        if not item_name or 'סה"כ' in item_name or item_name == 'שם פריט':
-            continue  # skip header / subtotal rows
-
-        if col_c is None or not isinstance(col_c, (int, float)):
-            continue
-
-        product = _validated_product(classify_product(item_name))
-        if not product:
-            continue
-
-        upc = extract_units_per_carton(item_name)
-        raw_qty = float(col_c)
-        sign = -1 if raw_qty < 0 else 1   # negative in report = outgoing (sales)
-        cartons = abs(raw_qty)
-        units = round(cartons * upc) * sign * -1   # flip to positive sales
-        # col_d is negative for sales (same sign as col_c) → negate to get positive revenue
-        value = -float(col_d) if isinstance(col_d, (int, float)) else 0
-
-        if product not in data['totals']:
-            data['totals'][product] = {'units': 0, 'value': 0, 'cartons': 0}
-        data['totals'][product]['units'] += units
-        data['totals'][product]['value'] += value
-        data['totals'][product]['cartons'] += cartons * sign * -1
-
-        if current_account:
-            if current_account not in data['by_customer']:
-                data['by_customer'][current_account] = {}
-            if product not in data['by_customer'][current_account]:
-                data['by_customer'][current_account][product] = {'units': 0, 'value': 0, 'cartons': 0}
-            data['by_customer'][current_account][product]['units'] += units
-            data['by_customer'][current_account][product]['value'] += value
-            data['by_customer'][current_account][product]['cartons'] += cartons * sign * -1
-
-    wb.close()
-    return data
-
-
 def parse_icedreams_file(filepath):
-    """Parse a single Icedreams monthly report.
-
-    Supports two layouts:
-    - Classic monthly (cols D=item, E=value, F=qty; bold col-A rows = customer)
-    - Compact weekly  (cols A=account, B=item, C=qty, D=value; header row 2 = 'שם חשבון')
-    """
+    """Parse a single Icedreams monthly report."""
     wb = load_workbook(filepath)
     ws = wb[wb.sheetnames[0]]
-
-    # Detect compact weekly format: row 2, col A = 'שם חשבון'
-    if str(ws.cell(row=2, column=1).value or '').strip() == 'שם חשבון':
-        return _parse_icedreams_compact(ws, wb)
-
     month = detect_month_from_sheet(ws)
     if not month:
         month = ws.title if ws.title else 'Unknown'
@@ -1067,43 +970,22 @@ def get_distributor_inventory():
 # Biscotti Dream Cake price — sourced from pricing_engine (SSOT)
 BISCOTTI_PRICE_DREAM_CAKE = get_b2b_price_safe('dream_cake_2')
 
-def _normalize_biscotti_branch(name: str) -> str:
-    """Roll up Biscotti branch legal names to their parent customer name.
-
-    Wolt Market branches (וולט מרקט-X) → וולט מרקט
-    Naomi's Farm branches (חוות נעמי*) → חוות נעמי
-    חן כרמלה למסחר בע"מ → כרמלה  (same physical customer as Icedream's כרמלה)
-    All others kept as-is.
-    """
-    if name.startswith('וולט מרקט'):
-        return 'וולט מרקט'
-    if name.startswith('חוות נעמי'):
-        return 'חוות נעמי'
-    if 'כרמלה' in name:
-        return 'כרמלה'
-    return name
-
-
 def _parse_biscotti_file(filepath):
-    """Parse Biscotti weekly sales report.
+    """Parse Daniel Amit weekly Biscotti report.
 
-    Supports two formats:
-      Format A (daniel_amit_weekly_biscotti.xlsx) — Multi-sheet:
-        'סיכום כללי': row 2=headers (col 0=סניף, last=סה"כ), data rows 3..N-2
-        'שבוע N': per-week daily columns, col 0=branch, last=total
-      Format B (week13.xlsx and future) — Single sheet, 3 columns:
-        Row 0: headers (מספר לקוח | שם לקוח | כמות)
-        Data rows 1..N-2, last row = grand total (סה"כ)
-        Col 0 = customer number (ignored), col 1 = customer name, col 2 = quantity
+    Format: Multi-sheet Excel.
+      - 'סיכום כללי' sheet: summary across all weeks, rows = branches, last col = total
+      - 'שבוע N (...)' sheets: one per week with daily columns
 
     Returns {month_key: {'totals': {product: {'units', 'value'}},
                          'by_customer': {branch: {product: {'units', 'value'}}}}}
-    All data maps to March 2026.
+    All data maps to March 2026 (dates 18.3+).
     """
     import os
     xl = pd.ExcelFile(filepath)
     print(f"  [Biscotti] {os.path.basename(filepath)} → sheets: {xl.sheet_names}")
 
+    # Try to use the summary sheet first; fall back to aggregating week sheets
     SUMMARY_KEYWORD = 'סיכום'
     WEEK_KEYWORD = 'שבוע'
 
@@ -1114,32 +996,14 @@ def _parse_biscotti_file(filepath):
 
     if summary_sheet:
         df = pd.read_excel(filepath, sheet_name=summary_sheet, header=None)
-
-        # Detect Format B: 3 columns, header row has 'שם לקוח' or 'כמות' in col 1/2
-        is_format_b = (df.shape[1] == 3 and
-                       not week_sheets and
-                       str(df.iloc[0, 1]).strip() in ('שם לקוח', 'כמות') or
-                       (df.shape[1] == 3 and not week_sheets and
-                        str(df.iloc[0, 0]).strip() == 'מספר לקוח'))
-
-        if is_format_b:
-            # Format B: col 0=customer_num, col 1=name, col 2=quantity
-            # Header at row 0, data rows 1..N-2, last row = grand total
-            for i in range(1, len(df) - 1):
-                name = str(df.iloc[i, 1]).strip()
-                qty  = df.iloc[i, 2]
-                if name and name != 'nan' and qty and str(qty) != 'nan':
-                    norm = _normalize_biscotti_branch(name)
-                    branch_totals[norm] = branch_totals.get(norm, 0) + int(qty)
-        else:
-            # Format A: row 2=headers, col 0=branch, last col=total, data rows 3..N-2
-            total_col = df.shape[1] - 1
-            for i in range(3, len(df) - 1):
-                branch = str(df.iloc[i, 0]).strip()
-                total = df.iloc[i, total_col]
-                if branch and branch != 'nan' and total and str(total) != 'nan':
-                    branch_totals[branch] = branch_totals.get(branch, 0) + int(total)
-
+        # Row 2 = headers: col 0 = "סניף", last col = "סה"כ"
+        # Data rows: 3 to second-to-last (last row is the grand total "סה"כ")
+        total_col = df.shape[1] - 1
+        for i in range(3, len(df) - 1):
+            branch = str(df.iloc[i, 0]).strip()
+            total = df.iloc[i, total_col]
+            if branch and branch != 'nan' and total and str(total) != 'nan':
+                branch_totals[branch] = int(total)
     elif week_sheets:
         # Aggregate across all week sheets
         for sheet in week_sheets:

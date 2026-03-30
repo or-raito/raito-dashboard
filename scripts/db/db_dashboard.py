@@ -860,15 +860,7 @@ def _md_write(entity: str, data: list) -> None:
 
 
 def _md_rebuild_portfolio(md: dict) -> None:
-    """Recompute the portfolio matrix from current md state and save to DB.
-
-    Row format matches master_data_parser.py exactly so the JS renderer works:
-      [i, name_he, name_en, type, distributor, status, price1, ..., active_count]
-    Headers:
-      ['#', 'Customer', 'Customer (EN)', 'Type', 'Distributor', 'Status',
-       sku1_name, ..., 'Active SKUs']
-    Prices are numeric, 'Pipeline', or None — never nested objects.
-    """
+    """Recompute the portfolio matrix from current md state and save to DB."""
     products = md.get('products', [])
     customers = md.get('customers', [])
     pricing   = md.get('pricing', [])
@@ -881,39 +873,23 @@ def _md_rebuild_portfolio(md: dict) -> None:
             cust = pr.get('customer', '')
             sku  = pr.get('sku_key', '')
             if cust and sku:
-                pricing_lookup[(cust, sku)] = (pr.get('sale_price'), pr.get('status', 'Active'))
-        headers = ['#', 'Customer', 'Customer (EN)', 'Type', 'Distributor', 'Status']
-        for prod in active_products:
-            headers.append(prod.get('name_en') or prod.get('sku_key', ''))
-        headers.append('Active SKUs')
+                pricing_lookup[(cust, sku)] = (pr.get('sale_price'), pr.get('status'))
+        headers = ['#', 'Customer', 'Distributor'] + [
+            p.get('name_en') or p.get('sku_key', '') for p in active_products
+        ]
         rows = []
         for i, cust in enumerate(sorted(customers, key=lambda c: c.get('name_en', '')), 1):
             name_he  = cust.get('name_he', '')
             name_en  = cust.get('name_en', '')
             cust_key = cust.get('key', '')
-            row: list = [i, name_he, name_en,
-                         cust.get('type', ''),
-                         cust.get('distributor', ''),
-                         cust.get('status', '')]
-            active_count = 0
+            cells: list = [i, name_en or name_he, cust.get('distributor', '')]
             for prod in active_products:
                 sku = prod.get('sku_key', '')
                 lkp = (pricing_lookup.get((name_he, sku))
                        or pricing_lookup.get((cust_key, sku))
                        or pricing_lookup.get((name_en, sku)))
-                if lkp:
-                    price, status = lkp
-                    if status == 'Pipeline':
-                        row.append('Pipeline')
-                    elif price:
-                        row.append(price)
-                        active_count += 1
-                    else:
-                        row.append(None)
-                else:
-                    row.append(None)
-            row.append(active_count)
-            rows.append(row)
+                cells.append({'price': lkp[0], 'status': lkp[1]} if lkp else None)
+            rows.append(cells)
         portfolio = {'headers': headers, 'rows': rows}
     # Persist portfolio back to DB
     _md_write('portfolio', portfolio)   # type: ignore[arg-type]
@@ -1025,7 +1001,7 @@ def api_delete(entity, pk):
 def api_portfolio():
     try:
         _md_ensure_table()
-        # portfolio is stored as its own row; if missing or empty, compute it
+        # portfolio is stored as its own row; if missing, compute it
         conn = _md_conn()
         try:
             cur = conn.cursor()
@@ -1034,13 +1010,8 @@ def api_portfolio():
         finally:
             conn.close()
         if row:
-            pf = row[0]
-            # Return cached only if it has the correct v2 format (headers[2] == 'Customer (EN)')
-            # Old format had ['#','Customer','Distributor',...] — force rebuild on stale cache
-            hdrs = pf.get('headers') if pf else None
-            if hdrs and len(hdrs) > 2 and hdrs[2] == 'Customer (EN)':
-                return jsonify(pf)
-        # Missing or empty — compute fresh from current entity data
+            return jsonify(row[0])
+        # Compute and store
         md = _md_read_all()
         _md_rebuild_portfolio(md)
         return jsonify(md.get('portfolio', {}))
@@ -1053,10 +1024,11 @@ def api_portfolio():
 
 @app.route('/api/lookup/<string:entity>', methods=['GET'])
 def api_lookup(entity):
-    """Return raw entity data — same shape as /api/<entity> so JS schemas match."""
     try:
         _md_ensure_table()
-        return jsonify(_md_read(entity))
+        items = _md_read(entity)
+        # Return full records so the JS SCHEMAS' valKey/labelKey work directly
+        return jsonify(items)
     except Exception as e:
         log.error("api_lookup %s: %s", entity, e)
         return jsonify({'error': str(e)}), 500
@@ -1147,33 +1119,14 @@ def api_rebuild():
         _md_ensure_table()
         md = _md_read_all()
         _md_rebuild_portfolio(md)
+        from db.database_manager import reset_cache
+        reset_cache()
         _cached_html = None
         log.info("API rebuild triggered — dashboard cache invalidated")
         return jsonify({'status': 'rebuilding',
                         'message': 'Dashboard will regenerate on next page load'})
     except Exception as e:
         log.error("api_rebuild: %s", e)
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/reseed', methods=['POST'])
-def api_reseed():
-    """Force-reseed all master_data entities from the current Excel file."""
-    global _cached_html
-    try:
-        conn = _md_conn()
-        cur = conn.cursor()
-        _md_seed(cur)
-        conn.commit()
-        conn.close()
-        # Rebuild portfolio so it reflects the freshly seeded data
-        md = _md_read_all()
-        _md_rebuild_portfolio(md)
-        _cached_html = None
-        log.info("master_data reseeded from Excel")
-        return jsonify({'status': 'ok', 'message': 'Master data reseeded from Excel. Refresh the page.'})
-    except Exception as e:
-        log.error("api_reseed: %s", e)
         return jsonify({'error': str(e)}), 500
 
 

@@ -30,10 +30,3 @@ raito_dump*.sql
 # IDE
 .vscode/
 .idea/
-
-# Python
-venv/
-__pycache__/
-*.pyc
-*.pyo
-.DS_Store

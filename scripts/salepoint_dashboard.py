@@ -88,6 +88,7 @@ def build_salepoint_tab(data):
         <option value="Active">Active</option>
         <option value="Churned">Churned</option>
         <option value="No Mar order">No Mar order</option>
+        <option value="Reactivated">Reactivated</option>
         <option value="New">New</option>
       </select>
       <span class="sp-count" id="sp-showing">-</span>

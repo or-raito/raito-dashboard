@@ -96,11 +96,11 @@ Icedream reports include actual invoice values.
 Icedream sends two different Excel/XLS formats depending on context:
 
 **Format A — "By Networks" monthly detail (`.xlsx`, standard parser)**
-- File examples: `ICEDREAM- DECEMBER.xlsx`, `icedream - January.xlsx`, `ice_feb_full.xlsx`, `icedream_mar_w12.xlsx`
+- File examples: `ICEDREAM- DECEMBER.xlsx`, `icedream - January.xlsx`, `ice_feb_full.xlsx`, `icedream_mar_w10_11.xlsx`
 - Title: "מכירות לעוגיפלצת חודשי לפי רשתות"
 - Structure: Rows per transaction/product per branch. Customer assigned when a **bold** `סה"כ` row appears in col A; col B = customer name.
 - Key columns: col D (item name), col E (revenue ₪), col F (qty — negative = sale, positive = return)
-- Parsed by: `parse_icedreams_file(filepath)` → classic path in `parsers.py` (no 'שם חשבון' in row 2)
+- Parsed by: `parse_icedreams_file(filepath)` in `parsers.py`
 - Units: col F is in **cartons/packs**. `extract_units_per_carton(item_name)` converts to individual units (e.g., `* 10 יח` → multiply by 10).
 
 **Format B — Weekly comparison (`.xls` OLE2/BIFF8, custom parser required)**
@@ -153,22 +153,6 @@ Icedream sends two different Excel/XLS formats depending on context:
 | `כרמלה` | `כרמלה` |
 | `פוט לוקר` | `פוט לוקר` |
 | `עוגיפלצת בע"מ` | `עוגיפלצת` (W12 only) |
-
-**Format C — Compact weekly (`.xlsx`, added Mar 2026)**
-- File examples: `week13.xlsx` (Icedream)
-- Detection: row 2 col A = `'שם חשבון'` (column header "account name") — checked in `parse_icedreams_file()`
-- Key header: D1 = `'שבוע N YYYY'` (e.g., `'שבוע 13 2026'`) — used to detect week number and compute month via `_icedream_week_to_month(week_num, year)`
-- Structure: Row 1 = week header, Row 2 = column labels, Row 3+ = data. **No bold headers.**
-- Key columns: col A (account/branch), col B (item), col C (qty, cartons, negative = sale), col D (value ₪, negative = sale)
-- Parsed by: `_parse_icedreams_compact(ws, wb)` in `parsers.py`
-- Revenue: `value = -float(col_d)` (col D is negative for sales, so negate directly)
-- Units: `-col_c * extract_units_per_carton(col_b)` (same pack-size logic as Format A)
-
-**Format A variant — "Customer-pivot" (unrecognized, not parsed)**
-- File example: `icedream_mar_w10_11.xlsx`
-- Structure: Section header in col D, customer name in col B on section-start rows, then product rows (col D=item, col E=value, col F=qty). No bold rows, no week header in D1.
-- **Parser returns 0 units — this format is not supported.** It appears to be a partial export filtered by account (only 5 customers, 23 rows, ~245 units estimated).
-- ⚠️ The CC weekly arrays include W10+W11 (725+553 = 1,278 Icedream units) manually, but BO and SP tabs do NOT include these units because this file can't be parsed. Fix: obtain full W10+W11 transaction files in Format A or C.
 
 **Critical: Icedream returns handling** — The parser flips signs: negative raw values become positive sales, positive raw values become negative (returns). Uses `sign * -1` logic, NOT `abs()`.
 
@@ -278,8 +262,7 @@ CLAUDE.md          ← Auto-loaded project context (short orientation + key rule
 | December 2025 | `data/icedreams/ICEDREAM- DECEMBER.xlsx` | `data/mayyan/Mayyan_Turbo.xlsx` (multi-month, monthly format with חודש column) |
 | January 2026 | `data/icedreams/icedream - January.xlsx` (individual branches, 573 rows) | `data/mayyan/Mayyan_Turbo.xlsx` |
 | **February 2026** | **`data/icedreams/ice_feb_full.xlsx`** | **`data/mayyan/maay_feb_full.xlsx`** (weekly format, no חודש column — uses שבועי) |
-| **March 2026 (W10-W13)** | **`data/icedreams/icedream_mar_w12.xlsx`** (Format A, 34 customers, 3,067 units). **`data/icedreams/week13.xlsx`** (Format C compact weekly, 14 customers, 970 units). `data/icedreams/icedream_mar_w10_11.xlsx` — partial customer-pivot export, **not parsed** (0 units, see Format A variant above). `data/icedreams/sales_week_12.xls` (Format B OLE2/BIFF8, reference file). | **`data/mayyan/maayan_sales_week_10_11.xlsx`** (W10+W11, weekly format). **`data/mayyan/week12_13.xlsx`** (W12+W13, weekly format). |
-| **March 2026 Biscotti** | — | — | **`data/biscotti/daniel_amit_weekly_biscotti.xlsx`** (W12: 101 units, W13: 20 units). **`data/biscotti/week13.xlsx`** (W13: 543 units, סיכום כללי format, weekly override not extractable). Total Biscotti March: 664 units / ₪53,120. |
+| **March 2026 (W10-W12)** | **`data/icedreams/sales_week_12.xls`** (Format B weekly XLS, OLE2/BIFF8, created 19/3 by Rozit Israel — authoritative W10-W12 source). W12 extracted to `icedream_mar_w12.xlsx` (Format A). Also `icedream_15_3` (W10+W11) and `icedream_mar_w10_11.xlsx` (branch-level detail). | **`data/mayyan/maayan_sales_week_10_11.xlsx`** (weekly format, week numbers 10-11, auto-mapped to March) |
 
 > ⚠️ Old partial Feb files are archived in `data/icedreams/_archive/`. Do NOT use.
 > ⚠️ `icefream - January - CUSTOMERS .xlsx` was a duplicate — archived. Only `icedream - January.xlsx` should be used.
@@ -393,36 +376,22 @@ All scripts in `scripts/` directory:
 ### Running
 
 ```bash
-# 1. Test locally (regenerate HTML)
-cd scripts && python3 unified_dashboard.py
-# Output: docs/unified_dashboard.html
+# Regenerate unified dashboard (BO + CC + MD tabs)
+python3 scripts/unified_dashboard.py
 
-# 2. Run Flask dev server (local test with API routes)
-cd scripts && source ~/dataset/venv/bin/activate && python3 db/db_dashboard.py
-# Visit: http://localhost:8080
+# Then copy to deployment folder
+cp docs/unified_dashboard.html github-deploy/index.html
 
-# 3. Deploy to Cloud Run (from Mac, in /Users/osadon/dataset)
-docker build --platform linux/amd64 -t me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest .
-docker push me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest
-gcloud run deploy raito-dashboard --image=me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard:latest --region=me-west1 --platform managed
-
-# 4. Git workflow (ALWAYS dev branch first)
-git checkout dev
-# ... make changes, test locally ...
-git add <files> && git commit -m "..."
-git push origin dev
-git checkout main && git merge dev && git push origin main
-# Then deploy Docker (step 3)
+# Push to GitHub Pages
+cd github-deploy && git add -A && git commit -m "Update" && git push origin main --force
 ```
-
-> ⚠️ GitHub Pages (`or-raito/raito-dashboard`) is deprecated. Cloud Run is the live URL.
 
 ### Outputs
 
 | File | Description |
 |---|---|
-| `docs/unified_dashboard.html` | **Main output** — Unified dashboard (5 tabs + Agent Plan) with sidebar nav, password protection |
-| `github-deploy/index.html` | ~~Deployment copy for GitHub Pages~~ — **deprecated** (Cloud Run is live) |
+| `docs/unified_dashboard.html` | **Main output** — Unified 3-tab dashboard with sidebar nav, password protection |
+| `github-deploy/index.html` | Deployment copy for GitHub Pages |
 | `docs/dashboard.html` | Old standalone BO dashboard (superseded by unified) |
 | `docs/Raito_Business_Overview.xlsx` | Full Excel dashboard (6 sheets) |
 | `docs/sale_points_deep_dive.xlsx` | Sale Points deep-dive Excel — Summary + All Sale Points + per-group sheets. Run: `python3 scripts/salepoint_excel.py` |
@@ -431,7 +400,7 @@ git checkout main && git merge dev && git push origin main
 
 ## Unified Dashboard Architecture
 
-**URL (live):** `https://raito-dashboard-20004010285.me-west1.run.app` (password: `raito2026`) — served by Cloud Run (Docker). GitHub Pages is **deprecated**.
+**URL:** `https://or-raito.github.io/raito-dashboard/` (password: `raito2026`)
 
 **Layout:** Left sidebar (240px) + main content area. Gridle CRM-inspired modern design.
 
@@ -439,8 +408,6 @@ git checkout main && git merge dev && git push origin main
 - Dashboard → Business Overview (BO)
 - Analytics → Customer Performance (CC)
 - Data → Master Data (MD)
-- Data → Sale Points (SP) — Tab 4
-- Data → Geo Analysis — Tab 5 (Google Maps choropleth + POS drill-down, served via `/api/geo/*`)
 
 ### Tab 1: Business Overview (BO)
 Generated dynamically by `dashboard.py` from parsed data.
@@ -457,7 +424,7 @@ Generated dynamically by `dashboard.py` from parsed data.
 5. **Detailed Summary** — Top 10 rows (sorted by revenue desc) with "Show More" button.
 6. **Icedream Customers** — Top 10 with "Show More".
 7. **Ma'ayan Chains** — Top 10 with "Show More".
-8. **Biscotti Customers** — Live data: 14 branches, 664 units (W12+W13, Mar 2026). Formal launch 10 Apr 2026.
+8. **Biscotti Customers** — First data live (9 branches, 121 units, Mar 2026). Formal launch 10 Apr 2026.
 9. **Top Customers** — Combined ranking from all distributors.
 10. **Inventory** (overview only) — Karfree + Icedream + Ma'ayan stock.
 
@@ -467,7 +434,7 @@ Source: `scripts/cc_dashboard.py` — fully dynamic Python generator (migrated f
 
 **Filters:** Year (All Years / 2025 / 2026, default 2026) × Customer, Distributor, Status, Month (default All Months), Brand (Turbo / Dani's). Year filter controls which months are visible in the Month dropdown — selecting 2025 shows only Dec, selecting 2026 shows Jan/Feb/Mar. Weekly Sales Trend chart filters by both year AND month — selecting a specific month shows only weeks belonging to that month. Implemented via `ccSetYear()` and `_ccFilteredWeekIndices()` JS functions injected by `_read_cc_dashboard()`.
 
-**Sections:** KPI cards (5: Revenue, Units, Gross Profit, Op Profit, Returns — All), Weekly Sales Trend chart (below KPIs, year+month filtered), Customer table, Product Mix. Inactive customers panel was removed (25 Mar 2026). Returns KPI card labels: "Returns — All/Icedreams/Ma'ayan", "Revenue Loss", "Return Rate".
+**Sections:** KPI cards (6: Revenue, Units, Gross Profit, Op Profit, Returns — All, Portfolio MoM), Weekly Sales Trend chart (moved below KPIs, year+month filtered), Customer table, Product Mix, Inactive customers panel. Returns KPI card translated from Hebrew to English (labels: "Returns — All/Icedreams/Ma'ayan", "Revenue Loss", "Return Rate").
 
 ### Tab 3: Master Data (MD)
 Generated by `_build_master_data_tab()` in `unified_dashboard.py`, using data from `master_data_parser.py`.
@@ -495,36 +462,35 @@ Generated by `_build_master_data_tab()` in `unified_dashboard.py`, using data fr
 4. Run `python3 scripts/unified_dashboard.py` to regenerate the dashboard
 
 ### Tab 4: Sale Points (SP)
-Generated by `salepoint_dashboard.py`. Customer summary landing page → click a customer → their individual sale points detail view.
+Generated by `salepoint_dashboard.py`. Displays a customer-level view of active, churning, and reactivated sale points across both distributors.
 
 **Filters:**
-- **Brand** — All Brands / Turbo / Dani's Dream Cake (top button bar, persists across both views)
-- **Status** — All Statuses / Active / Churned / No Mar order / New (dropdown; detail view only)
-- **Search** — Free-text search on sale point name (detail view only)
-- Note: no Customer Group or Distributor filter buttons. Distributor is shown as a column in the summary table.
+- **Brand** — All Brands / Turbo / Dani's Dream Cake (top bar above KPI summary)
+- **Status** — All / Active / Reactivated / Mar gap / Churned / New
+- **Customer Group** — All groups or a specific group (chain)
+- **Distributor** — All / Icedream / Ma'ayan
 
-**Status taxonomy (canonical — defined in `business_logic.compute_status`):**
-| Status | Definition |
-|---|---|
-| Active | Mar > 0 AND (Dec > 0 OR Jan > 0 OR Feb > 0) |
-| New | Mar > 0 AND all prior months == 0 |
-| No Mar order | Mar == 0 AND Feb > 0 |
-| Churned | Mar == 0 AND Feb == 0 AND (Dec > 0 OR Jan > 0) |
+**Status taxonomy:**
+| Status | Definition | Row fill |
+|---|---|---|
+| Active | Mar > 0 AND Feb > 0 | White |
+| Reactivated | Mar > 0 AND Feb == 0 | EAFAF1 (light green) |
+| Mar gap | Mar == 0 AND Feb > 0 | White |
+| Churned | Mar == 0 AND Feb == 0 AND any prior month > 0 | FDEDEC (light red) |
+| New | Fallback (first appearance) | White |
 
-`compute_status` returns exactly these four values. "Reactivated" was retired when the unified status logic was adopted (active with any prior history = Active, not Reactivated).
-
-**Brand filter logic (prices from `pricing_engine`, injected at build time):**
+**Brand filter logic:**
 - **Turbo units:** `choc + van + mango + pist`
 - **Dani's units:** `dc`
-- **Turbo revenue:** brand_units × `_TURBO_B2B` (from `get_b2b_price_safe('chocolate')`)
-- **Dani's revenue:** brand_units × `_DC_B2B` (from `get_b2b_price_safe('dream_cake_2')`)
+- **Turbo revenue:** brand_units × ₪13.80 (fixed B2B price)
+- **Dani's revenue:** brand_units × ₪81.10 (fixed B2B price)
 - Monthly breakdown columns use proportional fraction: `round(month_units × (brand_units / total_units))`
 
-**Data as of 30 Mar 2026:** 18 customers · 1,308 sale points · status distribution: 460 Active · 425 Churned · 323 No Mar order · 100 New
+**KPI cards:** Total Sale Points | Active | Reactivated | Churned | Total Units | Revenue
 
 **Excel export:** `python3 scripts/salepoint_excel.py` → `docs/sale_points_deep_dive.xlsx`
 - Sheet "Summary" — one row per customer group, 17 columns, dark navy 2C3E50 header
-- Sheet "All Sale Points" — one row per individual sale point, FDEDEC for Churned, EAFAF1 for New
+- Sheet "All Sale Points" — one row per individual sale point, FDEDEC for Churned, EAFAF1 for Reactivated
 - Per-group sheets (e.g., "שוק פרטי", "וולט מרקט", "דומינוס") — one sheet per customer group; title merged A1:F1, stats in row 2, active-point progression in row 3, headers in row 5, data from row 6
 
 **Icedream chain extraction (`_ICE_CHAIN_PREFIXES`):** Branch names like "דומינוס פיצה X" → "דומינוס"; "וולט מרקט X" → "וולט מרקט"; "גוד פארם X" → "גוד פארם" etc. Uses longest-prefix-first matching.
@@ -550,7 +516,7 @@ Generated by `salepoint_dashboard.py`. Customer summary landing page → click a
 4. **Ma'ayan stock format** differs from Icedream: units are individual (not cartons × factor), `1/10` notation in product names
 5. **Karfree PDF** uses reversed Hebrew (right-to-left rendering issue) — parser handles this
 6. **Dashboard name:** "Raito Business Overview" (renamed from "Raito Dashboard")
-7. **GitHub Pages:** repo `or-raito/raito-dashboard`, URL: `https://or-raito.github.io/raito-dashboard/` — **deprecated as of 29 Mar 2026** (see decision #104). Cloud Run is the sole live URL.
+7. **GitHub Pages:** repo `or-raito/raito-dashboard`, URL: `https://or-raito.github.io/raito-dashboard/`
 8. **Returns counted correctly** — Icedream parser uses sign-flip logic, NOT abs()
 9. **Branch aggregation** — All tables aggregate branches into chains via `extract_chain_name()`
 10. **Three-distributor dashboard** — Dashboard has separate sections for Icedream, Ma'ayan, and Biscotti. Biscotti is placeholder until reports arrive (starts 10 Apr 2026).
@@ -605,7 +571,7 @@ Generated by `salepoint_dashboard.py`. Customer summary landing page → click a
 59. **Multi-distributor Weekly Detail (22 Mar 2026)** — `weeklyDetailHistory` rows now carry a `distributor` field (`'Icedream'` or `'מעיין'`). W10 and W11 entries include both Icedream and Ma'ayan rows. W12 IIFE stamps `distributor:'Icedream'` on its aggregated rows (Ma'ayan W12 source file not yet received). Weekly Detail export sheet redesigned: new Distributor column, grouped by week → distributor → flavor → network, with per-distributor subtotals. Ma'ayan revenue distributed proportionally from `_maayWkRev` totals since source files lack per-line pricing.
 60. **Project CLAUDE.md + commands setup (22 Mar 2026)** — Added `CLAUDE.md` at project root with short orientation + 4 key rules, pointing to this briefing. Created `.claude/commands/update-week.md` (`/project:update-week [N]`) for the full weekly update workflow and `.claude/commands/validate-week.md` (`/project:validate-week [N]`) for parse-and-validate only. These persist across sessions so the W13+ update procedure is always one command away.
 61. **Weekly insights deck system (22 Mar 2026)** — Created `scripts/insights_data.py`
-62. **Sale Points Excel rewrite — reference format (24 Mar 2026)** — `scripts/salepoint_excel.py` fully rewritten to match `raito_salepoints_deep_dive-810ac7ed.xlsx` reference. Key changes: per-customer-group sheets (not per-branch); dark navy 2C3E50 header fill; alternating F8F9F9 rows; FDEDEC Churned / EAFAF1 New row highlights; status font colours (Active=green 27AE60, Churned=red E74C3C, New=blue 2980B9); trend column in 0% format (green/red bold); 17-column structure with precise column widths per sheet type; `_MAAYAN_CHAIN_NORM` dict to normalise inconsistent Ma'ayan chain names before grouping (prevents duplicate "פז יילו"/"פז ילו" sheets).
+62. **Sale Points Excel rewrite — reference format (24 Mar 2026)** — `scripts/salepoint_excel.py` fully rewritten to match `raito_salepoints_deep_dive-810ac7ed.xlsx` reference. Key changes: per-customer-group sheets (not per-branch); dark navy 2C3E50 header fill; alternating F8F9F9 rows; FDEDEC Churned / EAFAF1 Reactivated row highlights; status font colours (Active=green 27AE60, Churned=red E74C3C, Reactivated=blue 2980B9); trend column in 0% format (green/red bold); 17-column structure with precise column widths per sheet type; `_MAAYAN_CHAIN_NORM` dict to normalise inconsistent Ma'ayan chain names before grouping (prevents duplicate "פז יילו"/"פז ילו" sheets).
 63. **Sale Points brand filter (24 Mar 2026)** — Brand filter bar added to Sale Points tab (All Brands / Turbo / Dani's Dream Cake). Implemented via `brandFilter` JS state variable and helper functions `spMatchesBrand(s)`, `spBrandUnits(s)`, `spBrandRev(s)`. Filter gates `getFiltered()`, KPI totals, and per-row unit/revenue display. Apostrophe in "Dani's" requires double-quoted JS string literals — single-quoted strings cause SyntaxError.
 64. **Brand-specific units/revenue for Sale Points (24 Mar 2026)** — When filtering by brand, units and revenue are computed from brand-specific fields only (not total). Turbo: `choc+van+mango+pist` units × ₪13.80. Dani's: `dc` units × ₪81.10. Monthly breakdown columns use proportional fraction `brand_units/total_units` applied to each month's raw count.
 65. **dream_cake_2 now active product (24 Mar 2026)** — `dream_cake_2` (Biscotti-manufactured Dream Cake, GTIN 7290117842973) added to `config.py` as an active product: `PRODUCT_NAMES`, `PRODUCT_SHORT` ("Dream Cake"), `PRODUCT_STATUS` ("active"), `PRODUCT_COLORS` (#C2185B), `FLAVOR_COLORS`, `PRODUCTS_ORDER`, `PRODUCTION_COST` (₪58.0), `SELLING_PRICE_B2B` (₪80.0), `CREATORS` (under Daniel Amit), `BRAND_FILTERS` (in 'ab' and 'danis'). Original `dream_cake` (Piece of Cake) marked as discontinued. Master data export updated with barcode, chilled storage (0-4°C), and Biscotti Chain customer at ₪80/unit.
@@ -665,16 +631,12 @@ Generated by `salepoint_dashboard.py`. Customer summary landing page → click a
 
 108. **Dashboard data source reverted to Excel parsers (29 Mar 2026)** — `_generate_dashboard_html()` in `db_dashboard.py` was using `get_consolidated_data()` (reads `sales_transactions` table in Cloud SQL). Root cause discovered: `sales_transactions` and related Phase-4 tables (`products`, `customers`, `distributors`, `ingestion_batches`) do NOT exist in the live Cloud SQL instance — only `weekly_chart_overrides` and `master_data` exist. Fix: replaced `get_consolidated_data()` with `parsers.consolidate_data()` (Excel-based SSOT). Upload route also simplified: removed `load_caches()` + `load_*_sales()` calls (which also need `products` table). Upload now does: (1) `_copy_to_data_folder()` → copies file to data/ subfolder so parsers pick it up on next cache miss, (2) writes to `weekly_chart_overrides` (for agents), (3) invalidates `_cached_html`. Result: uploading a file → dashboard regenerates from Excel parsers → BO/CC/SP update automatically. Limitation: uploaded files are lost on container restart (next Docker deploy). NEVER re-add `get_consolidated_data()` to `_generate_dashboard_html()` without first verifying that all Phase-4 tables (`sales_transactions`, `ingestion_batches`, `products`, `customers`, `distributors`) exist and are populated in Cloud SQL.
 
-109. **Biscotti W13 integrated — 664 total March units (30 Mar 2026)** — `data/biscotti/week13.xlsx` (543 units, W13, 'סיכום כללי' format) + `daniel_amit_weekly_biscotti.xlsx` (W12: 101u, W13: 20u) = 664 units / ₪53,120 across 14 branches. `_extract_week_overrides()` returns [] for 'סיכום כללי'-only files (no 'שבוע N' sheets) — file IS parsed and copied to data folder, but CC weekly chart array must be updated manually for this format. BO/SP now show 664 Biscotti March units. All three tabs reflect correct totals.
-
-110. **SP "Reactivated" status option removed (30 Mar 2026)** — QA session found a dead `<option value="Reactivated">Reactivated</option>` in the SP tab status dropdown (`salepoint_dashboard.py` lines ~86-93). `business_logic.compute_status` never returns "Reactivated" — the unified 4-status system (Active / New / No Mar order / Churned) was adopted when the SSOT engines were built (decision #93). Selecting "Reactivated" in the old dropdown produced an empty sale points list (no match ever). Option removed from source script and rebuilt.
-
 107. **Mobile responsive v2 — full UX redesign (29 Mar 2026)** — Complete rewrite of mobile CSS after v1 feedback. Key changes: (1) **Mobile header bar** — frosted-glass sticky header with Raito logo, dynamic page title (syncs on tab switch via `mobileTabSync()`), refresh button. (2) **Redesigned bottom tab bar** — 72px height, `env(safe-area-inset-bottom)` for notch phones, pill-shaped `.mtab-icon` containers with indigo highlight on active state, press-scale animation. (3) **Proper sizing** — base font 14px, KPI numbers 20px, labels 10px, card padding 16px, border-radius 16px throughout. (4) **Horizontal-scroll filter bars** — `flex-wrap:nowrap; overflow-x:auto` with hidden scrollbars instead of wrapping chaos. (5) **Touch targets** — minimum 34–36px height on all interactive elements; input fields 16px font to prevent iOS auto-zoom. (6) **UX polish** — scroll-to-top on tab switch, SP KPIs as 2×2 grid with background cards, CC drawer pull handle, modals capped at 85vh. (7) **400px breakpoint** — single-column KPIs + SP KPIs on very small phones. All changes in `scripts/unified_dashboard.py` only. **Rule: Dockerfile is at repo root (`./Dockerfile`), not `deploy/dashboard/Dockerfile`.**
 
 
 ---
 
-## Current Data State (as of March 30, 2026)
+## Current Data State (as of March 28, 2026)
 
 ### Sales
 
@@ -683,12 +645,12 @@ Generated by `salepoint_dashboard.py`. Customer summary landing page → click a
 | Dec '25 | 83,753 | 1,559,374 | 61,739 | 22,014 | 0 |
 | Jan '26 | 51,131 | 1,092,105 | 30,353 | 20,778 | 0 |
 | Feb '26 | 58,331 | 1,084,381 | 43,777 | 14,554 | 0 |
-| Mar '26 (W10-W13) | ~21,123 | ~436,088 | 15,144 | ~5,315 | 664 |
-| **Total** | **~214,338** | **~₪4,171,948** | **151,013** | **~62,661** | **664** |
+| Mar '26 (W10-W13) | ~20,580 | ~392,648 | 15,144 | ~5,315 | 121 |
+| **Total** | **~213,795** | **~₪4,128,508** | **151,013** | **~62,661** | **121** |
 
-> W13 (15/3/2026) added 28 Mar 2026: Icedream 970 units / ₪13,493, all Turbo, no Dani's Dream Cake. Source: `data/icedreams/week13.xlsx`. Ma'ayan W13 not yet received. Biscotti total (W12+W13): 664 units / ₪53,120 across 14 branches — `daniel_amit_weekly_biscotti.xlsx` (W12: 101u, W13: 20u) + `data/biscotti/week13.xlsx` (W13: 543u, 'סיכום כללי' format). Biscotti weekly overrides not extractable from 'סיכום כללי'-only files; CC weekly chart requires manual array update for this format.
+> W13 (15/3/2026) added 28 Mar 2026: Icedream 970 units / ₪13,493, all Turbo, no Dani's Dream Cake. Source: `data/icedreams/week13.xlsx`. Ma'ayan W13 not yet received. Biscotti first data: 121 units of Dream Cake across 9 branches, `daniel_amit_weekly_biscotti.xlsx`.
 
-**Cross-tab parity snapshot (28 Mar 2026, pre-Biscotti W13):** BO=₪4,010,667 | CC=₪4,018,097 | SP=₪4,010,622 | BO↔SP gap ₪45 (0.00%) | BO↔CC gap ₪7,430 (0.18%) — all within acceptable thresholds. ⚠️ Biscotti W13 (543 units / ₪43,440) was integrated 30 Mar 2026 — parity re-check pending.
+**Cross-tab parity snapshot (28 Mar 2026):** BO=₪4,010,667 | CC=₪4,018,097 | SP=₪4,010,622 | BO↔SP gap ₪45 (0.00%) | BO↔CC gap ₪7,430 (0.18%) — all within acceptable thresholds.
 
 ### Inventory Snapshot (24/03/2026)
 
@@ -772,10 +734,10 @@ Icedream reports use negative quantities for sales and positive for returns. Alw
 
 | Item | Status | Owner |
 |---|---|---|
-| Biscotti parser (`parse_all_biscotti`) | ✅ Live — 664 units (W12+W13, Mar 2026), 14 branches. Integrated into SP tab + Excel. 'סיכום כללי'-only files require manual CC weekly array update. | Done |
+| Biscotti parser (`parse_all_biscotti`) | ✅ First data parsed (121 units, Mar 2026). Integrated into SP tab + Excel. | Done |
 | Din Shiwuk / Turbo Nuts integration | Not started — no barcodes/prices yet | Waiting on product data |
 | Ma'ayan W10+W11 data | ✅ Received and integrated (`maayan_sales_week_10_11.xlsx`) | Done |
-| Dream Cake Biscotti launch | Live: 664 units / ₪53,120 (Mar W12+W13, 14 branches). Formal launch 10 Apr 2026 | On track |
+| Dream Cake Biscotti launch | Early sales started Mar 2026 (121 units). Formal launch 10 Apr 2026 | On track |
 | ינגו דלי (Dani's) pricing | Showing ₪150/unit vs expected ₪81.2 | Under investigation |
 | December credits verification | Large returns from שטרית/ארומה/דור אלון הנשיא | Awaiting Ma'ayan response |
 
@@ -786,10 +748,10 @@ Icedream reports use negative quantities for sales and positive for returns. Alw
 **Current source:** `scripts/cc_dashboard.py` (fully dynamic Python generator — old HTML source file `dashboards/customer centric dashboard 11.3.26.html` is legacy/unused since 25 Mar 2026).
 All customer data (revenue, units, margins) computed dynamically from `consolidate_data()` output — same pipeline as BO tab. Zero hardcoded price literals or static customer totals.
 
-**Current state (30 Mar 2026):**
-- Sales Data: Dec 2025 | Jan 2026 | Feb 2026 | Mar 2026 (W10-W13) — all dynamic
-- Weekly Data: W1–W13 (28/12/2025 – 22/3/2026), rolling 10-week window (`WEEKLY_WINDOW = 10`) — weekly arrays still hardcoded in `cc_dashboard.py`
-- Active Distributors: Icedream | Ma'ayan | Biscotti (live — 14 branches, 664 units Mar 2026 W12+W13)
+**Current state (25 Mar 2026):**
+- Sales Data: Dec 2025 | Jan 2026 | Feb 2026 | Mar 2026 (W10-W12) — all dynamic
+- Weekly Data: W1–W12 (28/12/2025 – 15/3/2026), rolling 10-week window (`WEEKLY_WINDOW = 10`) — weekly arrays still hardcoded in `cc_dashboard.py`
+- Active Distributors: Icedream | Ma'ayan | Biscotti (live — 9 branches, 121 units Mar 2026)
 - Default View: Year 2026 | All Months | All customers | All brands
 - KPI year filter: active — "All Months '26" shows Jan+Feb+Mar only (Dec '25 excluded)
 
@@ -807,7 +769,7 @@ All customer data (revenue, units, margins) computed dynamically from `consolida
 - Combined revenue: ₪21,831 | units: 725
 - Turbo: ₪7,803 / 602 units | Dream Cake: ₪14,028 / 123 units
 
-**March active customers (W10-W13, Icedream):**
+**March active customers (W10-W12, Icedream):**
 - וולט מרקט: 2,077 units / ₪78,278 (W12 only — 28 branches, major expansion)
 - ינגו דלי: 1,018 units / ₪35,037 (W10: 445u | W12: 573u)
 - דומינוס: 472 units / ₪5,407 (W10: 164u | W11: 148u | W12: 160u)

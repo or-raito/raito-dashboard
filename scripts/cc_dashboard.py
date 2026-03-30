@@ -1950,9 +1950,9 @@ const _maayWkUnits = { 6: 9812,   7: 7700,   8: 17399,  9: 8866,   10: 7204,  11
 // Biscotti weekly — source: daniel_amit_weekly_biscotti.xlsx (24/3/2026)
 // Dream Cake (dream_cake_2) only. Sale price ₪80/unit, 0% commission.
 // W12 (18/3–21/3) = Biscotti "שבוע 1": 101 units × ₪80 = ₪8,080
-// W13 (22/3–27/3) = Biscotti "שבוע 2": 543 units (week13.xlsx new format) + 20 units (22/3 daniel_amit) = 563 units × ₪80 = ₪45,040
-const _biscWkRev   = { 12: 8080, 13: 45040 };
-const _biscWkUnits = { 12: 101,  13: 563   };
+// W13 (22/3–27/3) = Biscotti "שבוע 2": 20 units × ₪80 = ₪1,600 (partial: only 22/3 data)
+const _biscWkRev   = { 12: 8080, 13: 1600 };
+const _biscWkUnits = { 12: 101,  13: 20   };
 
 // ── WEEKLY CHART ─────────────────────────────────────────────────────────────
 let _weeklyMode = 'rev';
