@@ -87,10 +87,107 @@ def detect_month_from_sheet(ws):
 
 # ── Icedreams Parser ─────────────────────────────────────────────────────
 
+def _icedream_week_to_month(week_num: int, year: int = 2026) -> str:
+    """Map an Icedream week number to a month string.
+
+    Uses Jan 1 as the base (week 1 starts Jan 1).  Weeks 10-13 → March 2026, etc.
+    """
+    from datetime import date, timedelta
+    base = date(year, 1, 1)
+    week_start = base + timedelta(weeks=week_num - 1)
+    month_map = {
+        (1, 2026): 'January 2026', (2, 2026): 'February 2026',
+        (3, 2026): 'March 2026',   (4, 2026): 'April 2026',
+        (5, 2026): 'May 2026',     (12, 2025): 'December 2025',
+    }
+    return month_map.get((week_start.month, week_start.year),
+                         f'{week_start.month}/{week_start.year}')
+
+
+def _parse_icedreams_compact(ws, wb):
+    """Parse an Icedream compact weekly XLSX (cols: A=account, B=item, C=qty, D=value).
+
+    This format is used for week13.xlsx and similar single-week exports.  Row 1 carries
+    the week label (e.g. 'שבוע 13 2026' in col D), row 2 is the column-header row.
+    Data starts at row 3.
+    """
+    # Detect month from the week label in D1
+    header_text = str(ws.cell(row=1, column=4).value or '')
+    month = None
+    m = re.search(r'שבוע\s+(\d+)\s+(\d{4})', header_text)
+    if m:
+        month = _icedream_week_to_month(int(m.group(1)), int(m.group(2)))
+    if not month:
+        month = detect_month_from_sheet(ws) or 'Unknown'
+
+    data = {'month': month, 'by_customer': {}, 'totals': {}}
+    current_account = None
+
+    for row_idx in range(3, ws.max_row + 1):
+        col_a = ws.cell(row=row_idx, column=1).value
+        col_b = ws.cell(row=row_idx, column=2).value
+        col_c = ws.cell(row=row_idx, column=3).value  # quantity
+        col_d = ws.cell(row=row_idx, column=4).value  # value
+
+        # New account block starts when col A is non-empty
+        if col_a is not None:
+            account_raw = str(col_a).strip()
+            # Strip the delivery-type suffix (e.g. '*...*ת.משלוח')
+            account_raw = re.sub(r'\*ת\.\s*משלוח$', '', account_raw).strip('* ')
+            current_account = account_raw or current_account
+
+        item_name = str(col_b).strip() if col_b else ''
+        if not item_name or 'סה"כ' in item_name or item_name == 'שם פריט':
+            continue  # skip header / subtotal rows
+
+        if col_c is None or not isinstance(col_c, (int, float)):
+            continue
+
+        product = _validated_product(classify_product(item_name))
+        if not product:
+            continue
+
+        upc = extract_units_per_carton(item_name)
+        raw_qty = float(col_c)
+        sign = -1 if raw_qty < 0 else 1   # negative in report = outgoing (sales)
+        cartons = abs(raw_qty)
+        units = round(cartons * upc) * sign * -1   # flip to positive sales
+        # col_d is negative for sales (same sign as col_c) → negate to get positive revenue
+        value = -float(col_d) if isinstance(col_d, (int, float)) else 0
+
+        if product not in data['totals']:
+            data['totals'][product] = {'units': 0, 'value': 0, 'cartons': 0}
+        data['totals'][product]['units'] += units
+        data['totals'][product]['value'] += value
+        data['totals'][product]['cartons'] += cartons * sign * -1
+
+        if current_account:
+            if current_account not in data['by_customer']:
+                data['by_customer'][current_account] = {}
+            if product not in data['by_customer'][current_account]:
+                data['by_customer'][current_account][product] = {'units': 0, 'value': 0, 'cartons': 0}
+            data['by_customer'][current_account][product]['units'] += units
+            data['by_customer'][current_account][product]['value'] += value
+            data['by_customer'][current_account][product]['cartons'] += cartons * sign * -1
+
+    wb.close()
+    return data
+
+
 def parse_icedreams_file(filepath):
-    """Parse a single Icedreams monthly report."""
+    """Parse a single Icedreams monthly report.
+
+    Supports two layouts:
+    - Classic monthly (cols D=item, E=value, F=qty; bold col-A rows = customer)
+    - Compact weekly  (cols A=account, B=item, C=qty, D=value; header row 2 = 'שם חשבון')
+    """
     wb = load_workbook(filepath)
     ws = wb[wb.sheetnames[0]]
+
+    # Detect compact weekly format: row 2, col A = 'שם חשבון'
+    if str(ws.cell(row=2, column=1).value or '').strip() == 'שם חשבון':
+        return _parse_icedreams_compact(ws, wb)
+
     month = detect_month_from_sheet(ws)
     if not month:
         month = ws.title if ws.title else 'Unknown'
