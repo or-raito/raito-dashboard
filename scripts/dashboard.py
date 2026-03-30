@@ -659,9 +659,10 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
                         cust_units[chain] = cust_units.get(chain, 0) + u
                 # Biscotti customers (sum across all products in the filter)
                 for cust, pdata in md.get('biscotti_customers', {}).items():
+                    chain = extract_customer_name(cust)
                     u = sum((pdata.get(pp) or {}).get('units', 0) for pp in products_order)
                     if u > 0:
-                        cust_units[cust] = cust_units.get(cust, 0) + u
+                        cust_units[chain] = cust_units.get(chain, 0) + u
 
             donut_data = sorted(cust_units.items(), key=lambda x: x[1], reverse=True)
             top_n = donut_data[:10]
@@ -967,9 +968,10 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
                 if u > 0:
                     cust_units[chain] = cust_units.get(chain, 0) + u
             for cust, pdata in md.get('biscotti_customers', {}).items():
+                chain = extract_customer_name(cust)
                 u = sum((pdata.get(pp) or {}).get('units', 0) for pp in products_order)
                 if u > 0:
-                    cust_units[cust] = cust_units.get(cust, 0) + u
+                    cust_units[chain] = cust_units.get(chain, 0) + u
 
             cust_sorted_donut = sorted(cust_units.items(), key=lambda x: x[1], reverse=True)
             top_n = cust_sorted_donut[:10]
@@ -1132,11 +1134,12 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
 
         # Biscotti customers
         for cust, pdata in md.get('biscotti_customers', {}).items():
-            if cust not in cust_flavor:
-                cust_flavor[cust] = {}
+            chain = extract_customer_name(cust)
+            if chain not in cust_flavor:
+                cust_flavor[chain] = {}
             for p in flavor_products:
                 u = pdata.get(p, {}).get('units', 0) if isinstance(pdata.get(p), dict) else 0
-                cust_flavor[cust][p] = cust_flavor[cust].get(p, 0) + u
+                cust_flavor[chain][p] = cust_flavor[chain].get(p, 0) + u
 
         # Filter out zero-total customers, sort by total desc
         cust_totals = {c: sum(pvals.values()) for c, pvals in cust_flavor.items()}
@@ -1587,7 +1590,7 @@ def _build_month_section(data, month_list, section_id, active_products):
             k = f"Ma'ayan: {norm}"
             all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products if isinstance(pd.get(p), dict))
         for cust, pd in md.get('biscotti_customers', {}).items():
-            k = f"Biscotti: {cust}"
+            k = f"Biscotti: {extract_customer_name(cust)}"
             all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products if isinstance(pd.get(p), dict))
     all_c = {k: v for k, v in all_c.items() if v > 0}
     tc_list = sorted(all_c.items(), key=lambda x: x[1], reverse=True)[:10]
