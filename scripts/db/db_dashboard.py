@@ -1021,17 +1021,7 @@ def api_delete(entity, pk):
 def api_portfolio():
     try:
         _md_ensure_table()
-        # portfolio is stored as its own row; if missing, compute it
-        conn = _md_conn()
-        try:
-            cur = conn.cursor()
-            cur.execute("SELECT data FROM master_data WHERE entity = 'portfolio'")
-            row = cur.fetchone()
-        finally:
-            conn.close()
-        if row:
-            return jsonify(row[0])
-        # Compute and store
+        # Always rebuild fresh — computation is fast and avoids stale cache
         md = _md_read_all()
         _md_rebuild_portfolio(md)
         return jsonify(md.get('portfolio', {}))
