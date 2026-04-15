@@ -24,16 +24,68 @@ def build_salepoint_tab(data):
     turbo_b2b = get_b2b_price_safe('chocolate')
     dc_b2b = get_b2b_price_safe('dream_cake_2')
 
+    # Generate dynamic month arrays from registry
+    from config import ALL_MONTH_KEYS, _MONTH_REGISTRY, get_active_months
+    sp_all_month_keys_js = json.dumps(ALL_MONTH_KEYS)
+    sp_mon_labels_js = json.dumps([m[2].split()[0] for m in _MONTH_REGISTRY])
+    sp_period_options = '\n      '.join(
+        f'<option value="{m[1]}">{m[2]}</option>' for m in _MONTH_REGISTRY
+    )
+
+    # Dynamic HTML table headers for month columns
+    sp_summary_month_ths = ''.join(
+        f'<th class="sp-mc sp-mc-{m[1]}">{m[2].split()[0]}</th>'
+        for m in _MONTH_REGISTRY
+    )
+    sp_detail_month_ths = ''.join(
+        f'<th onclick="spSort({i+2})" class="sp-mc sp-mc-{m[1]}">{m[2].split()[0]}</th>'
+        for i, m in enumerate(_MONTH_REGISTRY)
+    )
+    n_months = len(_MONTH_REGISTRY)
+    sp_detail_post_ths = (
+        f'<th onclick="spSort({n_months+2})">Total</th>\n'
+        f'            <th onclick="spSort({n_months+3})">Months Active</th>\n'
+        f'            <th onclick="spSort({n_months+4})">Trend</th>\n'
+        f'            <th onclick="spSort({n_months+5})">Status</th>\n'
+        f'            <th onclick="spSort({n_months+6})">Choc</th>\n'
+        f'            <th onclick="spSort({n_months+7})">Van</th>\n'
+        f'            <th onclick="spSort({n_months+8})">Mango</th>\n'
+        f'            <th onclick="spSort({n_months+9})">Pist</th>\n'
+        f'            <th onclick="spSort({n_months+10})">DC</th>'
+    )
+
+    # Dynamic labels for status references
+    _active_months = get_active_months()
+    _last_active = _active_months[-1] if _active_months else _MONTH_REGISTRY[-1]
+    _prev_active = _active_months[-2] if len(_active_months) >= 2 else _active_months[0]
+    sp_last_month_label = _last_active[2].split()[0]   # e.g. 'Apr'
+    sp_prev_month_label = _prev_active[2].split()[0]   # e.g. 'Mar'
+    sp_no_order_label = f'No {sp_last_month_label} order'
+    sp_active_label = f'Active ({sp_prev_month_label}→{sp_last_month_label})'
+    # Last two active month keys for the "active" KPI count in JS
+    sp_prev_month_key = _prev_active[1]
+    sp_last_month_key = _last_active[1]
+
     return f"""
 <style>{_css()}</style>
 <div id="sp-app">
 
-  <!-- Brand filter bar — persists across both views -->
+  <!-- Filter bar — persists across both views -->
   <div id="sp-brand-bar">
     <span class="sp-brand-label">Brand</span>
     <button class="sp-brand-btn sp-brand-active" id="spb-all"   onclick="spSetBrand('all')">All Brands</button>
     <button class="sp-brand-btn"                 id="spb-turbo" onclick="spSetBrand('turbo')">Turbo</button>
     <button class="sp-brand-btn"                 id="spb-danis" onclick="spSetBrand('danis')">Dani's Dream Cake</button>
+    <span class="sp-brand-label" style="margin-left:18px">Distributor</span>
+    <button class="sp-brand-btn sp-brand-active" id="spd-all"   onclick="spSetDist('all')">All</button>
+    <button class="sp-brand-btn"                 id="spd-ice"   onclick="spSetDist('Icedream')">Icedream</button>
+    <button class="sp-brand-btn"                 id="spd-may"   onclick="spSetDist('Ma\\'ayan')">Ma'ayan</button>
+    <button class="sp-brand-btn"                 id="spd-bis"   onclick="spSetDist('Biscotti')">Biscotti</button>
+    <span class="sp-brand-label" style="margin-left:18px">Period</span>
+    <select id="sp-period-filter" onchange="spSetPeriod(this.value)" style="padding:6px 12px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer">
+      <option value="all">All Months</option>
+      {sp_period_options}
+    </select>
   </div>
 
   <!-- Landing: Customer Summary -->
@@ -52,7 +104,7 @@ def build_salepoint_tab(data):
         <thead>
           <tr>
             <th>#</th><th class="sp-col-name">Customer</th><th class="sp-col-name">Distributor</th><th>Sale Points</th>
-            <th>Dec</th><th>Jan</th><th>Feb</th><th>Mar</th>
+            {sp_summary_month_ths}
             <th>Total Units</th><th>Total Revenue</th>
           </tr>
         </thead>
@@ -78,7 +130,7 @@ def build_salepoint_tab(data):
         <div class="sp-kpi"><span class="sp-kpi-n" id="sp-d-sp">-</span><span class="sp-kpi-l">Sale Points</span></div>
         <div class="sp-kpi"><span class="sp-kpi-n" id="sp-d-units">-</span><span class="sp-kpi-l">Total Units</span></div>
         <div class="sp-kpi"><span class="sp-kpi-n" id="sp-d-rev">-</span><span class="sp-kpi-l">Revenue</span></div>
-        <div class="sp-kpi"><span class="sp-kpi-n" id="sp-d-active">-</span><span class="sp-kpi-l">Active (Feb→Mar)</span></div>
+        <div class="sp-kpi"><span class="sp-kpi-n" id="sp-d-active">-</span><span class="sp-kpi-l">{sp_active_label}</span></div>
       </div>
     </div>
     <div class="sp-toolbar">
@@ -87,7 +139,7 @@ def build_salepoint_tab(data):
         <option value="">All Statuses</option>
         <option value="Active">Active</option>
         <option value="Churned">Churned</option>
-        <option value="No Mar order">No Mar order</option>
+        <option value="{sp_no_order_label}">{sp_no_order_label}</option>
         <option value="Reactivated">Reactivated</option>
         <option value="New">New</option>
       </select>
@@ -99,19 +151,8 @@ def build_salepoint_tab(data):
           <tr>
             <th onclick="spSort(0)">#</th>
             <th onclick="spSort(1)" class="sp-col-name">Sale Point</th>
-            <th onclick="spSort(2)">Dec</th>
-            <th onclick="spSort(3)">Jan</th>
-            <th onclick="spSort(4)">Feb</th>
-            <th onclick="spSort(5)">Mar</th>
-            <th onclick="spSort(6)">Total</th>
-            <th onclick="spSort(7)">Months Active</th>
-            <th onclick="spSort(8)">Trend</th>
-            <th onclick="spSort(9)">Status</th>
-            <th onclick="spSort(10)">Choc</th>
-            <th onclick="spSort(11)">Van</th>
-            <th onclick="spSort(12)">Mango</th>
-            <th onclick="spSort(13)">Pist</th>
-            <th onclick="spSort(14)">DC</th>
+            {sp_detail_month_ths}
+            {sp_detail_post_ths}
           </tr>
         </thead>
         <tbody id="sp-detail-body"></tbody>
@@ -122,11 +163,15 @@ def build_salepoint_tab(data):
 
 <script>
 window.__SP_DATA__ = {sp_json};
+window.__SP_MONTHS__ = {sp_all_month_keys_js};
+window.__SP_MON_LABELS__ = {sp_mon_labels_js};
 (function() {{
   var D = window.__SP_DATA__;
   var currentCustomer = null;
   var sortCol = -1, sortAsc = true;
   var brandFilter = 'all';
+  var distFilter = 'all';
+  var periodFilter = 'all';
 
   // ── Brand helpers ──
   function spMatchesBrand(s) {{
@@ -149,28 +194,50 @@ window.__SP_DATA__ = {sp_json};
     if (brandFilter === 'danis') return s.dc * _DC_B2B;
     return s.rev;
   }}
-  function cHasBrand(c) {{
+  function cMatchesDist(c) {{
+    if (distFilter === 'all') return true;
+    return c.distributor === distFilter;
+  }}
+  function cHasFilters(c) {{
+    if (!cMatchesDist(c)) return false;
     if (brandFilter === 'all') return true;
     return c.salepoints.some(spMatchesBrand);
   }}
+  // Period-aware unit accessor: returns total or just selected month's units
+  function spPeriodUnits(s) {{
+    if (periodFilter === 'all') return s.total;
+    return s[periodFilter] || 0;
+  }}
+  var months = {sp_all_month_keys_js};
   function cBrandUnits(c) {{
     // Return brand-specific totals for the customer summary row
-    if (brandFilter === 'all') return {{ dec: c.dec, jan: c.jan, feb: c.feb, mar: c.mar, total: c.total_units, rev: c.total_revenue, sp: c.salepoint_count }};
-    var dec=0, jan=0, feb=0, mar=0, total=0, rev=0, sp=0;
+    if (brandFilter === 'all' && periodFilter === 'all') {{
+      var obj = {{ total: c.total_units, rev: c.total_revenue, sp: c.salepoint_count }};
+      months.forEach(function(m) {{ obj[m] = c[m] || 0; }});
+      return obj;
+    }}
+    var mt = {{}};
+    months.forEach(function(m) {{ mt[m] = 0; }});
+    var total=0, rev=0, sp=0;
     c.salepoints.forEach(function(s) {{
       if (!spMatchesBrand(s)) return;
+      if (periodFilter !== 'all' && !(s[periodFilter] > 0)) return;
       var bu = spBrandUnits(s);
-      // Distribute monthly units proportionally by brand share
       var frac = s.total > 0 ? bu / s.total : 0;
-      dec   += Math.round(s.dec * frac);
-      jan   += Math.round(s.jan * frac);
-      feb   += Math.round(s.feb * frac);
-      mar   += Math.round(s.mar * frac);
-      total += bu;
-      rev   += spBrandRev(s);
+      months.forEach(function(m) {{ mt[m] += Math.round((s[m]||0) * frac); }});
       sp++;
+      if (periodFilter !== 'all') {{
+        var pUnits = Math.round((s[periodFilter] || 0) * frac);
+        total += pUnits;
+        rev   += s.total > 0 ? spBrandRev(s) * (s[periodFilter] / s.total) : 0;
+      }} else {{
+        total += bu;
+        rev   += spBrandRev(s);
+      }}
     }});
-    return {{ dec: dec, jan: jan, feb: feb, mar: mar, total: total, rev: rev, sp: sp }};
+    rev = Math.round(rev);
+    mt.total = total; mt.rev = rev; mt.sp = sp;
+    return mt;
   }}
 
   // ── Set brand filter ──
@@ -186,9 +253,46 @@ window.__SP_DATA__ = {sp_json};
     }}
   }};
 
+  // ── Set distributor filter ──
+  window.spSetDist = function(d) {{
+    distFilter = d;
+    var dmap = {{'all':'all','Icedream':'ice',"Ma'ayan":'may','Biscotti':'bis'}};
+    ['all','ice','may','bis'].forEach(function(id) {{
+      document.getElementById('spd-' + id).classList.toggle('sp-brand-active', dmap[d] === id);
+    }});
+    if (currentCustomer) {{
+      // If viewing a customer that doesn't match new filter, go back to summary
+      if (!cMatchesDist(currentCustomer)) {{
+        spBack();
+      }} else {{
+        renderDetailFiltered();
+      }}
+    }}
+    renderSummary();
+  }};
+
+  // ── Show/hide month columns based on period filter ──
+  function spApplyMonthColumns() {{
+    months.forEach(function(m) {{
+      var vis = (periodFilter === 'all' || periodFilter === m) ? '' : 'none';
+      document.querySelectorAll('.sp-mc-' + m).forEach(function(el) {{ el.style.display = vis; }});
+    }});
+  }}
+
+  // ── Set period filter ──
+  window.spSetPeriod = function(p) {{
+    periodFilter = p;
+    if (currentCustomer) {{
+      renderDetailFiltered();
+    }} else {{
+      renderSummary();
+    }}
+    spApplyMonthColumns();
+  }};
+
   // ── Render Summary (landing page) ──
   function renderSummary() {{
-    var filtered = D.customers.filter(cHasBrand);
+    var filtered = D.customers.filter(cHasFilters);
     var totSP = 0, totUnits = 0, totRev = 0;
     filtered.forEach(function(c) {{
       var bu = cBrandUnits(c);
@@ -208,19 +312,20 @@ window.__SP_DATA__ = {sp_json};
       // Find original index for spOpen
       var origIdx = D.customers.indexOf(c);
       tr.onclick = function() {{ spOpen(origIdx); }};
+      var mCells = months.map(function(m) {{
+        return '<td class="sp-mc sp-mc-' + m + '">' + fmtN(bu[m]||0) + '</td>';
+      }}).join('');
       tr.innerHTML =
         '<td>' + (i+1) + '</td>' +
         '<td class="sp-col-name">' + esc(c.name) + '</td>' +
         '<td><span class="sp-dist sp-dist-' + (c.distributor === "Icedream" ? 'ice' : c.distributor === "Biscotti" ? 'bis' : 'may') + '">' + esc(c.distributor) + '</span></td>' +
         '<td>' + bu.sp + '</td>' +
-        '<td>' + fmtN(bu.dec) + '</td>' +
-        '<td>' + fmtN(bu.jan) + '</td>' +
-        '<td>' + fmtN(bu.feb) + '</td>' +
-        '<td>' + fmtN(bu.mar) + '</td>' +
+        mCells +
         '<td class="sp-bold">' + fmtN(bu.total) + '</td>' +
         '<td>₪' + fmtN(bu.rev) + '</td>';
       tb.appendChild(tr);
     }});
+    spApplyMonthColumns();
   }}
 
   // ── Open customer detail ──
@@ -237,10 +342,17 @@ window.__SP_DATA__ = {sp_json};
 
   function renderDetailFiltered() {{
     var sps = currentCustomer.salepoints.filter(spMatchesBrand);
+    if (periodFilter !== 'all') sps = sps.filter(function(s){{ return (s[periodFilter] || 0) > 0; }});
     var spCount = sps.length;
-    var units = sps.reduce(function(a,x){{return a+spBrandUnits(x);}}, 0);
-    var rev   = sps.reduce(function(a,x){{return a+spBrandRev(x);}},   0);
-    var active = sps.filter(function(s){{ return s.feb > 0 && s.mar > 0; }}).length;
+    var units = sps.reduce(function(a,x){{return a+spPeriodUnits(x);}}, 0);
+    var rev   = sps.reduce(function(a,x){{
+      if (periodFilter !== 'all') {{
+        return a + (x.total > 0 ? spBrandRev(x) * (x[periodFilter] / x.total) : 0);
+      }}
+      return a+spBrandRev(x);
+    }},   0);
+    rev = Math.round(rev);
+    var active = sps.filter(function(s){{ return (s['{sp_prev_month_key}']||0) > 0 && (s['{sp_last_month_key}']||0) > 0; }}).length;
     var brandLabel = brandFilter === 'all' ? '' : (brandFilter === 'turbo' ? ' · Turbo' : " · Dani's Dream Cake");
     document.getElementById('sp-detail-sub').textContent =
       currentCustomer.distributor + (currentCustomer.parent ? ' · ' + currentCustomer.parent : '') +
@@ -268,14 +380,14 @@ window.__SP_DATA__ = {sp_json};
       var tr = document.createElement('tr');
       var trendHtml = s.trend !== null ? ((s.trend >= 0 ? '<span class="sp-up">+' : '<span class="sp-down">') + s.trend + '%</span>') : '<span class="sp-na">—</span>';
       var statusCls = 'sp-st-' + s.status.toLowerCase().replace(/[^a-z]/g, '');
+      var dCells = months.map(function(m) {{
+        return '<td class="sp-mc sp-mc-' + m + '">' + fmtN(s[m]||0) + '</td>';
+      }}).join('');
       tr.innerHTML =
         '<td>' + (i+1) + '</td>' +
         '<td class="sp-col-name">' + esc(s.name) + '</td>' +
-        '<td>' + fmtN(s.dec) + '</td>' +
-        '<td>' + fmtN(s.jan) + '</td>' +
-        '<td>' + fmtN(s.feb) + '</td>' +
-        '<td>' + fmtN(s.mar) + '</td>' +
-        '<td class="sp-bold">' + fmtN(spBrandUnits(s)) + '</td>' +
+        dCells +
+        '<td class="sp-bold">' + fmtN(spPeriodUnits(s)) + '</td>' +
         '<td>' + s.months_active + '</td>' +
         '<td>' + trendHtml + '</td>' +
         '<td><span class="sp-status ' + statusCls + '">' + esc(s.status) + '</span></td>' +
@@ -286,13 +398,14 @@ window.__SP_DATA__ = {sp_json};
         '<td>' + fmtN(s.dc) + '</td>';
       tb.appendChild(tr);
     }});
+    spApplyMonthColumns();
   }}
 
   // ── Sort ──
   window.spSort = function(col) {{
     if (!currentCustomer) return;
     if (sortCol === col) sortAsc = !sortAsc; else {{ sortCol = col; sortAsc = true; }}
-    var keys = ['_i','name','dec','jan','feb','mar','total','months_active','trend','status','choc','van','mango','pist','dc'];
+    var keys = ['_i','name'].concat({sp_all_month_keys_js}).concat(['total','months_active','trend','status','choc','van','mango','pist','dc']);
     var key = keys[col];
     var arr = getFiltered();
     arr.sort(function(a,b) {{
@@ -314,6 +427,7 @@ window.__SP_DATA__ = {sp_json};
     var st = document.getElementById('sp-status-filter').value;
     return currentCustomer.salepoints.filter(function(s) {{
       if (!spMatchesBrand(s)) return false;
+      if (periodFilter !== 'all' && !(s[periodFilter] > 0)) return false;
       if (q && s.name.toLowerCase().indexOf(q) < 0) return false;
       if (st && s.status !== st) return false;
       return true;
@@ -337,7 +451,8 @@ def _extract(data):
     Pricing: All prices sourced from pricing_engine (no hardcoded literals).
     Status/Trend: Pre-computed via business_logic (Option A — Python-side only).
     """
-    months = ['December 2025', 'January 2026', 'February 2026', 'March 2026']
+    from config import CHART_MONTHS
+    months = CHART_MONTHS
     # Collect per-customer, per-branch data — same grouping as the Excel
     # For Ma'ayan: group by normalized chain. Each account = one sale point.
     # For Icedream: group by normalized chain. Each customer entry = one sale point.
@@ -382,9 +497,25 @@ def _extract(data):
                         b['rev'] += u * price
                         b['flav'][prod] = b['flav'].get(prod, 0) + u
 
-        # Biscotti customers (direct distribution — all branches grouped under "Biscotti Customer")
+        # Biscotti customers — route each branch to its real customer name
+        _BISCOTTI_SP_CUSTOMER = [
+            ('וולט מרקט',   'Wolt Market'),
+            ('חוות נעמי',   "Naomi's Farm"),
+            ('חן כרמלה',    'Carmella'),
+            ('כרמלה',       'Carmella'),
+            ('מתילדה יהוד', 'Matilda Yehud'),
+            ('דלישס',       'Delicious RL'),
+        ]
+
+        def _resolve_biscotti_sp_customer(branch_name):
+            for prefix, cust in _BISCOTTI_SP_CUSTOMER:
+                if branch_name.startswith(prefix):
+                    return cust
+            return 'Biscotti Customer'  # fallback for unrecognised branches
+
         for branch, pdata in md.get('biscotti_customers', {}).items():
-            key = ('Biscotti', 'Biscotti Customer')
+            cust_name = _resolve_biscotti_sp_customer(branch)
+            key = ('Biscotti', cust_name)
             if key not in customers:
                 customers[key] = {'parent': 'Biscotti', 'branches': {}}
             if branch not in customers[key]['branches']:
@@ -399,7 +530,46 @@ def _extract(data):
                         b['rev'] += u * price
                         b['flav'][prod] = b['flav'].get(prod, 0) + u
 
-    # Build output matching Excel columns
+    # ── SP Dedup: merge same sale point appearing under different distributors ──
+    # Build index: branch_name → list of (dist, norm, key) where it appears
+    from collections import defaultdict
+    branch_index = defaultdict(list)  # {branch_name: [(key, dist), ...]}
+    for (dist, norm), cinfo in customers.items():
+        for bname in cinfo['branches']:
+            branch_index[bname].append(((dist, norm), dist))
+
+    # For branches appearing under multiple distributors, merge into first key
+    # and record combined distributor name
+    _sp_distributor_names = {}  # {branch_name: "Dist1 + Dist2"}
+    for bname, entries in branch_index.items():
+        if len(entries) <= 1:
+            continue
+        # Sort so the merge target is deterministic (alphabetical by dist name)
+        entries.sort(key=lambda e: e[1])
+        target_key = entries[0][0]
+        combined_dists = ' + '.join(sorted(set(e[1] for e in entries)))
+        _sp_distributor_names[bname] = combined_dists
+        # Merge all non-target entries into target
+        for src_key, _ in entries[1:]:
+            src_branches = customers[src_key]['branches']
+            if bname not in src_branches:
+                continue
+            src_months = src_branches.pop(bname)
+            tgt_months = customers[target_key]['branches'].setdefault(
+                bname, {mo: {'units': 0, 'rev': 0, 'flav': {}} for mo in months}
+            )
+            for mo in months:
+                tgt_months[mo]['units'] += src_months[mo]['units']
+                tgt_months[mo]['rev'] += src_months[mo]['rev']
+                for fl, fu in src_months[mo]['flav'].items():
+                    tgt_months[mo]['flav'][fl] = tgt_months[mo]['flav'].get(fl, 0) + fu
+
+    # Build output matching Excel columns — fully dynamic from MONTH_REGISTRY
+    from config import MONTH_KEYS, ALL_MONTH_KEYS, get_active_month_keys
+    month_key_map = MONTH_KEYS  # full_name → short_key
+    all_mk = ALL_MONTH_KEYS     # ordered short keys
+    active_mk = get_active_month_keys()  # months up to today (for status/trend)
+
     result_customers = []
     total_sp = 0
     total_units = 0
@@ -408,16 +578,18 @@ def _extract(data):
     for (dist, norm), cinfo in customers.items():
         branches = cinfo['branches']
         sp_list = []
-        cust_dec = cust_jan = cust_feb = cust_mar = 0
+        cust_month_totals = {mk: 0 for mk in all_mk}
         cust_units = 0
         cust_rev = 0
 
         for bname, bmonths in branches.items():
-            dec_u = bmonths['December 2025']['units']
-            jan_u = bmonths['January 2026']['units']
-            feb_u = bmonths['February 2026']['units']
-            mar_u = bmonths['March 2026']['units']
-            tot = dec_u + jan_u + feb_u + mar_u
+            # Extract units per month key dynamically
+            month_units = {}
+            for full_name in months:
+                mk = month_key_map.get(full_name)
+                if mk:
+                    month_units[mk] = bmonths[full_name]['units']
+            tot = sum(month_units.values())
             rev = sum(bmonths[m]['rev'] for m in months)
 
             if tot == 0:
@@ -431,9 +603,11 @@ def _extract(data):
 
             # Build sale-point dict, then enrich with status/trend/months_active
             # from the canonical business_logic engine (Option A: pre-compute)
+            sp_dist_label = _sp_distributor_names.get(bname, dist)
             sp_entry = {
                 'name': bname,
-                'dec': dec_u, 'jan': jan_u, 'feb': feb_u, 'mar': mar_u,
+                'distributor': sp_dist_label,
+                **month_units,
                 'total': tot,
                 'choc': flav.get('chocolate', 0),
                 'van': flav.get('vanilla', 0),
@@ -442,13 +616,11 @@ def _extract(data):
                 'dc': flav.get('dream_cake', 0) + flav.get('dream_cake_2', 0),
                 'rev': round(rev),
             }
-            enrich_salepoint(sp_entry)  # adds 'status', 'trend', 'months_active'
+            enrich_salepoint(sp_entry, month_keys=active_mk)
             sp_list.append(sp_entry)
 
-            cust_dec += dec_u
-            cust_jan += jan_u
-            cust_feb += feb_u
-            cust_mar += mar_u
+            for mk in all_mk:
+                cust_month_totals[mk] += month_units.get(mk, 0)
             cust_units += tot
             cust_rev += rev
 
@@ -464,7 +636,7 @@ def _extract(data):
             'parent': cinfo['parent'] if cinfo['parent'] != norm else '',
             'salepoints': sp_list,
             'salepoint_count': len(sp_list),
-            'dec': cust_dec, 'jan': cust_jan, 'feb': cust_feb, 'mar': cust_mar,
+            **cust_month_totals,
             'total_units': cust_units,
             'total_revenue': round(cust_rev),
         })

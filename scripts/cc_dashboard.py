@@ -48,10 +48,14 @@ _CC_CUSTOMER_META = {
     18: dict(name="Hama",           status="negotiation", distributor="אייסדרים",       dist_pct=15, activeSKUs=4,  hasPricing=True,  hasSales=False, brands=["turbo"]),
     19: dict(name="Foot Locker",    status="active",      distributor="אייסדרים",       dist_pct=15, activeSKUs=4,  hasPricing=True,  hasSales=True,  brands=["turbo"]),
     20: dict(name="Biscotti Chain", status="active",      distributor="ביסקוטי",        dist_pct=0,  activeSKUs=1,  hasPricing=True,  hasSales=True,  brands=["danis"]),
+    21: dict(name="Matilda Yehud",  status="active",      distributor="ביסקוטי",        dist_pct=0,  activeSKUs=1,  hasPricing=True,  hasSales=True,  brands=["danis"]),
+    22: dict(name="Delicious RL",   status="active",      distributor="ביסקוטי",        dist_pct=0,  activeSKUs=1,  hasPricing=True,  hasSales=True,  brands=["danis"]),
 }
 
 # Maps English chain name (as returned by extract_customer_name) → CC customer ID.
 # Used to route parsed records to the right customer row.
+# NOTE: CC IDs (1-20) are internal to this dashboard and differ from DB customer IDs.
+# The _CC_ID_TO_DB_ID bridge below maps between them.
 _CUSTOMER_EN_TO_CC_ID = {
     'AMPM':            1,
     'Alonit':          2,
@@ -64,7 +68,7 @@ _CUSTOMER_EN_TO_CC_ID = {
     'Carmella':        8,
     'Noy HaSade':      9,
     'Private Market':  11,
-    'Oogiplatset':     12,
+    # 'Oogiplatset' removed — internal/promo account, not a real customer
     'Paz Yellow':      13,
     'Paz Super Yuda':  14,
     'Sonol':           15,
@@ -72,14 +76,57 @@ _CUSTOMER_EN_TO_CC_ID = {
     'Foot Locker':     19,
 }
 
-# Parser month strings → JS revenue object keys
-_MONTH_KEYS = {
-    'December 2025':  'dec',
-    'January 2026':   'jan',
-    'February 2026':  'feb',
-    'March 2026':     'mar',
-}
-_ALL_MONTHS = ['dec', 'jan', 'feb', 'mar']
+# Biscotti branch prefix → CC customer ID.
+# Branches are matched longest-prefix-first so more specific prefixes win.
+# Anything that doesn't match falls back to CC ID 20 (Biscotti Chain).
+_BISCOTTI_BRANCH_CC_ID = [
+    ('וולט מרקט',   5),   # Wolt Market
+    ('חוות נעמי',   17),  # Naomi's Farm
+    ('חן כרמלה',    8),   # Carmella
+    ('כרמלה',       8),   # Carmella (short form)
+    ('מתילדה יהוד', 21),  # Matilda Yehud
+    ('דלישס',       22),  # Delicious Rishon LeZion
+]
+
+def _resolve_biscotti_branch(branch_name):
+    """Map a raw Biscotti branch name to a CC customer ID via prefix matching.
+    Returns 20 (Biscotti Chain) for unrecognised branches.
+    """
+    for prefix, cc_id in _BISCOTTI_BRANCH_CC_ID:
+        if branch_name.startswith(prefix):
+            return cc_id
+    return 20  # default: Biscotti Chain
+
+
+# Bridge: CC customer ID → DB customers.id (populated from id_maps when DB is available).
+# Enables gradual migration from CC-internal IDs to canonical DB IDs.
+# Phase 3 will replace CC IDs entirely with DB IDs.
+_CC_ID_TO_DB_ID = {}   # populated at runtime by _bridge_cc_to_db_ids()
+
+
+def _bridge_cc_to_db_ids(id_maps):
+    """Build the CC ID ↔ DB customer_id bridge from parsed id_maps.
+
+    Called once per dashboard build when id_maps['available'] is True.
+    Populates _CC_ID_TO_DB_ID and logs the mapping for verification.
+    """
+    global _CC_ID_TO_DB_ID
+    if not id_maps or not id_maps.get('available'):
+        return
+
+    db_customers = id_maps.get('customers', {})
+    bridged = 0
+    for en_name, cc_id in _CUSTOMER_EN_TO_CC_ID.items():
+        db_id = db_customers.get(en_name)
+        if db_id:
+            _CC_ID_TO_DB_ID[cc_id] = db_id
+            bridged += 1
+
+    if bridged:
+        print(f"  CC→DB bridge: {bridged}/{len(_CUSTOMER_EN_TO_CC_ID)} customers mapped")
+
+# Parser month strings → JS revenue object keys (from central registry)
+from config import MONTH_KEYS as _MONTH_KEYS, ALL_MONTH_KEYS as _ALL_MONTHS
 
 # Customers that carry both Turbo and Danis brands (need turboRev/danisRev split)
 _MULTI_BRAND_IDS = {5, 7, 8, 9, 17, 20}
@@ -122,6 +169,8 @@ _CC_ID_TO_PRICING_EN = {
     16: "Domino's Pizza",
     17: "Naomi's Farm",
     19: 'Foot Locker',
+    21: 'Matilda Yehud',
+    22: 'Delicious Rishon LeZion',
 }
 
 # Products shown per customer in the pricing drawer (const productPricing).
@@ -134,7 +183,7 @@ _CC_CUST_SKUS = {
     5:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2', 'magadat'],
     6:  ['vanilla', 'mango', 'chocolate', 'pistachio'],
     7:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2', 'magadat'],
-    8:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2', 'magadat'],
+    8:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'dream_cake_2', 'magadat'],   # Carmela: Turbo (Icedream) + Dream Cake (Biscotti)
     9:  ['vanilla', 'mango', 'chocolate', 'pistachio', 'magadat'],
     10: ['vanilla', 'mango', 'chocolate'],
     11: ['vanilla', 'mango', 'chocolate', 'pistachio'],
@@ -146,7 +195,26 @@ _CC_CUST_SKUS = {
     18: ['vanilla', 'mango', 'chocolate', 'pistachio'],
     19: ['vanilla', 'mango', 'chocolate', 'pistachio'],
     20: ['dream_cake_2'],
+    21: ['dream_cake_2'],
+    22: ['dream_cake_2'],
 }
+
+# Per-SKU distribution % overrides for customers served by multiple distributors.
+# Biscotti-sourced SKUs (dream_cake_2) carry 0% commission.
+# Customers not listed here use their flat dist_pct from _CC_CUSTOMER_META.
+_CC_SKU_DIST_PCT = {
+    5:  {'dream_cake_2': 0},   # Wolt Market — Biscotti (0%) + Icedream (15%) split
+    8:  {'dream_cake_2': 0},   # Carmela — Biscotti (0%) + Icedream (15%) split
+    17: {'dream_cake_2': 0},   # Naomi's Farm — same split
+}
+
+
+def _get_dist_pct(cc_id, sku):
+    """Effective distribution % for a CC customer + SKU pair.
+    Falls back to the customer-level flat rate for SKUs not in the override table.
+    """
+    return _CC_SKU_DIST_PCT.get(cc_id, {}).get(sku, _CC_CUSTOMER_META[cc_id]['dist_pct'])
+
 
 # Hebrew product names for the pricing drawer
 _PROD_HEB = {
@@ -177,18 +245,26 @@ def _compute_cc_dynamic_data(data):
     """
     from config import extract_customer_name
 
+    # Build CC↔DB ID bridge if resolver data is available
+    _bridge_cc_to_db_ids(data.get('id_maps', {}))
+
     months = _ALL_MONTHS
 
     # ── Accumulators ────────────────────────────────────────────────────────
-    rev  = {cid: {m: 0.0 for m in months} for cid in _CC_CUSTOMER_META}
-    u    = {cid: {m: 0   for m in months} for cid in _CC_CUSTOMER_META}
-    trev = {cid: {m: 0.0 for m in months} for cid in _CC_CUSTOMER_META}
-    drev = {cid: {m: 0.0 for m in months} for cid in _CC_CUSTOMER_META}
-    tu   = {cid: {m: 0   for m in months} for cid in _CC_CUSTOMER_META}
-    du   = {cid: {m: 0   for m in months} for cid in _CC_CUSTOMER_META}
-    pmix = {cid: {} for cid in _CC_CUSTOMER_META}
+    rev          = {cid: {m: 0.0 for m in months} for cid in _CC_CUSTOMER_META}
+    u            = {cid: {m: 0   for m in months} for cid in _CC_CUSTOMER_META}
+    trev         = {cid: {m: 0.0 for m in months} for cid in _CC_CUSTOMER_META}
+    drev         = {cid: {m: 0.0 for m in months} for cid in _CC_CUSTOMER_META}
+    tu           = {cid: {m: 0   for m in months} for cid in _CC_CUSTOMER_META}
+    du           = {cid: {m: 0   for m in months} for cid in _CC_CUSTOMER_META}
+    pmix         = {cid: {} for cid in _CC_CUSTOMER_META}
+    # Revenue-weighted distribution cost per customer (tracks correct rate per SKU
+    # so multi-distributor customers like Wolt Market get accurate op_margin).
+    dist_cost_rev = {cid: 0.0 for cid in _CC_CUSTOMER_META}
+    # Which distributors have contributed revenue to each CC customer
+    dist_sources  = {cid: set() for cid in _CC_CUSTOMER_META}
 
-    def _add(cid, mkey, product, units_val, value_val):
+    def _add(cid, mkey, product, units_val, value_val, source=None):
         # Allow negative contributions (returns) — clamped at the end.
         units_val = int(round(units_val))
         value_val = float(value_val)
@@ -202,6 +278,12 @@ def _compute_cc_dynamic_data(data):
             tu[cid][mkey]   += units_val
         if units_val > 0:
             pmix[cid][product] = pmix[cid].get(product, 0) + units_val
+        # Accumulate actual distribution cost using per-SKU rate
+        if value_val > 0:
+            dist_cost_rev[cid] += value_val * _get_dist_pct(cid, product) / 100
+        # Track which distributors contributed to this customer
+        if source and units_val != 0:
+            dist_sources[cid].add(source)
 
     # ── 1. All distributors, all months — from consolidated data ──────────
     # Single pipeline: same data object as BO tab.
@@ -215,7 +297,7 @@ def _compute_cc_dynamic_data(data):
             if not cid:
                 continue
             for product, pdata in prods.items():
-                _add(cid, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0))
+                _add(cid, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0), source='אייסדרים')
 
         # Ma'ayan accounts — pdata is {product: {units, value}} priced at parse time
         # via _mayyan_chain_price() (price DB per customer+product, B2B fallback).
@@ -229,12 +311,13 @@ def _compute_cc_dynamic_data(data):
             for product, prod_data in prods.items():
                 units_val = prod_data.get('units', 0) if isinstance(prod_data, dict) else 0
                 value_val = prod_data.get('value', 0.0) if isinstance(prod_data, dict) else 0.0
-                _add(cid, mkey, product, units_val, value_val)
+                _add(cid, mkey, product, units_val, value_val, source='מעיין נציגויות')
 
-        # Biscotti customers
-        for _branch, prods in md.get('biscotti_customers', {}).items():
+        # Biscotti customers — route each branch to its parent CC customer
+        for branch, prods in md.get('biscotti_customers', {}).items():
+            branch_cc_id = _resolve_biscotti_branch(branch)
             for product, pdata in prods.items():
-                _add(20, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0))
+                _add(branch_cc_id, mkey, product, pdata.get('units', 0), pdata.get('value', 0.0), source='ביסקוטי')
 
     # ── 2. Clamp negative unit totals to 0 ───────────────────────────────
     # If a customer's net units go negative in a month (e.g. pure return month),
@@ -274,7 +357,7 @@ def _compute_cc_dynamic_data(data):
         # Dynamic financial fields — derived from actual transaction data
         total_units = sum(u[cid].values())
         total_rev   = sum(rev[cid].values())
-        dp = meta['dist_pct']
+        dp = meta['dist_pct']  # flat rate used for JS field + single-dist customers
 
         if total_units > 0 and total_rev > 0 and meta.get('hasPricing'):
             avg_price = round(total_rev / total_units, 2)
@@ -283,9 +366,11 @@ def _compute_cc_dynamic_data(data):
                 for p in pmix[cid]
             )
             gross_margin = round((total_rev - total_cost) / total_rev * 100, 2)
-            op_margin    = round(gross_margin - dp, 2)
+            # Use revenue-weighted effective dist % (handles multi-distributor customers)
+            effective_dp = round(dist_cost_rev[cid] / total_rev * 100, 2)
+            op_margin    = round(gross_margin - effective_dp, 2)
         else:
-            avg_price = gross_margin = op_margin = None
+            avg_price = gross_margin = op_margin = effective_dp = None
 
         # MoM growth: last two consecutive months with revenue > 0
         month_revs = [rev[cid][m] for m in months]
@@ -300,10 +385,16 @@ def _compute_cc_dynamic_data(data):
         rev_js  = ','.join(f"{m}:{_jn(rev[cid][m])}" for m in months)
         unit_js = ','.join(f"{m}:{u[cid][m]}" for m in months)
 
+        # Build distributors array from actual revenue sources
+        actual_dists = sorted(dist_sources[cid]) or [meta['distributor']]
+        dists_js = ','.join(f'"{d}"' for d in actual_dists)
+        # Display label: primary distributor name or "Multiple" for multi-source customers
+        dist_label = meta['distributor'] if len(actual_dists) <= 1 else 'Multiple'
+
         row = (
             f"  {{id:{cid}, name:\"{meta['name']}\", status:\"{meta['status']}\","
-            f" distributor:\"{meta['distributor']}\","
-            f" dist_pct:{meta['dist_pct']}, avgPrice:{_jn(avg_price)},"
+            f" distributor:\"{dist_label}\", distributors:[{dists_js}],"
+            f" dist_pct:{_jn(effective_dp if effective_dp is not None else dp, 1)}, avgPrice:{_jn(avg_price)},"
             f" grossMargin:{_jn(gross_margin)}, opMargin:{_jn(op_margin)},"
             f" activeSKUs:{meta['activeSKUs']}, hasPricing:{_jn(meta['hasPricing'])},"
             f" hasSales:{_jn(meta['hasSales'])}, brands:[{brands_js}],\n"
@@ -368,7 +459,6 @@ def _build_product_pricing_js():
         if cid not in _CC_CUSTOMER_META:
             continue
         meta = _CC_CUSTOMER_META[cid]
-        dp   = meta['dist_pct']
         skus = _CC_CUST_SKUS[cid]
 
         prod_parts = []
@@ -377,6 +467,7 @@ def _build_product_pricing_js():
             p18  = round(p0 * vat, 2)
             cost = get_production_cost(sku)
             gm   = round((p0 - cost) / p0 * 100, 2) if p0 > 0 else 0
+            dp   = _get_dist_pct(cid, sku)   # per-SKU rate (handles multi-distributor)
             om   = round(gm - dp, 2)
             heb  = _PROD_HEB.get(sku, sku)
             prod_parts.append(
@@ -430,6 +521,21 @@ def build_cc_tab(data):
             content,
             flags=re.DOTALL,
         )
+        # Inject dynamic month arrays from registry
+        import json as _json
+        from config import ALL_MONTH_KEYS, _MONTH_REGISTRY
+        _all_months_js = _json.dumps(ALL_MONTH_KEYS)
+        _mon_labels_js = _json.dumps([m[2] for m in _MONTH_REGISTRY])
+        # Build month→year mapping: {dec:'2025', jan:'2026', ..., total:'all'}
+        _month_year_map = {}
+        for _mr in _MONTH_REGISTRY:
+            _year = _mr[0].split()[-1]  # e.g. '2025' from 'December 2025'
+            _month_year_map[_mr[1]] = _year
+        _month_year_map['total'] = 'all'
+        _cc_month_year_js = '{' + ','.join(f"{k}:'{v}'" for k, v in _month_year_map.items()) + '}'
+        content = content.replace('{all_months_js}', _all_months_js)
+        content = content.replace('{mon_labels_js}', _mon_labels_js)
+        content = content.replace('{cc_month_year_js}', _cc_month_year_js)
         print("  [CC] Dynamic customers[], productMix{}, productPricing{} injected successfully")
     except Exception as _cc_dyn_err:
         import traceback as _tb
@@ -666,10 +772,7 @@ def build_cc_tab(data):
             '<option value="total">All Months</option>',
             '<option value="total" selected>All Months</option>'
         )
-        body_html = body_html.replace(
-            '<option value="mar">March 2026 (W10)</option>',
-            '<option value="mar">March 2026 (W10)</option>'  # remove implicit first-selected
-        )
+        # (no implicit first-selected to remove — dropdown defaults to All Months via JS state)
 
         result['html_body'] = body_html
 
@@ -784,8 +887,8 @@ const _ccWeekMonthMap = weeklyXLabels.map(lbl => {
   return 'unknown';
 });
 
-// Month-to-year mapping for the month dropdown
-const _ccMonthYear = { dec:'2025', jan:'2026', feb:'2026', mar:'2026', total:'all' };
+// Month-to-year mapping for the month dropdown (injected from registry)
+const _ccMonthYear = __CC_MONTH_YEAR_PLACEHOLDER__;
 
 function ccSetYear() {
   S.year = document.getElementById('f-year').value;
@@ -928,6 +1031,8 @@ renderWeeklyChart = function() {
 """
 
         combined_scripts += year_filter_js
+        # Inject _ccMonthYear from registry
+        combined_scripts = combined_scripts.replace('__CC_MONTH_YEAR_PLACEHOLDER__', _cc_month_year_js)
 
         # 3. Patch resetFilters to also reset year to 2026
         combined_scripts = combined_scripts.replace(
@@ -1105,7 +1210,10 @@ table.skut td{padding:5px 7px;border-bottom:1px solid rgba(46,51,72,0.35);color:
     </select></div>
   <div class="fgroup"><label>Month</label>
     <select id="f-month" onchange="applyFilters()">
-      <option value="mar" id="opt-mar">March 2026 (W12)</option>
+      <option value="jun" id="opt-jun">June 2026</option>
+      <option value="may" id="opt-may">May 2026</option>
+      <option value="apr" id="opt-apr">April 2026</option>
+      <option value="mar" id="opt-mar">March 2026</option>
       <option value="feb">February 2026</option>
       <option value="jan">January 2026</option>
       <option value="dec">December 2025</option>
@@ -1129,7 +1237,7 @@ table.skut td{padding:5px 7px;border-bottom:1px solid rgba(46,51,72,0.35);color:
     <div class="ph">
       <div>
         <div class="pt">Weekly Sales Trend — Icedreams · Ma'ayan · Biscotti</div>
-        <div class="ps" id="chart-subtitle">28/12–22/3 2026 · Each point = week start (Sunday) · Icedreams W1–W13 · Ma'ayan W6–W13 · Biscotti W12–W13 · Rolling 10-week window</div>
+        <div class="ps" id="chart-subtitle">28/12/2025 onwards · Each point = week start (Sunday) · Rolling 10-week window</div>
       </div>
       <div class="tab-grp">
         <button class="tab on" id="wb-rev" onclick="setWeeklyMode('rev')">Revenue ₪</button>
@@ -1290,10 +1398,10 @@ const customers = [
   {id:19, name:"Foot Locker",      status:"active",      distributor:"אייסדרים",       dist_pct:15, avgPrice:15.5,   grossMargin:58.06, opMargin:43.06, activeSKUs:4,  hasPricing:true,  hasSales:true, brands:['turbo'],
           revenue:{dec:0, jan:0, feb:0, mar:1302}, units:{dec:0, jan:0, feb:0, mar:84}, momGrowth:null},
   {id:20, name:"Biscotti Chain", status:"active",    distributor:"ביסקוטי",         dist_pct:0,  avgPrice:80.0,   grossMargin:27.5,  opMargin:27.5,  activeSKUs:1,  hasPricing:true,  hasSales:true, brands:['danis'],
-          revenue:{dec:0, jan:0, feb:0, mar:9680},
-          turboRev:{dec:0, jan:0, feb:0, mar:0},    danisRev:{dec:0, jan:0, feb:0, mar:9680},
-          units:{dec:0, jan:0, feb:0, mar:121},
-          turboUnits:{dec:0, jan:0, feb:0, mar:0},  danisUnits:{dec:0, jan:0, feb:0, mar:121},
+          revenue:{dec:0, jan:0, feb:0, mar:51920},
+          turboRev:{dec:0, jan:0, feb:0, mar:0},    danisRev:{dec:0, jan:0, feb:0, mar:51920},
+          units:{dec:0, jan:0, feb:0, mar:649},
+          turboUnits:{dec:0, jan:0, feb:0, mar:0},  danisUnits:{dec:0, jan:0, feb:0, mar:649},
           momGrowth:null},
 ];
 
@@ -1565,8 +1673,9 @@ function getUnitField(c){
 function filtered(){
   return customers.filter(c=>{
     if(S.cust!=='all' && c.id!=S.cust) return false;
-    if(S.dist==='אייסדרים' && c.distributor!=='אייסדרים') return false;
-    if(S.dist==='מעיין' && c.distributor!=='מעיין נציגויות') return false;
+    if(S.dist==='אייסדרים' && !(c.distributors||[c.distributor]).includes('אייסדרים')) return false;
+    if(S.dist==='מעיין' && !(c.distributors||[c.distributor]).some(d=>d.startsWith('מעיין'))) return false;
+    if(S.dist==='ביסקוטי' && !(c.distributors||[c.distributor]).includes('ביסקוטי')) return false;
     if(S.dist==='none' && c.hasPricing) return false;
     if(S.status!=='all' && c.status!==S.status) return false;
     if(S.brand!=='all' && !c.brands.includes(S.brand)) return false;
@@ -1843,8 +1952,8 @@ function openDrawer(c){
   // Monthly chart
   const ctx=document.getElementById('d-chart').getContext('2d');
   if(charts.drawer) charts.drawer.destroy();
-  const months=["Dec '25","Jan '26","Feb '26","Mar '26"];
-  const revData=[c.revenue.dec,c.revenue.jan,c.revenue.feb,c.revenue.mar||0];
+  const months=MON_LABELS;
+  const revData=MONTHS.map(function(m){return c.revenue[m]||0;});
   charts.drawer=new Chart(ctx,{type:'bar',data:{labels:months,datasets:[{data:revData,backgroundColor:['rgba(79,142,247,0.6)','rgba(79,142,247,0.9)','rgba(79,142,247,0.5)','rgba(79,142,247,0.8)'],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return N(c.raw);}}},
     datalabels:{anchor:'end',align:'end',color:'#b0bac9',font:{size:11,weight:'600'},formatter:function(v){return v>0?N(v):'';}}},
@@ -1904,7 +2013,7 @@ function closeDrawer(){
 //   1 = "ינ'26"  (Jan 2026 — monthly total, displayed as dot)
 //   2–10 = "ש'1"–"ש'9"  (weekly, 2026)
 // Source: icedream_weekly_sales.xls  +  CP tab monthly totals  +  maay_feb_full.xlsx
-const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3","22/3"];
+const weeklyXLabels = ["28/12","4/1","11/1","18/1","25/1","1/2","8/2","15/2","22/2","1/3","8/3","15/3","22/3","29/3","5/4"];
 
 // ── Inactive customers: dynamic period config ─────────────────────────────
 // DATA_LAST_WEEK auto-derived from weeklyXLabels length — update by adding labels above
@@ -1915,7 +2024,7 @@ const DATA_LAST_WEEK_LABEL = weeklyXLabels[DATA_LAST_WEEK - 1];     // e.g. "8/3
 const WEEKLY_WINDOW = 10;  // Rolling window — always show last N weeks
 
 // Icedreams monthly totals (Dec & Jan) — from Customer Performance tab, distributor=Icedreams
-// Customers: גוד פארם, וולט מרקט, ינגו דלי, כרמלה, נוי השדה, דומינוס, חוות נעמי, עוגיפלצת
+// Customers: גוד פארם, וולט מרקט, ינגו דלי, כרמלה, נוי השדה, דומינוס, חוות נעמי
 const _iceMonRev   = { dec: 686481,  jan: 641087  };
 const _iceMonUnits = { dec: 20289,   jan: 17919   };
 
@@ -1930,29 +2039,29 @@ const _maayMonUnits = { dec: 61775,   jan: 30088   };
 // Danis revenue validated exactly. Yingo W2 validated by user.
 // W10 (1/3/2026): ינגו 445u/₪13788, דומינוס 164u/₪1869, חוות נעמי 116u/₪6173, וולט -30u return (excluded from gross)
 // Combined (Turbo + Danis)  — W11 source: icedream_15_3 | W12 source: icedream_mar_w12.xlsx (19/3/2026) | W13 pending
-const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979, 13493];
-const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067, 970];
+const _iceWkRev        = [9256, 10076, 1460, 8070, 599111, 17666, 2673, 2916, 437981, 21831, 26678, 111979, 13493, null, 13943];
+const _iceWkUnits      = [144, 324, 108, 66, 17068, 483, 198, 216, 12290, 725, 553, 3067, 970, null, 1000];
 // Turbo (ice cream) only
-const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872, 13493];
-const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182, 970];
+const _iceWkRevTurbo   = [497, 3776, 1460, 0, 143429, 5416, 2673, 2916, 112840, 7803, 3354, 29872, 13493, null, 13943];
+const _iceWkUnitsTurbo = [36, 282, 108, 0, 11537, 400, 198, 216, 8290, 602, 272, 2182, 970, null, 1000];
 // Danis (dream cake) only — validated exact match all weeks
-const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106, 0];
-const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885, 0];
-// Returns tracked separately
-const _iceWkRetRev   = [0, 8278, 1309, 2392, 0, 233, 1890, 1925, 0, 1125, null, 0, null];
-const _iceWkRetUnits = [0, 117, 51, 204, 0, 7, 114, 33, 0, 30, null, 0, null];
+const _iceWkRevDanis   = [8759, 6300, 0, 8070, 455682, 12249, 0, 0, 325141, 14028, 23324, 82106, 0, null, 0];
+const _iceWkUnitsDanis = [108, 42, 0, 66, 5531, 83, 0, 0, 4000, 123, 281, 885, 0, null, 0];
+// Returns tracked separately — W14: no data, W15: no returns
+const _iceWkRetRev   = [0, 8278, 1309, 2392, 0, 233, 1890, 1925, 0, 1125, null, 0, null, null, null];
+const _iceWkRetUnits = [0, 117, 51, 204, 0, 7, 114, 33, 0, 30, null, 0, null, null, null];
 
 // Mayyan weekly — source: דוח_הפצה_גלידות_טורבו__אל_פירוט (detail sheet), net כמות בודדים × chain price
 // W6–W9: maay_feb_full.xlsx | W10–W11: maayan_sales_week_10_11.xlsx | W12–W13: week12_13.xlsx
-const _maayWkRev   = { 6: 135406, 7: 106260, 8: 240106, 9: 122351, 10: 99415, 11: 109572, 12: 67672, 13: 142182 };
-const _maayWkUnits = { 6: 9812,   7: 7700,   8: 17399,  9: 8866,   10: 7204,  11: 7940,   12: 4970,  13: 10410  };
+const _maayWkRev   = { 6: 135406, 7: 106260, 8: 240106, 9: 122351, 10: 99415, 11: 109572, 12: 67672, 13: 142182, 14: 78750, 15: 52099 };
+const _maayWkUnits = { 6: 9812,   7: 7700,   8: 17399,  9: 8866,   10: 7204,  11: 7940,   12: 4970,  13: 10410,  14: 5516,  15: 3840  };
 
-// Biscotti weekly — source: daniel_amit_weekly_biscotti.xlsx (24/3/2026)
+// Biscotti weekly — sources: daniel_amit_weekly_biscotti.xlsx + week13.xlsx
 // Dream Cake (dream_cake_2) only. Sale price ₪80/unit, 0% commission.
-// W12 (18/3–21/3) = Biscotti "שבוע 1": 101 units × ₪80 = ₪8,080
-// W13 (22/3–27/3) = Biscotti "שבוע 2": 20 units × ₪80 = ₪1,600 (partial: only 22/3 data)
-const _biscWkRev   = { 12: 8080, 13: 1600 };
-const _biscWkUnits = { 12: 101,  13: 20   };
+// W12 (18/3–21/3) = "שבוע 1": 101 units × ₪80 = ₪8,080
+// W13 (22/3–27/3) = "שבוע 2" (20u) + week13.xlsx bulk (528u) = 548 units × ₪80 = ₪43,840
+const _biscWkRev   = { 12: 8080, 13: 43840, 14: 111120, 15: 12000 };
+const _biscWkUnits = { 12: 101,  13: 548,   14: 1389,   15: 150   };
 
 // ── WEEKLY CHART ─────────────────────────────────────────────────────────────
 let _weeklyMode = 'rev';
@@ -2442,8 +2551,6 @@ const weeklyDetail = [
   // ── כרמלה ────────────────────────────────────────────────────────────
   {network:'כרמלה', account:'כרמלה', product:'טורבו פיסטוק (×10)', upc:'×10', boxes:4, units:40, revenue:559.88},
   {network:'כרמלה', account:'כרמלה', product:'טורבו שוקולד אגוזי לוז (×10)', upc:'×10', boxes:3, units:30, revenue:419.91},
-  // ── עוגיפלצת ─────────────────────────────────────────────────────────
-  {network:'עוגיפלצת', account:'עוגיפלצת בע"מ', product:'דרים קייק- 3 יח (×3)', upc:'×3', boxes:17, units:51, revenue:7650.01},
   // ── פוט לוקר ─────────────────────────────────────────────────────────
   {network:'פוט לוקר', account:'פוט לוקר', product:'טורבו וניל מדגסקר (×6)', upc:'×6', boxes:4, units:24, revenue:371.913},
   {network:'פוט לוקר', account:'פוט לוקר', product:'טורבו מנגו מאיה (×10)', upc:'×10', boxes:2, units:20, revenue:309.927},
@@ -2542,8 +2649,8 @@ function exportToExcel(selSheets, selCustomers, selBrands) {
     return ws;
   }
 
-  const MONTHS = ['dec','jan','feb','mar'];
-  const MON_LABELS = ['Dec 2025','Jan 2026','Feb 2026',`Mar 2026 (W10–W${DATA_LAST_WEEK})`];
+  const MONTHS = {all_months_js};
+  const MON_LABELS = {mon_labels_js};
 
   function sumRevMonth(m, dist) {
     return customers.reduce((s,c) => {
