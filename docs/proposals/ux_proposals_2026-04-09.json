@@ -1,0 +1,35 @@
+[
+  {
+    "type": "new_chart",
+    "priority": "medium",
+    "title": "Distributor Revenue vs. Weeks Active Scatter Plot",
+    "description": "Add a scatter plot (BO tab) with X=weeks reported, Y=total season revenue per distributor. Size = total units. Useful when more distributors are added.",
+    "api_endpoint": "/api/distributor-scatter",
+    "implementation": "Query: SELECT distributor, COUNT(*) AS weeks_reported, SUM(revenue) AS total_revenue, SUM(units) AS total_units FROM weekly_chart_overrides GROUP BY 1"
+  },
+  {
+    "type": "new_chart",
+    "priority": "low",
+    "title": "Distributor Performance Radar Chart",
+    "description": "Spider/radar chart comparing Icedream, Ma'ayan, Biscotti across axes: Revenue, Units, Weeks Active, WoW Growth. Gives executives a single-glance competitive view.",
+    "implementation": "Chart.js type: 'radar' in BO tab. Data from SELECT distributor, SUM(revenue), SUM(units), COUNT(*) FROM weekly_chart_overrides GROUP BY 1"
+  },
+  {
+    "type": "new_api_endpoint",
+    "priority": "medium",
+    "title": "API: /api/distributor-scatter",
+    "path": "/api/distributor-scatter",
+    "method": "GET",
+    "description": "Returns per-distributor season totals for scatter plot",
+    "sql": "SELECT distributor, COUNT(*) AS weeks_reported, SUM(units) AS total_units, SUM(revenue) AS total_revenue FROM weekly_chart_overrides GROUP BY 1"
+  },
+  {
+    "type": "new_api_endpoint",
+    "priority": "medium",
+    "title": "API: /api/distributor-wow",
+    "path": "/api/distributor-wow",
+    "method": "GET",
+    "description": "Distributor week-over-week comparison for radar/trend charts",
+    "sql": "SELECT distributor, week_num, units, revenue FROM weekly_chart_overrides ORDER BY distributor, week_num"
+  }
+]

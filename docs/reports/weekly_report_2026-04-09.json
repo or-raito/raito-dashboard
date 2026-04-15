@@ -1,0 +1,107 @@
+{
+  "report_date": "2026-04-09",
+  "week_label": "W15/2026",
+  "generated_at": "2026-04-09T15:33:23.296740+00:00",
+  "triggered_by": [],
+  "latest_week_num": 13,
+  "season_totals": [
+    {
+      "distributor": "mayyan",
+      "total_revenue": 209854.2,
+      "total_units": 15380,
+      "weeks_reported": 2
+    },
+    {
+      "distributor": "icedream",
+      "total_revenue": 13493.22,
+      "total_units": 970,
+      "weeks_reported": 1
+    }
+  ],
+  "latest_week": [
+    {
+      "distributor": "mayyan",
+      "week_num": 13,
+      "units": 10410,
+      "revenue": 142181.9
+    },
+    {
+      "distributor": "icedream",
+      "week_num": 13,
+      "units": 970,
+      "revenue": 13493.22
+    }
+  ],
+  "latest_vs_season_avg": [
+    {
+      "distributor": "mayyan",
+      "latest_revenue": 142181.9,
+      "season_avg": 104927.1,
+      "vs_avg_pct": 35.5
+    },
+    {
+      "distributor": "icedream",
+      "latest_revenue": 13493.22,
+      "season_avg": 13493.22,
+      "vs_avg_pct": 0.0
+    }
+  ],
+  "distributor_trends": {
+    "icedream": [
+      {
+        "week_num": 13,
+        "label": "22/3",
+        "revenue": 13493.22,
+        "units": 970,
+        "wow_pct": null
+      }
+    ],
+    "mayyan": [
+      {
+        "week_num": 12,
+        "label": "15/3",
+        "revenue": 67672.3,
+        "units": 4970,
+        "wow_pct": null
+      },
+      {
+        "week_num": 13,
+        "label": "22/3",
+        "revenue": 142181.9,
+        "units": 10410,
+        "wow_pct": 110.1
+      }
+    ]
+  },
+  "anomalies": [
+    {
+      "distributor": "mayyan",
+      "week_num": 13,
+      "label": "22/3",
+      "prev_revenue": 67673.44,
+      "curr_revenue": 142181.9,
+      "change_pct": 110.1,
+      "flag": "spike"
+    }
+  ],
+  "biscotti_growth": {
+    "status": "no_data",
+    "note": "Biscotti not in weekly_chart_overrides"
+  },
+  "consecutive_drops": [],
+  "missing_uploads": [
+    "⚠ Icedream: no data for W13 — file may not have been uploaded",
+    "⚠ Ma'ayan: no data for W13 — file may not have been uploaded",
+    "⚠ Biscotti: no data for W13 — file may not have been uploaded"
+  ],
+  "salepoint_kpis": {
+    "status": "unavailable",
+    "note": "Could not fetch dashboard HTML"
+  },
+  "recommendations": [
+    "⚠ Icedream: no data for W13 — file may not have been uploaded",
+    "⚠ Ma'ayan: no data for W13 — file may not have been uploaded",
+    "⚠ Biscotti: no data for W13 — file may not have been uploaded",
+    "Revenue spike at mayyan in 22/3: +110.1% WoW — confirm it is a real sale event, not a double-upload."
+  ]
+}

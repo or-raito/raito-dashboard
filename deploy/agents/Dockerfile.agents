@@ -1,0 +1,33 @@
+# Dockerfile.agents — Raito Multi-Agent Runner
+# Builds a lightweight image used by all 4 Cloud Run Jobs.
+# Each job sets AGENT_NAME env var to select which agent runs.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps (openpyxl needs no extras; psycopg2-binary bundles libpq)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python deps
+COPY scripts/requirements.txt /app/scripts/requirements.txt
+RUN pip install --no-cache-dir \
+    psycopg2-binary \
+    openpyxl \
+    flask \
+    gunicorn \
+    google-cloud-storage \
+    google-cloud-logging \
+    sendgrid \
+    -r /app/scripts/requirements.txt
+
+# Copy source
+COPY scripts/ /app/scripts/
+
+ENV PYTHONPATH="/app/scripts:/app/scripts/db:/app"
+ENV PYTHONUNBUFFERED=1
+
+# Default entrypoint: orchestrator picks agent from AGENT_NAME env var
+ENTRYPOINT ["python3", "-m", "agents.orchestrator"]
