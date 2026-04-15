@@ -12,12 +12,38 @@ import pandas as pd
 from openpyxl import load_workbook
 from config import (
     DATA_DIR, OUTPUT_DIR, classify_product, extract_units_per_carton,
-    MONTH_ORDER, extract_customer_name,
+    MONTH_ORDER, extract_customer_name, INTERNAL_ACCOUNTS,
 )
 from pricing_engine import get_b2b_price_safe, get_production_cost
 from registry import validate_sku, PRODUCTS
 
 _log = logging.getLogger(__name__)
+
+# ── Optional DB Resolver (Phase 2: ID-based resolution) ─────────────────
+_resolver_instance = None
+_resolver_init_attempted = False
+
+
+def _get_resolver():
+    """Try to initialize the DB entity resolver (singleton).
+
+    Returns an EntityResolver if DB is reachable, or None.
+    Safe to call repeatedly — only attempts connection once per session.
+    """
+    global _resolver_instance, _resolver_init_attempted
+    if _resolver_init_attempted:
+        return _resolver_instance
+    _resolver_init_attempted = True
+    try:
+        from db.resolvers import EntityResolver
+        _resolver_instance = EntityResolver()
+        _log.info("DB resolver initialized — ID-based resolution enabled")
+        print("  ✓ DB resolver connected — ID enrichment active")
+    except Exception as e:
+        _log.info(f"DB resolver not available ({e}) — string-only mode")
+        _resolver_instance = None
+    return _resolver_instance
+
 
 # Track unknown SKUs seen during this session (warn once per SKU)
 _unknown_skus_warned: set = set()
@@ -47,10 +73,11 @@ def detect_month_from_sheet(ws):
     """Detect month from sheet name and date range row (Row 3)."""
     title = ws.title or ''
     month_keywords = {
-        'דצמבר': 'December 2025', 'December': 'December 2025',
-        'ינואר': 'January 2026', 'January': 'January 2026',
-        'פברואר': 'February 2026', 'February': 'February 2026',
-        'מרץ': 'March 2026', 'March': 'March 2026',
+        'נובמבר': 'November 2025', 'November': 'November 2025', 'NOVEMBER': 'November 2025',
+        'דצמבר': 'December 2025', 'December': 'December 2025', 'DECEMBER': 'December 2025',
+        'ינואר': 'January 2026', 'January': 'January 2026', 'JANUARY': 'January 2026',
+        'פברואר': 'February 2026', 'February': 'February 2026', 'FEBRUARY': 'February 2026',
+        'מרץ': 'March 2026', 'March': 'March 2026', 'MARCH': 'March 2026',
     }
     for keyword, month in month_keywords.items():
         if keyword in title:
@@ -67,6 +94,7 @@ def detect_month_from_sheet(ws):
             month_num = int(month_num)
             year = int(year)
             month_map = {
+                (11, 2025): 'November 2025',
                 (12, 2025): 'December 2025',
                 (1, 2026): 'January 2026', (2, 2026): 'February 2026',
                 (3, 2026): 'March 2026', (4, 2026): 'April 2026',
@@ -144,17 +172,206 @@ def parse_icedreams_file(filepath):
     return data
 
 
-def parse_format_b_xls(filepath):
-    """Parse an Icedream Format B weekly XLS file (BIFF8/OLE2) using xlrd.
+def _parse_icedream_weekly_xlsx(filepath):
+    """Parse a single-week Icedream .xlsx file (Format B weekly).
 
-    These are the weekly comparison files (e.g. sales_week_12.xls) sent directly
-    from Icedream's system. One row per product per customer; multiple week columns.
+    Layout (e.g. week13.xlsx):
+      R1: _, _, _, 'שבוע 13 2026'   (week identifier)
+      R2: 'שם חשבון', 'שם פריט', 'כמות', 'בש"ח'  (headers)
+      R3+: data rows — account in col 1 (only on first product row),
+           product in col 2, cartons in col 3 (negative=sales), revenue in col 4.
+           'סה"כ' in col 2 = customer summary row (skip).
+
+    Returns same structure as parse_icedreams_file():
+      {'month': str, 'by_customer': {name: {product: {units, value, cartons}}}, 'totals': {}}
+    """
+    import os
+    wb = load_workbook(filepath)
+    ws = wb[wb.sheetnames[0]]
+
+    # --- Detect week number — scan first 5 rows, all columns ---
+    week_num = None
+    for r in range(1, 6):
+        for c in range(1, ws.max_column + 1):
+            val = ws.cell(row=r, column=c).value
+            if val and 'שבוע' in str(val):
+                m = re.search(r'(\d+)', str(val))
+                if m:
+                    week_num = int(m.group(1))
+                break
+        if week_num:
+            break
+
+    # Map week to month (from central registry)
+    if week_num:
+        from config import WEEK_TO_MONTH
+        month = WEEK_TO_MONTH.get(week_num, f'W{week_num}')
+    else:
+        month = detect_month_from_sheet(ws) or 'Unknown'
+
+    print(f"  [Icedream weekly] {os.path.basename(filepath)} → W{week_num} → {month}")
+
+    data = {'month': month, 'by_customer': {}, 'totals': {}}
+    current_account = None
+
+    def _clean_account(s):
+        """Strip branch decorations to get a clean account name."""
+        s = re.sub(r'^\*+|\*+$', '', s).strip()
+        s = re.sub(r'\*ת\.משלוח.*$', '', s).strip()
+        s = re.sub(r'ת\.משלוח.*$', '', s).strip()
+        s = re.sub(r'\*[^*]*$', '', s).strip()
+        return s.strip()
+
+    for row_idx in range(3, ws.max_row + 1):
+        acct_raw = ws.cell(row=row_idx, column=1).value
+        product_raw = ws.cell(row=row_idx, column=2).value
+        qty_raw = ws.cell(row=row_idx, column=3).value
+        rev_raw = ws.cell(row=row_idx, column=4).value
+
+        # Update current account when column 1 has a value
+        if acct_raw:
+            current_account = _clean_account(str(acct_raw).strip())
+
+        if not product_raw or not current_account:
+            continue
+
+        product_str = str(product_raw).strip()
+
+        # Skip summary rows
+        if 'סה"כ' in product_str:
+            continue
+
+        # Strict Raito product filter
+        if 'טורבו' not in product_str and 'דרים קייק' not in product_str:
+            continue
+
+        product = _validated_product(classify_product(product_str))
+        if not product:
+            continue
+
+        upc = extract_units_per_carton(product_str)
+        qty = float(qty_raw) if qty_raw not in (None, '', ' ') else 0.0
+        rev = float(rev_raw) if rev_raw not in (None, '', ' ') else 0.0
+
+        # Negative = sales, flip to positive
+        cartons = abs(qty)
+        units = round(cartons * upc)
+        value = round(abs(rev), 2)
+
+        if units == 0 and value == 0:
+            continue
+
+        # Totals
+        if product not in data['totals']:
+            data['totals'][product] = {'units': 0, 'value': 0, 'cartons': 0}
+        data['totals'][product]['units'] += units
+        data['totals'][product]['value'] += value
+        data['totals'][product]['cartons'] += cartons
+
+        # By customer — keep raw per-branch name so SP tab sees per-branch rows.
+        # Downstream CC/BO call extract_customer_name() at read time to aggregate.
+        # (Was collapsing branches here, bucketing all Wolt branches into 1 row;
+        # legacy parser parse_icedreams_file preserves raw keys — matching that.)
+        cust_name = current_account
+        if cust_name not in data['by_customer']:
+            data['by_customer'][cust_name] = {}
+        if product not in data['by_customer'][cust_name]:
+            data['by_customer'][cust_name][product] = {'units': 0, 'value': 0, 'cartons': 0}
+        data['by_customer'][cust_name][product]['units'] += units
+        data['by_customer'][cust_name][product]['value'] += value
+        data['by_customer'][cust_name][product]['cartons'] += cartons
+
+    wb.close()
+    return data
+
+
+def _is_icedream_weekly_xlsx(filepath):
+    """Check if an xlsx file is a single-week Format B file (e.g. week13.xlsx).
+
+    Detected by 'שבוע' in the first row of the first sheet.
+    """
+    try:
+        wb = load_workbook(filepath, read_only=True)
+        ws = wb[wb.sheetnames[0]]
+        # Scan first 5 rows — week header may appear in row 1 (old format) or row 3 (W15+ format)
+        # Only count as single-week if exactly 1 'שבוע' cell found (multi-week files have 2+)
+        shavua_count = 0
+        for r in range(1, 6):
+            for c in range(1, min(13, ws.max_column + 1 if ws.max_column else 13)):
+                val = ws.cell(row=r, column=c).value
+                if val and 'שבוע' in str(val):
+                    shavua_count += 1
+        wb.close()
+        return shavua_count == 1
+    except Exception:
+        pass
+    return False
+
+
+def _is_format_b_multiweek_xlsx(filepath):
+    """Detect a multi-week Format B xlsx (e.g. converted sales_week_12.xlsx).
+
+    Layout: row 1 = title, row 3 = week headers ('שבוע N'), row 4 = col labels.
+    Distinguished from single-week files where 'שבוע' appears in row 1.
+    """
+    try:
+        wb = load_workbook(filepath, read_only=True)
+        ws = wb[wb.sheetnames[0]]
+        # Row 1 must NOT have 'שבוע' (that would be single-week format)
+        row1_has_shavua = any(
+            ws.cell(row=1, column=c).value and 'שבוע' in str(ws.cell(row=1, column=c).value)
+            for c in range(1, 7)
+        )
+        if row1_has_shavua:
+            wb.close()
+            return False
+        # Row 3 must have 'שבוע' in at least 2 of cols 2–12
+        # (multi-week files have multiple week columns; single-week W15 format has only one)
+        row3_shavua_count = sum(
+            1 for c in range(2, 13)
+            if ws.cell(row=3, column=c).value and 'שבוע' in str(ws.cell(row=3, column=c).value)
+        )
+        wb.close()
+        return row3_shavua_count >= 2
+    except Exception:
+        pass
+    return False
+
+
+def _format_b_read_rows(filepath):
+    """Read a Format B file (either .xls or .xlsx) into a list of row lists.
+
+    Tries openpyxl first for .xlsx, falls back to xlrd for .xls.
+    Returns list of rows where each row is a list of cell values.
+    """
+    from pathlib import Path as _Path
+    p = _Path(filepath)
+    if p.suffix.lower() == '.xlsx':
+        wb = load_workbook(p, read_only=True)
+        ws = wb.active
+        rows = [[c.value for c in row] for row in ws.iter_rows()]
+        wb.close()
+        return rows
+    else:
+        try:
+            import xlrd as _xlrd
+            wb = _xlrd.open_workbook(str(p))
+            ws = wb.sheets()[0]
+            return [[ws.cell_value(r, c) for c in range(ws.ncols)] for r in range(ws.nrows)]
+        except ImportError:
+            return []
+
+
+def parse_format_b_xls(filepath):
+    """Parse an Icedream Format B multi-week file (.xls or .xlsx).
+
+    Supports both legacy .xls (via xlrd when available) and converted .xlsx
+    (via openpyxl — no xlrd dependency required).
 
     Column layout (3-week file):
       0: Account name (only on first product row per customer)
       1: Product name (Hebrew SKU)
-      2: W10 qty (cartons, negative = sales)
-      3: W10 revenue (ILS, negative = sales)
+      2: W10 qty / 3: W10 revenue
       4: W11 qty / 5: W11 revenue
       6: W12 qty / 7: W12 revenue
       8: total qty / 9: total revenue
@@ -166,34 +383,22 @@ def parse_format_b_xls(filepath):
     Special rule: 'Oogiplatset' (עוגיפלצת) is only included for the LAST week
     column (W12), not for earlier weeks, per dashboard convention.
     """
-    try:
-        import xlrd  # noqa: F401
-    except ImportError:
-        return {}
+    import re as _re_local
 
     try:
-        import re as _re_local
-        wb = xlrd.open_workbook(str(filepath))
-        ws = wb.sheets()[0]
+        all_rows = _format_b_read_rows(filepath)
     except Exception:
         return {}
 
-    # Detect week columns by scanning row 2 for 'שבוע' headers
-    week_cols = []   # list of (qty_col, rev_col) pairs, in week order
-    for j in range(ws.ncols):
-        cell_val = str(ws.cell_value(2, j)) if ws.nrows > 2 else ''
-        if 'שבוע' in cell_val:
-            # qty at j+1 is actually the raw header; actual data starts from col after header
-            # Row 3 has: "שם חשבון","שם פריט","כמות","בש\"ח","כמות","בש\"ח",...
-            # Each week occupies 2 cols starting at the col where "שבוע X" appears + 1
-            pass
-    # Instead: parse row 3 for "כמות" / "בש"כ" pairs, skip account+product cols
-    # Cols 0=account,1=product then pairs of (qty,rev) per week
-    # Cols 0=account, 1=product, then pairs of (qty,rev) per week.
-    # Last 2 cols are grand total — exclude them from week_cols.
+    if len(all_rows) < 5:
+        return {}
+
+    n_cols = max(len(r) for r in all_rows)
+
+    # Cols 0=account, 1=product, then pairs (qty,rev) per week, last 2 = totals
     data_start_col = 2
     week_cols = []
-    for j in range(data_start_col, ws.ncols - 2, 2):  # ws.ncols-2 excludes total cols
+    for j in range(data_start_col, n_cols - 2, 2):
         week_cols.append((j, j + 1))
 
     def _clean(s):
@@ -208,8 +413,10 @@ def parse_format_b_xls(filepath):
     customers = {}   # {chain_en: {wk_idx: {product: {'units', 'value'}}}}
     current_chain = None
 
-    for row_idx in range(4, ws.nrows):
-        row = [ws.cell_value(row_idx, j) for j in range(ws.ncols)]
+    for row in all_rows[4:]:   # data starts at row index 4
+        # Pad short rows
+        while len(row) < n_cols:
+            row.append(None)
         account_raw = str(row[0]).strip() if row[0] else ''
         product_raw = str(row[1]).strip() if row[1] else ''
 
@@ -218,8 +425,8 @@ def parse_format_b_xls(filepath):
             continue
 
         if account_raw:
-            cleaned = _clean(account_raw)
-            current_chain = extract_customer_name(cleaned)
+            # Preserve raw per-branch name; CC/BO aggregate via extract_customer_name at read time.
+            current_chain = _clean(account_raw)
 
         if not current_chain or not product_raw:
             continue
@@ -274,7 +481,14 @@ def parse_all_icedreams():
             continue
         if 'stock' in f.name.lower():
             continue
-        data = parse_icedreams_file(f)
+        # Skip multi-week Format B xlsx files — handled by the supplement loop below
+        if _is_format_b_multiweek_xlsx(f):
+            continue
+        # Route to weekly parser if single-week Format B xlsx
+        if _is_icedream_weekly_xlsx(f):
+            data = _parse_icedream_weekly_xlsx(f)
+        else:
+            data = parse_icedreams_file(f)
         month = data['month']
         if month in results:
             for product, vals in data['totals'].items():
@@ -293,13 +507,28 @@ def parse_all_icedreams():
         else:
             results[month] = data
 
-    # ── Supplement months with unattributed units from Format B XLS ──────
+    # ── Supplement months with unattributed units from Format B files ────
     # Some weekly .xlsx files produce flat totals but empty by_customer
     # (e.g. icedream_mar_w10_11.xlsx lacks bold customer-summary rows).
-    # The Format B .xls file (sales_week_12.xls) covers the same weeks with
-    # full per-customer data.  We take all week columns EXCEPT the LAST one
-    # (the last week is already attributed via the corresponding _w12.xlsx).
+    # The Format B file (sales_week_12.xls or sales_week_12.xlsx) covers the
+    # same weeks with full per-customer data.  We take all week columns EXCEPT
+    # the LAST one (the last week is already attributed via weekly xlsx).
+    # Prefer .xlsx version (no xlrd needed); skip .xls if .xlsx exists.
+    format_b_files = []
+    for f in sorted(folder.glob('*.xlsx')):
+        if f.name.startswith('~') or 'stock' in f.name.lower():
+            continue
+        if _is_format_b_multiweek_xlsx(f):
+            format_b_files.append(f)
+    # Add .xls files that don't have a .xlsx counterpart already listed
+    xlsx_stems = {f.stem for f in format_b_files}
     for f in sorted(folder.glob('*.xls')):
+        if f.name.startswith('~') or 'stock' in f.name.lower():
+            continue
+        if f.stem not in xlsx_stems:
+            format_b_files.append(f)
+
+    for f in sorted(format_b_files):
         if f.name.startswith('~') or 'stock' in f.name.lower():
             continue
         format_b = parse_format_b_xls(f)
@@ -487,6 +716,11 @@ def parse_mayyan_file(filepath, price_table=None):
     chain_col = next((c for c in df.columns if 'רשת' in str(c)), None)
     type_col = next((c for c in df.columns if 'סוג' in str(c)), None)
     branch_col = next((c for c in df.columns if 'חשבון' in str(c) and 'שם' in str(c)), None)
+    # Fallback columns used when branch_col collapses to the chain name
+    # (happens in W14/W15 where Ma'ayan put 'שוק פרטי' in שם חשבון for every private-market row)
+    address_col = next((c for c in df.columns if 'כתובת' in str(c)), None)
+    city_col = next((c for c in df.columns if str(c).startswith('עיר')), None)
+    acct_key_col = next((c for c in df.columns if 'מפתח' in str(c) and 'חשבון' in str(c)), None)
 
     if not all([product_col, units_col]):
         return {}
@@ -498,65 +732,50 @@ def parse_mayyan_file(filepath, price_table=None):
 
     if month_col:
         # Standard monthly format — map Hebrew month names to standard keys
+        from config import HEBREW_MONTH_NAMES, MONTH_ORDER
         month_map = {}
         for m in df[month_col].unique():
             ms = str(m)
-            if 'דצמבר' in ms or 'December' in ms:
-                month_map[m] = 'December 2025'
-            elif 'ינואר' in ms or 'January' in ms:
-                month_map[m] = 'January 2026'
-            elif 'פברואר' in ms or 'February' in ms:
-                month_map[m] = 'February 2026'
-            elif 'מרץ' in ms or 'March' in ms:
-                month_map[m] = 'March 2026'
-            else:
+            matched = False
+            # Check Hebrew and English month names dynamically
+            for heb_name, eng_name in HEBREW_MONTH_NAMES.items():
+                if heb_name in ms or eng_name in ms:
+                    # Find the matching full month key in MONTH_ORDER
+                    for full_key in MONTH_ORDER:
+                        if eng_name in full_key:
+                            month_map[m] = full_key
+                            matched = True
+                            break
+                    break
+            if not matched:
                 month_map[m] = str(m)
         df['month_std'] = df[month_col].map(month_map)
     else:
         # Weekly format — no month column; infer month from filename or sheet names
-        fname = str(filepath).lower()
+        from config import FILENAME_MONTH_KEYWORDS, WEEK_TO_MONTH
+        fname = os.path.basename(str(filepath)).lower()
         inferred_month = None
-        month_keywords = {
-            'dec': 'December 2025', 'דצמבר': 'December 2025',
-            'jan': 'January 2026', 'ינואר': 'January 2026',
-            'feb': 'February 2026', 'פברואר': 'February 2026',
-            'mar': 'March 2026', 'מרץ': 'March 2026',
-            'apr': 'April 2026', 'אפריל': 'April 2026',
-        }
-        for kw, month_val in month_keywords.items():
+        for kw, month_val in FILENAME_MONTH_KEYWORDS.items():
             if kw in fname:
                 inferred_month = month_val
                 break
         if not inferred_month:
             # Try sheet names
             for sn in sheet_names:
-                for kw, month_val in month_keywords.items():
+                for kw, month_val in FILENAME_MONTH_KEYWORDS.items():
                     if kw in sn.lower():
                         inferred_month = month_val
                         break
                 if inferred_month:
                     break
         if not inferred_month and week_col:
-            # Try to infer month from week numbers in the data
-            # Week numbers are ISO weeks in the data; map to months for 2025-2026 season
-            week_to_month = {
-                # Dec 2025: weeks ~49-52
-                49: 'December 2025', 50: 'December 2025', 51: 'December 2025', 52: 'December 2025',
-                # Jan 2026: weeks ~1-4
-                1: 'January 2026', 2: 'January 2026', 3: 'January 2026', 4: 'January 2026',
-                # Feb 2026: weeks ~5-8
-                5: 'February 2026', 6: 'February 2026', 7: 'February 2026', 8: 'February 2026',
-                # Mar 2026: weeks ~9-13
-                9: 'March 2026', 10: 'March 2026', 11: 'March 2026', 12: 'March 2026', 13: 'March 2026',
-                # Apr 2026: weeks ~14-17
-                14: 'April 2026', 15: 'April 2026', 16: 'April 2026', 17: 'April 2026',
-            }
+            # Infer month from week numbers using central registry
             weeks_in_data = df[week_col].dropna().unique()
             for w in weeks_in_data:
                 try:
                     w_int = int(w)
-                    if w_int in week_to_month:
-                        inferred_month = week_to_month[w_int]
+                    if w_int in WEEK_TO_MONTH:
+                        inferred_month = WEEK_TO_MONTH[w_int]
                         break
                 except (ValueError, TypeError):
                     pass
@@ -622,6 +841,21 @@ def parse_mayyan_file(filepath, price_table=None):
                     continue
                 acct = str(acct_raw).strip()
                 chain_name = str(row[chain_col]).strip() if chain_col and chain_col in row.index else ''
+                # Fallback: when branch_col collapses to the chain name (W14/W15 bug in
+                # Ma'ayan's export — all שוק פרטי rows have שם חשבון='שוק פרטי'),
+                # compose a per-branch name from address+city, disambiguated by acct key.
+                if acct == chain_name:
+                    addr = str(row.get(address_col) or '').strip() if address_col else ''
+                    city = str(row.get(city_col) or '').strip() if city_col else ''
+                    key_val = str(row.get(acct_key_col) or '').strip() if acct_key_col else ''
+                    label_parts = [p for p in (addr, city) if p and p.lower() != 'nan']
+                    label = ', '.join(label_parts)
+                    if label and key_val:
+                        acct = f"{chain_name} — {label} (#{key_val})"
+                    elif label:
+                        acct = f"{chain_name} — {label}"
+                    elif key_val:
+                        acct = f"{chain_name} — #{key_val}"
                 product = row.get('product')
                 if not product:
                     continue
@@ -662,6 +896,9 @@ def parse_all_mayyan():
     for f in sorted(folder.glob('*.xlsx')):
         if f.name.startswith('~'):
             continue
+        # Skip stock files — handled separately by get_distributor_inventory()
+        if 'stock' in f.name.lower():
+            continue
         data = parse_mayyan_file(f, price_table=price_table)
         for month, mdata in data.items():
             if month not in results:
@@ -686,6 +923,18 @@ def parse_all_mayyan():
                         existing['by_account'][key][sku]['units'] += vals.get('units', 0)
                         existing['by_account'][key][sku]['value'] = round(
                             existing['by_account'][key][sku]['value'] + vals.get('value', 0.0), 2)
+                # Merge by_chain
+                for chain, products in mdata.get('by_chain', {}).items():
+                    if chain not in existing.setdefault('by_chain', {}):
+                        existing['by_chain'][chain] = {}
+                    for sku, units in products.items():
+                        existing['by_chain'][chain][sku] = existing['by_chain'][chain].get(sku, 0) + units
+                # Merge by_customer_type
+                for ctype, products in mdata.get('by_customer_type', {}).items():
+                    if ctype not in existing.setdefault('by_customer_type', {}):
+                        existing['by_customer_type'][ctype] = {}
+                    for sku, units in products.items():
+                        existing['by_customer_type'][ctype][sku] = existing['by_customer_type'][ctype].get(sku, 0) + units
                 # Merge branches
                 existing.setdefault('branches', set()).update(mdata.get('branches', set()))
     return results
@@ -743,7 +992,6 @@ def parse_karfree_inventory():
                         pdf_files.append(f)
             except Exception:
                 pass
-    pdf_files = sorted(pdf_files, key=lambda f: f.stat().st_mtime)
     if not pdf_files:
         return {}
 
@@ -753,78 +1001,93 @@ def parse_karfree_inventory():
         print("  Warning: pdfplumber not installed, skipping inventory")
         return {}
 
-    filepath = pdf_files[-1]
-    results = {
-        'report_date': None,
-        'products': {},
-        'total_units': 0,
-        'total_pallets': 0,
-    }
+    # Pick the file with the latest report date (not mtime — mtime is unreliable).
+    # Parse all candidates, return the one with the newest date.
+    best_result = None
+    best_date = (0, 0, 0)
 
-    with pdfplumber.open(filepath) as pdf:
-        full_text = ''
-        for page in pdf.pages:
-            full_text += page.extract_text() + '\n'
+    for filepath in pdf_files:
+        results = {
+            'report_date': None,
+            'products': {},
+            'total_units': 0,
+            'total_pallets': 0,
+        }
 
-    lines = full_text.split('\n')
-    current_product = None
+        try:
+            with pdfplumber.open(filepath) as pdf:
+                full_text = ''
+                for page in pdf.pages:
+                    full_text += page.extract_text() + '\n'
+        except Exception:
+            continue
 
-    for line in lines:
-        if ':ךיראתל ןוכנ' in line:
-            date_match = re.search(r'(\d{2}/\d{2}/\d{4})', line)
-            if date_match:
-                results['report_date'] = date_match.group(1)
+        lines = full_text.split('\n')
+        current_product = None
 
-        if 'טירפ' in line and ':' in line:
-            product = _classify_product_karfree(line)
-            current_product = product  # Reset even if None (e.g. Dubai products)
-            if product and product not in results['products']:
-                results['products'][product] = {
-                    'units': 0, 'pallets': 0, 'batches': []
-                }
+        for line in lines:
+            if ':ךיראתל ןוכנ' in line:
+                date_match = re.search(r'(\d{2}/\d{2}/\d{4})', line)
+                if date_match:
+                    results['report_date'] = date_match.group(1)
 
-        if current_product and re.match(r'^\s*0\s+000017', line):
-            parts = line.split()
-            try:
-                packages = None
-                for i, p in enumerate(parts):
-                    if p == '0.00' and i + 1 < len(parts):
-                        packages = int(parts[i + 1])
-                        break
-                if packages:
-                    # Vanilla (לינו) has both 6-pack and 10-pack SKUs:
-                    # non-240 pallets are old 6-packs, 240 pallets are 10-packs
-                    if current_product == 'vanilla':
-                        factor = 10 if packages == 240 else 6
-                    else:
-                        factor = 10  # all other ice cream products are 10 units/carton
-                    actual_units = packages * factor
-                    dates = re.findall(r'\d{2}/\d{2}/\d{4}', line)
-                    batch = {
-                        'packages': packages,
-                        'factor': factor,
-                        'units': actual_units,
-                        'expiry': dates[0] if len(dates) > 0 else None,
-                        'production': dates[1] if len(dates) > 1 else None,
-                        'entry': dates[2] if len(dates) > 2 else None,
+            if 'טירפ' in line and ':' in line:
+                product = _classify_product_karfree(line)
+                current_product = product  # Reset even if None (e.g. Dubai products)
+                if product and product not in results['products']:
+                    results['products'][product] = {
+                        'units': 0, 'pallets': 0, 'batches': []
                     }
-                    results['products'][current_product]['batches'].append(batch)
-            except (ValueError, IndexError):
-                pass
 
-        if 'טירפל' in line and 'כ"הס' in line:
-            total_match = re.search(r'(\d[\d\s,]*\d)\s+(\d+)\s+:טירפל', line)
-            if total_match and current_product:
-                pallets_count = int(total_match.group(2))
-                results['products'][current_product]['pallets'] = pallets_count
+            if current_product and re.match(r'^\s*0\s+000017', line):
+                parts = line.split()
+                try:
+                    packages = None
+                    for i, p in enumerate(parts):
+                        if p == '0.00' and i + 1 < len(parts):
+                            packages = int(parts[i + 1])
+                            break
+                    if packages:
+                        # Vanilla (לינו) has both 6-pack and 10-pack SKUs:
+                        # non-240 pallets are old 6-packs, 240 pallets are 10-packs
+                        if current_product == 'vanilla':
+                            factor = 10 if packages == 240 else 6
+                        else:
+                            factor = 10  # all other ice cream products are 10 units/carton
+                        actual_units = packages * factor
+                        dates = re.findall(r'\d{2}/\d{2}/\d{4}', line)
+                        batch = {
+                            'packages': packages,
+                            'factor': factor,
+                            'units': actual_units,
+                            'expiry': dates[0] if len(dates) > 0 else None,
+                            'production': dates[1] if len(dates) > 1 else None,
+                            'entry': dates[2] if len(dates) > 2 else None,
+                        }
+                        results['products'][current_product]['batches'].append(batch)
+                except (ValueError, IndexError):
+                    pass
 
-    for p, pdata in results['products'].items():
-        pdata['units'] = sum(b['units'] for b in pdata['batches'])
-        pdata['packages'] = sum(b['packages'] for b in pdata['batches'])
-        results['total_units'] += pdata['units']
-        results['total_pallets'] += pdata['pallets']
+            if 'טירפל' in line and 'כ"הס' in line:
+                total_match = re.search(r'(\d[\d\s,]*\d)\s+(\d+)\s+:טירפל', line)
+                if total_match and current_product:
+                    pallets_count = int(total_match.group(2))
+                    results['products'][current_product]['pallets'] = pallets_count
 
-    return results
+        for p, pdata in results['products'].items():
+            pdata['units'] = sum(b['units'] for b in pdata['batches'])
+            pdata['packages'] = sum(b['packages'] for b in pdata['batches'])
+            results['total_units'] += pdata['units']
+            results['total_pallets'] += pdata['pallets']
+
+        # Compare by report date
+        if results.get('report_date') and results.get('total_units', 0) > 0:
+            date_key = _stock_report_date_key(results['report_date'])
+            if date_key > best_date:
+                best_date = date_key
+                best_result = results
+
+    return best_result or {}
 
 
 def get_warehouse_data():
@@ -923,44 +1186,51 @@ def parse_distributor_stock(filepath):
     return results
 
 
+def _stock_report_date_key(date_str):
+    """Convert 'dd/mm/yyyy' report date to sortable (yyyy, mm, dd) tuple."""
+    if not date_str:
+        return (0, 0, 0)
+    try:
+        parts = date_str.split('/')
+        return (int(parts[2]), int(parts[1]), int(parts[0]))
+    except (IndexError, ValueError):
+        return (0, 0, 0)
+
+
 def get_distributor_inventory():
-    """Parse distributor stock files from icedream and mayyan folders."""
+    """Parse distributor stock files from icedream and mayyan folders.
+
+    Picks the stock file with the latest report_date (not file mtime)
+    for each distributor.
+    """
     dist_inv = {}
 
-    # Search in multiple possible locations for stock files
-    ice_folders = [DATA_DIR / 'icedreams', OUTPUT_DIR / 'icedream']
-    for icedream_folder in ice_folders:
-        if not icedream_folder.exists():
-            continue
-        for f in sorted(icedream_folder.glob('*stock*'), key=lambda p: p.stat().st_mtime, reverse=True):
-            if f.name.startswith('~'):
+    def _find_best_stock(folders, dist_key):
+        """Parse all stock files in folders, return the one with latest report date."""
+        best = None
+        best_date = (0, 0, 0)
+        for folder in folders:
+            if not folder.exists():
                 continue
-            try:
-                data = parse_distributor_stock(f)
-                if data.get('products'):
-                    dist_inv['icedream'] = data
-                    break
-            except Exception:
-                pass
-        if 'icedream' in dist_inv:
-            break
+            # Case-insensitive stock file matching
+            stock_files = [f for f in folder.iterdir() if 'stock' in f.name.lower() and not f.is_dir()]
+            for f in stock_files:
+                if f.name.startswith('~'):
+                    continue
+                try:
+                    data = parse_distributor_stock(f)
+                    if data.get('products'):
+                        date_key = _stock_report_date_key(data.get('report_date'))
+                        if date_key > best_date:
+                            best_date = date_key
+                            best = data
+                except Exception:
+                    pass
+        if best:
+            dist_inv[dist_key] = best
 
-    may_folders = [DATA_DIR / 'mayyan', OUTPUT_DIR / 'Maayan']
-    for mayyan_folder in may_folders:
-        if not mayyan_folder.exists():
-            continue
-        for f in sorted(mayyan_folder.glob('*stock*'), key=lambda p: p.stat().st_mtime, reverse=True):
-            if f.name.startswith('~'):
-                continue
-            try:
-                data = parse_distributor_stock(f)
-                if data.get('products'):
-                    dist_inv['mayyan'] = data
-                    break
-            except Exception:
-                pass
-        if 'mayyan' in dist_inv:
-            break
+    _find_best_stock([DATA_DIR / 'icedreams', OUTPUT_DIR / 'icedream'], 'icedream')
+    _find_best_stock([DATA_DIR / 'mayyan', OUTPUT_DIR / 'Maayan'], 'mayyan')
 
     return dist_inv
 
@@ -970,56 +1240,121 @@ def get_distributor_inventory():
 # Biscotti Dream Cake price — sourced from pricing_engine (SSOT)
 BISCOTTI_PRICE_DREAM_CAKE = get_b2b_price_safe('dream_cake_2')
 
-def _parse_biscotti_file(filepath):
-    """Parse Daniel Amit weekly Biscotti report.
+def _biscotti_week_to_month(week_num):
+    """Map ISO week number to month key using central registry."""
+    from config import WEEK_TO_MONTH
+    return WEEK_TO_MONTH.get(week_num, f'W{week_num}')
 
-    Format: Multi-sheet Excel.
-      - 'סיכום כללי' sheet: summary across all weeks, rows = branches, last col = total
-      - 'שבוע N (...)' sheets: one per week with daily columns
+
+def _parse_biscotti_file(filepath):
+    """Parse Biscotti sales report.
+
+    **New format (primary)**: Single sheet 'סיכום כללי' with columns:
+      - 'מספר לקוח' (internal ID — ignored)
+      - 'שם לקוח'   (sale point name)
+      - 'כמות'      (quantity)
+      Skip row where שם לקוח == 'סה"כ כללי' (grand total).
+
+    **Old format (fallback)**: Multi-sheet Excel with 'שבוע N' weekly sheets
+      and/or a 'סיכום' summary sheet (branch × week totals).
+
+    Week-to-month: extracted from filename (e.g. week13.xlsx → W13 → March 2026).
+    Falls back to 'March 2026' if no week number found.
 
     Returns {month_key: {'totals': {product: {'units', 'value'}},
                          'by_customer': {branch: {product: {'units', 'value'}}}}}
-    All data maps to March 2026 (dates 18.3+).
     """
-    import os
+    import os, re
     xl = pd.ExcelFile(filepath)
-    print(f"  [Biscotti] {os.path.basename(filepath)} → sheets: {xl.sheet_names}")
+    fname = os.path.basename(filepath)
+    print(f"  [Biscotti] {fname} → sheets: {xl.sheet_names}")
 
-    # Try to use the summary sheet first; fall back to aggregating week sheets
-    SUMMARY_KEYWORD = 'סיכום'
-    WEEK_KEYWORD = 'שבוע'
+    # --- Determine month from filename week number ---
+    week_match = re.search(r'week\s*(\d+)', fname, re.IGNORECASE)
+    if week_match:
+        month_key = _biscotti_week_to_month(int(week_match.group(1)))
+    else:
+        month_key = 'Unknown'  # no hardcoded fallback — will be filtered downstream
 
-    summary_sheet = next((s for s in xl.sheet_names if SUMMARY_KEYWORD in s), None)
-    week_sheets = [s for s in xl.sheet_names if WEEK_KEYWORD in s]
+    branch_totals = {}  # {sale_point_name: units}
 
-    branch_totals = {}  # {branch_name: units}
+    # --- Try NEW format first: סיכום כללי with שם לקוח + כמות columns ---
+    # Also accept any sheet that has 'שם לקוח' and 'כמות' column headers (e.g. PRI*.tmp sheets)
+    SUMMARY_SHEET = 'סיכום כללי'
+    new_format_parsed = False
+    summary_sheet = next((s for s in xl.sheet_names if s.strip() == SUMMARY_SHEET), None)
 
-    if summary_sheet:
-        df = pd.read_excel(filepath, sheet_name=summary_sheet, header=None)
-        # Row 2 = headers: col 0 = "סניף", last col = "סה"כ"
-        # Data rows: 3 to second-to-last (last row is the grand total "סה"כ")
-        total_col = df.shape[1] - 1
-        for i in range(3, len(df) - 1):
-            branch = str(df.iloc[i, 0]).strip()
-            total = df.iloc[i, total_col]
-            if branch and branch != 'nan' and total and str(total) != 'nan':
-                branch_totals[branch] = int(total)
-    elif week_sheets:
-        # Aggregate across all week sheets
-        for sheet in week_sheets:
-            df = pd.read_excel(filepath, sheet_name=sheet, header=None)
+    # If no exact sheet name match, scan all sheets for the expected column headers
+    sheets_to_try = [summary_sheet] if summary_sheet else xl.sheet_names
+
+    for sheet_name in sheets_to_try:
+        if new_format_parsed:
+            break
+        df = pd.read_excel(filepath, sheet_name=sheet_name)
+        # Find columns by name — also scan first 10 rows for header row
+        name_col = None
+        qty_col = None
+        for col in df.columns:
+            col_str = str(col).strip()
+            if 'שם לקוח' in col_str:
+                name_col = col
+            elif 'כמות' in col_str:
+                qty_col = col
+        # If headers not in first row, scan rows for header row and re-read
+        if name_col is None or qty_col is None:
+            for idx in range(min(10, len(df))):
+                row_vals = [str(v).strip() for v in df.iloc[idx]]
+                if any('שם לקוח' in v for v in row_vals) and any('כמות' in v for v in row_vals):
+                    df = pd.read_excel(filepath, sheet_name=sheet_name, header=idx + 1)
+                    for col in df.columns:
+                        col_str = str(col).strip()
+                        if 'שם לקוח' in col_str:
+                            name_col = col
+                        elif 'כמות' in col_str:
+                            qty_col = col
+                    break
+        if name_col is not None and qty_col is not None:
+            new_format_parsed = True
+            for _, row in df.iterrows():
+                name = str(row[name_col]).strip()
+                qty = row[qty_col]
+                if not name or name == 'nan' or name == 'סה"כ כללי':
+                    continue
+                if pd.isna(qty):
+                    continue
+                try:
+                    branch_totals[name] = branch_totals.get(name, 0) + int(qty)
+                except (ValueError, TypeError):
+                    continue
+
+    # --- Fallback: OLD format (שבוע / סיכום sheets) ---
+    if not new_format_parsed:
+        SUMMARY_KEYWORD = 'סיכום'
+        WEEK_KEYWORD = 'שבוע'
+        old_summary = next((s for s in xl.sheet_names if SUMMARY_KEYWORD in s), None)
+        week_sheets = [s for s in xl.sheet_names if WEEK_KEYWORD in s]
+
+        if old_summary:
+            df = pd.read_excel(filepath, sheet_name=old_summary, header=None)
             total_col = df.shape[1] - 1
-            for i in range(2, len(df) - 1):
+            for i in range(3, len(df) - 1):
                 branch = str(df.iloc[i, 0]).strip()
                 total = df.iloc[i, total_col]
                 if branch and branch != 'nan' and total and str(total) != 'nan':
-                    branch_totals[branch] = branch_totals.get(branch, 0) + int(total)
+                    branch_totals[branch] = int(total)
+        elif week_sheets:
+            for sheet in week_sheets:
+                df = pd.read_excel(filepath, sheet_name=sheet, header=None)
+                total_col = df.shape[1] - 1
+                for i in range(2, len(df) - 1):
+                    branch = str(df.iloc[i, 0]).strip()
+                    total = df.iloc[i, total_col]
+                    if branch and branch != 'nan' and total and str(total) != 'nan':
+                        branch_totals[branch] = branch_totals.get(branch, 0) + int(total)
 
     if not branch_totals:
         return {}
 
-    # All data maps to March 2026
-    month_key = 'March 2026'
     total_units = sum(branch_totals.values())
     total_value = round(total_units * BISCOTTI_PRICE_DREAM_CAKE, 2)
 
@@ -1055,14 +1390,24 @@ def parse_all_biscotti():
     for f in sorted(folder.glob('*.xlsx')):
         if f.name.startswith('~') or f.name.startswith('.'):
             continue
+        # Skip temp files (e.g. PRI8C5F.tmp.xlsx)
+        if '.tmp.' in f.name.lower():
+            continue
         # Skip item-setup / admin files — only parse weekly sales reports
-        # Identified by presence of 'שבוע' or 'סיכום' sheets
+        # Identified by: sheet name contains 'שבוע' or 'סיכום' (old/new format),
+        # OR filename contains 'week' (new PRI*.tmp sheet format),
+        # OR sheet contains 'שם לקוח' + 'כמות' column headers
         try:
             xl = pd.ExcelFile(f)
             sheets = xl.sheet_names
             is_sales_report = any(
                 'שבוע' in s or 'סיכום' in s for s in sheets
             )
+            if not is_sales_report:
+                # Also accept files named weekN.xlsx
+                import re as _re
+                if _re.search(r'week\s*\d+', f.name, _re.IGNORECASE):
+                    is_sales_report = True
             if not is_sales_report:
                 continue
         except Exception:
@@ -1144,16 +1489,22 @@ def consolidate_data():
     }
 
     for month in all_months:
+        # Filter out internal/promo accounts (e.g. Oogiplatset) from customer dicts
+        _ice_cust_raw = icedreams.get(month, {}).get('by_customer', {})
+        _ice_cust = {k: v for k, v in _ice_cust_raw.items() if k not in INTERNAL_ACCOUNTS}
+        _bisc_cust_raw = biscotti.get(month, {}).get('by_customer', {})
+        _bisc_cust = {k: v for k, v in _bisc_cust_raw.items() if k not in INTERNAL_ACCOUNTS}
+
         month_data = {
             'icedreams': icedreams.get(month, {}).get('totals', {}),
             'mayyan': mayyan.get(month, {}).get('totals', {}),
-            'icedreams_customers': icedreams.get(month, {}).get('by_customer', {}),
+            'icedreams_customers': _ice_cust,
             'mayyan_chains': mayyan.get(month, {}).get('by_chain', {}),
             'mayyan_accounts': mayyan.get(month, {}).get('by_account', {}),
             'mayyan_branches': mayyan.get(month, {}).get('branches', set()),
             'mayyan_types': mayyan.get(month, {}).get('by_customer_type', {}),
             'biscotti': biscotti.get(month, {}).get('totals', {}),
-            'biscotti_customers': biscotti.get(month, {}).get('by_customer', {}),
+            'biscotti_customers': _bisc_cust,
             'combined': {},
         }
 
@@ -1210,6 +1561,106 @@ def consolidate_data():
         # (pricing was applied at parse time using _mayyan_chain_price per row)
         month_data['mayyan_accounts_revenue'] = month_data.get('mayyan_accounts', {})
 
+        # Filter Biscotti customers: same hygiene as Icedream (drop zero-unit branches, round values)
+        filtered_bisc = {}
+        for branch, pdata in month_data.get('biscotti_customers', {}).items():
+            total_u = sum(v.get('units', 0) for v in pdata.values())
+            if total_u != 0:
+                for p, vals in pdata.items():
+                    vals['value'] = round(vals.get('value', 0), 2)
+                filtered_bisc[branch] = pdata
+        month_data['biscotti_customers'] = filtered_bisc
+
         consolidated['monthly_data'][month] = month_data
 
+    # ── Phase 2: Enrich with DB IDs ─────────────────────────────────────
+    consolidated['id_maps'] = _enrich_with_ids(consolidated)
+
     return consolidated
+
+
+def _enrich_with_ids(consolidated):
+    """Resolve all customer/product/distributor names to DB IDs.
+
+    Returns an id_maps dict:
+      {
+        'customers':    {english_name: customer_id, ...},
+        'products':     {sku_key: product_id, ...},
+        'brands':       {brand_key: brand_id, ...},
+        'distributors': {dist_key: distributor_id, ...},
+        'available':    True/False   ← whether DB resolver was used
+      }
+
+    If DB is unavailable, returns {'available': False} and everything
+    continues to work via string-based matching (backward compatible).
+    """
+    resolver = _get_resolver()
+    if not resolver:
+        return {'available': False}
+
+    customer_id_map = {}   # english_name → customer_id
+    product_id_map = {}    # sku_key → product_id
+    brand_id_map = {}      # brand_key → brand_id
+    dist_id_map = {}       # dist_key → distributor_id
+
+    # ── Resolve products (from the known SKU list) ──
+    for sku in consolidated.get('products', []):
+        result = resolver.resolve_product_by_sku(sku)
+        if result:
+            product_id_map[sku] = result[0]  # product_id
+
+    # ── Resolve distributors ──
+    for dist_key in ('icedream', 'mayyan_froz', 'biscotti'):
+        did = resolver.resolve_distributor(dist_key)
+        if did:
+            dist_id_map[dist_key] = did
+
+    # ── Resolve brands ──
+    for brand_key in ('turbo', 'danis'):
+        bid = resolver.resolve_brand(brand_key)
+        if bid:
+            brand_id_map[brand_key] = bid
+
+    # ── Resolve customer names (collect from all months) ──
+    all_customer_names = set()
+    for month, mdata in consolidated.get('monthly_data', {}).items():
+        # Icedream customers (English names from extract_customer_name)
+        all_customer_names.update(mdata.get('icedreams_customers', {}).keys())
+        # Biscotti customers (Hebrew branch names — resolve to parent customer)
+        all_customer_names.update(mdata.get('biscotti_customers', {}).keys())
+        # Ma'ayan chains (Hebrew chain names)
+        all_customer_names.update(mdata.get('mayyan_chains', {}).keys())
+
+    for name in all_customer_names:
+        if name in customer_id_map:
+            continue
+        result = resolver.resolve_customer(name)
+        if result:
+            customer_id_map[name] = result[0]  # customer_id
+
+    # ── Report coverage ──
+    n_cust = len(customer_id_map)
+    n_cust_total = len(all_customer_names)
+    n_prod = len(product_id_map)
+    n_prod_total = len(consolidated.get('products', []))
+    print(f"  ID enrichment: customers {n_cust}/{n_cust_total}, "
+          f"products {n_prod}/{n_prod_total}, "
+          f"distributors {len(dist_id_map)}, brands {len(brand_id_map)}")
+
+    if resolver.unresolved_customers:
+        print(f"  ⚠ {len(resolver.unresolved_customers)} unresolved customer names:")
+        for name, count in sorted(resolver.unresolved_customers.items(), key=lambda x: -x[1])[:10]:
+            print(f"    [{count}x] '{name}'")
+
+    if resolver.unresolved_products:
+        print(f"  ⚠ {len(resolver.unresolved_products)} unresolved product names:")
+        for name, count in sorted(resolver.unresolved_products.items(), key=lambda x: -x[1])[:10]:
+            print(f"    [{count}x] '{name}'")
+
+    return {
+        'available': True,
+        'customers': customer_id_map,
+        'products': product_id_map,
+        'brands': brand_id_map,
+        'distributors': dist_id_map,
+    }
