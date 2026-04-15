@@ -30,3 +30,16 @@ raito_dump*.sql
 # IDE
 .vscode/
 .idea/
+
+# Local-only docs and notes
+*.docx
+*.pptx
+vault/Home.md
+vault/CLAUDE.md
+vault/Notes/Distributor Overview.md
+vault/Notes/RAITO Parser Landscape.md
+vault/Topics/
+raito/
+
+# Generated dashboard output (already above, also the non-unified one)
+docs/dashboard.html

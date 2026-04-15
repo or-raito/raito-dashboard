@@ -29,4 +29,8 @@ Dockerfile
 .claude/
 CLAUDE.md
 RAITO_BRIEFING.md
+RAITO_CONTEXT.md
+RAITO_ARCHITECTURE.md
+RAITO_DATA.md
+RAITO_DECISIONS.md
 RAITO_SQL_Architecture_Plan.md
