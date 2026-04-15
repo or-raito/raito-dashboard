@@ -98,22 +98,132 @@ BRAND_FILTERS = {
               'products': ['dream_cake', 'dream_cake_2']},
 }
 
-# ── Month Mappings ──────────────────────────────────────────────────────
+# ── Month Registry (auto-generated — SINGLE SOURCE OF TRUTH) ──────────
+# Add months here ONLY. Every other file imports from this registry.
+# Format: ('Month Year', 'short_key', 'Short Label')
 
-MONTH_ORDER = {
-    'October 2025': 0, 'December 2025': 1, 'January 2026': 2,
-    'February 2026': 3, 'March 2026': 4, 'April 2026': 5, 'May 2026': 6,
-    'June 2026': 8, 'July 2026': 9, 'August 2026': 10, 'September 2026': 11,
-}
+from datetime import date as _date
 
-MONTH_NAMES_HEB = {
-    'October 2025': "Oct '25", 'December 2025': "Dec '25",
-    'January 2026': "Jan '26", 'February 2026': "Feb '26", 'March 2026': "Mar '26",
-    'April 2026': "Apr '26", 'May 2026': "May '26", 'June 2026': "Jun '26",
-    'July 2026': "Jul '26", 'August 2026': "Aug '26", 'September 2026': "Sep '26",
-}
+_MONTH_REGISTRY = [
+    # ('October 2025',   'oct25', "Oct '25"),  # Pre-launch, minimal data — excluded
+    ('November 2025',  'nov',   "Nov '25"),
+    ('December 2025',  'dec',   "Dec '25"),
+    ('January 2026',   'jan',   "Jan '26"),
+    ('February 2026',  'feb',   "Feb '26"),
+    ('March 2026',     'mar',   "Mar '26"),
+    ('April 2026',     'apr',   "Apr '26"),
+    ('May 2026',       'may',   "May '26"),
+    ('June 2026',      'jun',   "Jun '26"),
+    ('July 2026',      'jul',   "Jul '26"),
+    ('August 2026',    'aug',   "Aug '26"),
+    ('September 2026', 'sep',   "Sep '26"),
+    ('October 2026',   'oct',   "Oct '26"),
+    ('November 2026',  'nov26', "Nov '26"),
+    ('December 2026',  'dec26', "Dec '26"),
+]
 
+# ── Derived structures (all auto-generated from _MONTH_REGISTRY) ──────
+
+MONTH_ORDER = {m[0]: i for i, m in enumerate(_MONTH_REGISTRY)}
+
+MONTH_NAMES_HEB = {m[0]: m[2] for m in _MONTH_REGISTRY}
+
+# full_name → short_key  (e.g. 'March 2026' → 'mar')
+MONTH_KEYS = {m[0]: m[1] for m in _MONTH_REGISTRY}
+
+# Ordered list of short keys  (e.g. ['dec', 'jan', 'feb', ...])
+ALL_MONTH_KEYS = [m[1] for m in _MONTH_REGISTRY]
+
+# Ordered list of full names  (e.g. ['December 2025', 'January 2026', ...])
 CHART_MONTHS = list(MONTH_ORDER.keys())
+
+# short_key → full_name reverse lookup
+MONTH_KEY_TO_FULL = {m[1]: m[0] for m in _MONTH_REGISTRY}
+
+# full_name → 'YYYY-MM' API format  (e.g. 'March 2026' → '2026-03')
+_MONTH_ABBR_TO_NUM = {
+    'January': '01', 'February': '02', 'March': '03', 'April': '04',
+    'May': '05', 'June': '06', 'July': '07', 'August': '08',
+    'September': '09', 'October': '10', 'November': '11', 'December': '12',
+}
+MONTH_TO_API = {}
+for _m in _MONTH_REGISTRY:
+    _parts = _m[0].split()  # e.g. ['March', '2026']
+    MONTH_TO_API[_m[0]] = f"{_parts[1]}-{_MONTH_ABBR_TO_NUM[_parts[0]]}"
+
+# ── Week-to-Month mapping (ISO weeks → month full name) ──────────────
+# Auto-generated: for each ISO week, determine which month it belongs to
+# by checking the Thursday of that week (ISO standard).
+
+def _build_week_to_month():
+    """Build {(year, week_num): 'Month Year'} for all weeks in range."""
+    from datetime import timedelta
+    mapping = {}
+    valid_months = set(MONTH_ORDER.keys())
+    # Cover ISO weeks for years 2025 and 2026
+    for year in (2025, 2026):
+        for wk in range(1, 54):
+            try:
+                # Thursday of ISO week determines the month
+                thu = _date.fromisocalendar(year, wk, 4)
+            except ValueError:
+                continue
+            month_name = thu.strftime('%B %Y')  # e.g. 'March 2026'
+            if month_name in valid_months:
+                mapping[wk] = month_name
+                # Also store with year prefix for disambiguation
+                mapping[(year, wk)] = month_name
+    return mapping
+
+WEEK_TO_MONTH = _build_week_to_month()
+
+# Hebrew month name → full English name (for Ma'ayan parser)
+HEBREW_MONTH_NAMES = {
+    'ינואר': 'January', 'פברואר': 'February', 'מרץ': 'March',
+    'אפריל': 'April', 'מאי': 'May', 'יוני': 'June',
+    'יולי': 'July', 'אוגוסט': 'August', 'ספטמבר': 'September',
+    'אוקטובר': 'October', 'נובמבר': 'November', 'דצמבר': 'December',
+}
+
+# Filename keywords → month full name (for Ma'ayan file detection)
+# First occurrence wins — e.g. 'dec' → 'December 2025', not 'December 2026'
+FILENAME_MONTH_KEYWORDS = {}
+for _m in _MONTH_REGISTRY:
+    _parts = _m[0].split()
+    _eng = _parts[0].lower()[:3]  # 'jan', 'feb', etc.
+    _full = _m[0]
+    if _eng not in FILENAME_MONTH_KEYWORDS:
+        FILENAME_MONTH_KEYWORDS[_eng] = _full
+    # Hebrew keywords
+    for _heb, _eng_full in HEBREW_MONTH_NAMES.items():
+        if _eng_full == _parts[0] and _heb not in FILENAME_MONTH_KEYWORDS:
+            FILENAME_MONTH_KEYWORDS[_heb] = _full
+            break
+
+# ── Active Months (auto-computed from current date) ───────────────────
+
+def get_active_months():
+    """Return registry entries up to and including the current month.
+
+    Used for status/trend computation — ensures the system knows which
+    months to expect data for. Months beyond today are excluded from
+    status calculations but still appear in table columns and dropdowns.
+    """
+    today = _date.today()
+    current = today.strftime('%B %Y')
+    result = []
+    for m in _MONTH_REGISTRY:
+        result.append(m)
+        if m[0] == current:
+            break
+    # If current month not in registry, return all registry entries
+    return result if result and result[-1][0] == current else list(_MONTH_REGISTRY)
+
+
+def get_active_month_keys():
+    """Return short keys for months up to and including today."""
+    return [m[1] for m in get_active_months()]
+
 
 # ── Shared Helpers ──────────────────────────────────────────────────────
 
@@ -139,6 +249,12 @@ def classify_product(name):
     elif 'פיסטוק' in name:
         return 'pistachio'
     return None
+
+# ── Internal / Promo Accounts (excluded from all customer metrics) ────────────
+# These are not real customers — they represent internal orders (promotions,
+# samples, ops manager orders, etc.) and should not count in revenue,
+# customer counts, or sale point metrics.
+INTERNAL_ACCOUNTS = {'Oogiplatset', 'עוגיפלצת', 'עוגיפלצת בע"מ'}
 
 # ── Customer Hierarchy (canonical source: registry.py) ─────────────────────────
 # "Chain" terminology is deprecated → use "Customer" / "Branch" instead.

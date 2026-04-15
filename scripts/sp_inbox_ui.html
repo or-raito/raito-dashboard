@@ -1,0 +1,203 @@
+<!--
+  RAITO — Unassigned Sale Points inbox (MD tab card)
+
+  Paste the contents of this file INSIDE the Master Data tab HTML, right after
+  the existing entity cards (customers, pricing, logistics, ...).
+
+  Dependencies (all already present in unified_dashboard.py's MD tab):
+    - Tailwind-like utility classes (the project uses plain CSS that mirrors
+      them — adjust class names if needed)
+    - fetch() — vanilla
+
+  Backend:
+    /api/sp-inbox/              GET   → list
+    /api/sp-inbox/<id>/confirm  POST  → {"customer_id": int}
+    /api/sp-inbox/resuggest     POST
+    /api/sp-inbox/customers     GET
+
+  Mounted via:  app.register_blueprint(sp_inbox_bp)  in the Flask app.
+-->
+
+<section id="sp-inbox-card" class="md-card"
+         style="border:1px solid #d1d5db;border-radius:12px;padding:20px;
+                margin:20px 0;background:#fff;">
+  <header style="display:flex;align-items:center;justify-content:space-between;
+                 margin-bottom:14px;">
+    <h3 style="margin:0;font-size:18px;font-weight:600;">
+      📥 Unassigned Sale Points
+      <span id="sp-inbox-count"
+            style="display:inline-block;margin-left:8px;padding:2px 8px;
+                   border-radius:999px;background:#fef3c7;color:#92400e;
+                   font-size:13px;font-weight:500;">0</span>
+    </h3>
+    <div>
+      <button id="sp-inbox-resuggest"
+              style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;
+                     background:#f9fafb;cursor:pointer;font-size:13px;">
+        🔄 Re-suggest all
+      </button>
+      <button id="sp-inbox-refresh"
+              style="padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;
+                     background:#f9fafb;cursor:pointer;font-size:13px;
+                     margin-left:6px;">
+        ↻ Refresh
+      </button>
+    </div>
+  </header>
+
+  <p style="font-size:13px;color:#6b7280;margin:0 0 12px 0;">
+    New branches found in distributor sales data that need a Customer Root.
+    High-confidence matches are pre-selected — just click <em>Confirm</em>.
+    Override via the dropdown if the suggestion is wrong.
+  </p>
+
+  <div style="overflow-x:auto;">
+    <table id="sp-inbox-table"
+           style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:#f3f4f6;text-align:left;">
+          <th style="padding:8px;border-bottom:1px solid #e5e7eb;">Branch</th>
+          <th style="padding:8px;border-bottom:1px solid #e5e7eb;">Distributor</th>
+          <th style="padding:8px;border-bottom:1px solid #e5e7eb;">Suggested customer</th>
+          <th style="padding:8px;border-bottom:1px solid #e5e7eb;">Confidence</th>
+          <th style="padding:8px;border-bottom:1px solid #e5e7eb;">Reason</th>
+          <th style="padding:8px;border-bottom:1px solid #e5e7eb;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="sp-inbox-tbody"></tbody>
+    </table>
+  </div>
+  <div id="sp-inbox-empty"
+       style="text-align:center;color:#6b7280;padding:20px;display:none;">
+    🎉 No unassigned sale points. Everything is mapped.
+  </div>
+</section>
+
+<script>
+(() => {
+  const base = '/api/sp-inbox';
+  let customerOptions = [];
+
+  async function loadCustomers() {
+    const r = await fetch(`${base}/customers`);
+    const j = await r.json();
+    customerOptions = (j.rows || []);
+  }
+
+  function customerDropdown(selectedId, spId) {
+    const opts = customerOptions.map(c =>
+      `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.name_en}</option>`
+    ).join('');
+    return `<select data-sp="${spId}" class="sp-inbox-select"
+                    style="padding:4px 8px;border-radius:4px;border:1px solid #d1d5db;
+                           font-size:13px;min-width:160px;">
+              <option value="">— select —</option>
+              ${opts}
+            </select>`;
+  }
+
+  function confidenceBadge(conf) {
+    if (conf == null || conf === 0) {
+      return `<span style="color:#6b7280;">—</span>`;
+    }
+    const pct = Math.round(conf * 100);
+    const color = conf >= 0.85 ? '#10b981'
+                : conf >= 0.65 ? '#f59e0b'
+                : '#6b7280';
+    return `<span style="color:${color};font-weight:500;">${pct}%</span>`;
+  }
+
+  async function loadInbox() {
+    const r = await fetch(`${base}/`);
+    const j = await r.json();
+    const rows = j.rows || [];
+    document.getElementById('sp-inbox-count').textContent = rows.length;
+
+    const tbody = document.getElementById('sp-inbox-tbody');
+    const empty = document.getElementById('sp-inbox-empty');
+
+    if (rows.length === 0) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    tbody.innerHTML = rows.map(r => `
+      <tr data-sp="${r.id}" style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:8px;font-family:monospace;direction:rtl;text-align:right;">
+          ${r.branch_name_he}
+        </td>
+        <td style="padding:8px;">${r.distributor_name}</td>
+        <td style="padding:8px;">
+          ${customerDropdown(r.suggested_customer_id, r.id)}
+        </td>
+        <td style="padding:8px;">${confidenceBadge(r.suggestion_confidence)}</td>
+        <td style="padding:8px;color:#6b7280;font-size:12px;">
+          ${r.suggestion_reason || '—'}
+        </td>
+        <td style="padding:8px;">
+          <button class="sp-inbox-confirm" data-sp="${r.id}"
+                  style="padding:4px 10px;border-radius:4px;border:0;
+                         background:#10b981;color:#fff;cursor:pointer;font-size:13px;">
+            ✓ Confirm
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    tbody.querySelectorAll('.sp-inbox-confirm').forEach(btn => {
+      btn.addEventListener('click', onConfirm);
+    });
+  }
+
+  async function onConfirm(ev) {
+    const spId = ev.target.dataset.sp;
+    const row  = ev.target.closest('tr');
+    const sel  = row.querySelector('.sp-inbox-select');
+    const custId = sel.value;
+    if (!custId) {
+      alert('Select a customer first.');
+      return;
+    }
+    ev.target.disabled = true;
+    ev.target.textContent = '…';
+    try {
+      const r = await fetch(`${base}/${spId}/confirm`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({customer_id: parseInt(custId, 10)}),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'confirm failed');
+      row.style.transition = 'opacity 0.3s';
+      row.style.opacity = '0';
+      setTimeout(() => row.remove(), 300);
+      const countEl = document.getElementById('sp-inbox-count');
+      countEl.textContent = Math.max(0, parseInt(countEl.textContent, 10) - 1);
+    } catch (err) {
+      alert('Confirm failed: ' + err.message);
+      ev.target.disabled = false;
+      ev.target.textContent = '✓ Confirm';
+    }
+  }
+
+  document.getElementById('sp-inbox-refresh')
+          .addEventListener('click', loadInbox);
+
+  document.getElementById('sp-inbox-resuggest')
+          .addEventListener('click', async () => {
+    const r = await fetch(`${base}/resuggest`, {method: 'POST'});
+    const j = await r.json();
+    if (j.ok) {
+      alert(`Re-suggested. ${j.changed} row(s) updated.`);
+      loadInbox();
+    } else {
+      alert('Re-suggest failed: ' + (j.error || 'unknown'));
+    }
+  });
+
+  // Initial load
+  loadCustomers().then(loadInbox);
+})();
+</script>

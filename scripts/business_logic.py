@@ -9,9 +9,12 @@ Design: Option A (pre-compute in Python). All status taxonomies and trend
 calculations are computed in the Python backend. The JS dashboard receives
 pre-computed values in the JSON payload — it never re-derives them.
 
-Canonical definitions (as of 2026-03-25):
-  Status: Based on 4-month unit history (Dec, Jan, Feb, Mar).
+Canonical definitions (as of 2026-04-14):
+  Status: Based on chronological unit history (any number of months).
   Trend:  MoM comparison of last two consecutive non-zero months.
+
+All functions accept *monthly_values (variadic) — backward compatible with
+the old 4-positional-arg signature (dec, jan, feb, mar).
 """
 
 from __future__ import annotations
@@ -23,44 +26,44 @@ from typing import Optional
 # Status Taxonomy
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# CANONICAL RULES (unified from SP dashboard + SP Excel):
+# CANONICAL RULES (dynamic — works with any number of months):
 #
-#   mar > 0 AND any prior month > 0     → "Active"
-#   mar > 0 AND no prior months > 0     → "New"
-#   mar == 0 AND feb > 0                → "No Mar order"  (W13 data may be pending)
-#   mar == 0 AND feb == 0 AND prior > 0 → "Churned"
-#   all months == 0                     → excluded (shouldn't reach here)
-#
-# Note: The previous SP Excel used a stricter "Active" rule (required feb > 0
-# specifically). We now unify to the dashboard's rule: mar > 0 AND *any* prior.
-# This means a sale point with mar=5, dec=3, jan=0, feb=0 is "Active" (not
-# "Reactivated"), because it has prior history even though feb was zero.
+#   last > 0 AND any prior month > 0     → "Active"
+#   last > 0 AND no prior months > 0     → "New"
+#   last == 0 AND second-to-last > 0     → "No {label} order"
+#   last == 0 AND second-to-last == 0 AND any prior > 0 → "Churned"
+#   all months == 0                      → excluded (shouldn't reach here)
 
-def compute_status(dec: int, jan: int, feb: int, mar: int) -> str:
-    """Compute sale-point status from four-month unit history.
+def compute_status(*monthly_values, last_month_label: str = 'recent') -> str:
+    """Compute sale-point status from chronological unit history.
+
+    Accepts any number of monthly unit values in chronological order.
+    The last value is treated as the "current" month.
 
     Args:
-        dec: Units in December 2025
-        jan: Units in January 2026
-        feb: Units in February 2026
-        mar: Units in March 2026
+        *monthly_values: Unit counts per month, oldest first.
+        last_month_label: Short name of the last month (e.g., 'Apr')
+            for the "No X order" status label.
 
     Returns:
-        One of: 'Active', 'New', 'No Mar order', 'Churned'
+        One of: 'Active', 'New', 'No {label} order', 'Churned'
     """
-    dec = dec or 0
-    jan = jan or 0
-    feb = feb or 0
-    mar = mar or 0
+    vals = [v or 0 for v in monthly_values]
+    if not vals:
+        return 'Churned'
 
-    if mar > 0:
-        if dec > 0 or jan > 0 or feb > 0:
+    last = vals[-1]
+    prior = vals[:-1]
+    second_last = prior[-1] if prior else 0
+
+    if last > 0:
+        if any(v > 0 for v in prior):
             return 'Active'
         else:
             return 'New'
-    elif feb > 0:
-        return 'No Mar order'
-    elif dec > 0 or jan > 0:
+    elif second_last > 0:
+        return f'No {last_month_label} order'
+    elif any(v > 0 for v in prior):
         return 'Churned'
     else:
         return 'Churned'
@@ -73,37 +76,25 @@ def compute_status(dec: int, jan: int, feb: int, mar: int) -> str:
 # CANONICAL RULE (unified):
 #   Walk the monthly sequence backwards. Find the last two consecutive months
 #   where both have > 0 units. Return the % change.
-#
-# Previous SP Excel compared only Dec→Feb. We unify to the dashboard's
-# approach: last two consecutive non-zero months, which adapts better as
-# new months are added.
 
-def compute_trend(dec: int, jan: int, feb: int, mar: int) -> Optional[int]:
+def compute_trend(*monthly_values) -> Optional[int]:
     """Compute MoM trend as integer percentage.
 
     Compares the last two consecutive months that both have > 0 units.
     Returns None if no such pair exists.
 
     Args:
-        dec: Units in December 2025
-        jan: Units in January 2026
-        feb: Units in February 2026
-        mar: Units in March 2026
+        *monthly_values: Unit counts per month, oldest first.
 
     Returns:
         Integer percentage change (e.g., 25 for +25%, -50 for -50%),
         or None if trend cannot be computed.
     """
-    dec = dec or 0
-    jan = jan or 0
-    feb = feb or 0
-    mar = mar or 0
+    vals = [v or 0 for v in monthly_values]
 
-    monthly_seq = [dec, jan, feb, mar]
-
-    for i in range(len(monthly_seq) - 1, 0, -1):
-        if monthly_seq[i] > 0 and monthly_seq[i - 1] > 0:
-            return round((monthly_seq[i] - monthly_seq[i - 1]) / monthly_seq[i - 1] * 100)
+    for i in range(len(vals) - 1, 0, -1):
+        if vals[i] > 0 and vals[i - 1] > 0:
+            return round((vals[i] - vals[i - 1]) / vals[i - 1] * 100)
 
     return None
 
@@ -127,42 +118,56 @@ def compute_trend_fraction(dec: int, feb: int) -> Optional[float]:
 # Ordering Pattern
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def compute_ordering_pattern(dec: int, jan: int, feb: int, mar: int) -> str:
-    """Classify ordering consistency across 4 months.
+def compute_ordering_pattern(*monthly_values) -> str:
+    """Classify ordering consistency.
 
-    Returns 'Consistent' if data in >= 3 of 4 months, else 'Sporadic'.
+    Returns 'Consistent' if data in >= 75% of months, else 'Sporadic'.
     """
-    active = sum(1 for v in [dec or 0, jan or 0, feb or 0, mar or 0] if v > 0)
-    return 'Consistent' if active >= 3 else 'Sporadic'
+    vals = [v or 0 for v in monthly_values]
+    if not vals:
+        return 'Sporadic'
+    active = sum(1 for v in vals if v > 0)
+    threshold = max(3, len(vals) * 3 // 4)  # 75%, minimum 3
+    return 'Consistent' if active >= threshold else 'Sporadic'
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Months Active
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def compute_months_active(dec: int, jan: int, feb: int, mar: int) -> int:
-    """Count how many of the 4 months had > 0 units."""
-    return sum(1 for v in [dec or 0, jan or 0, feb or 0, mar or 0] if v > 0)
+def compute_months_active(*monthly_values) -> int:
+    """Count how many months had > 0 units."""
+    return sum(1 for v in monthly_values if (v or 0) > 0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Batch Pre-Computation (for SP dashboard JSON payload)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def enrich_salepoint(sp: dict) -> dict:
+def enrich_salepoint(sp: dict, month_keys=None) -> dict:
     """Add computed status, trend, and months_active to a sale-point dict.
 
-    Expects keys: 'dec', 'jan', 'feb', 'mar' (unit counts).
-    Adds keys: 'status', 'trend', 'months_active'.
+    Reads unit values for each month key from the dict, computes status/trend,
+    and writes the results back. Mutates and returns the same dict.
 
-    Mutates and returns the same dict for chaining convenience.
+    Args:
+        sp: Sale-point dict with month short keys (e.g., 'dec', 'jan', ...).
+        month_keys: Ordered list of month short keys to use for computation.
+            If None, uses active months from config.get_active_month_keys().
     """
-    d = sp.get('dec', 0) or 0
-    j = sp.get('jan', 0) or 0
-    f = sp.get('feb', 0) or 0
-    m = sp.get('mar', 0) or 0
+    if month_keys is None:
+        from config import get_active_month_keys
+        month_keys = get_active_month_keys()
 
-    sp['status'] = compute_status(d, j, f, m)
-    sp['trend'] = compute_trend(d, j, f, m)
-    sp['months_active'] = compute_months_active(d, j, f, m)
+    vals = [sp.get(k, 0) or 0 for k in month_keys]
+
+    # Determine the last month's short label for the "No X order" status
+    from config import _MONTH_REGISTRY
+    label_map = {m[1]: m[2].split()[0] for m in _MONTH_REGISTRY}
+    last_key = month_keys[-1] if month_keys else 'recent'
+    last_label = label_map.get(last_key, last_key.capitalize())
+
+    sp['status'] = compute_status(*vals, last_month_label=last_label)
+    sp['trend'] = compute_trend(*vals)
+    sp['months_active'] = compute_months_active(*vals)
     return sp

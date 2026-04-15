@@ -14,13 +14,9 @@ from business_logic import compute_status, compute_trend, compute_ordering_patte
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-MONTHS = ['December 2025', 'January 2026', 'February 2026', 'March 2026']
-MONTH_SHORT = {
-    'December 2025': 'Dec',
-    'January 2026': 'Jan',
-    'February 2026': 'Feb',
-    'March 2026': 'Mar',
-}
+from config import _MONTH_REGISTRY
+MONTHS = [m[0] for m in _MONTH_REGISTRY]
+MONTH_SHORT = {m[0]: m[2].split()[0] for m in _MONTH_REGISTRY}
 FLAVORS = ['chocolate', 'vanilla', 'mango', 'pistachio', 'dream_cake', 'dream_cake_2']
 
 # Ma'ayan customer name normalization (typo/variant → canonical Hebrew, then EN)
@@ -39,7 +35,6 @@ _ICE_CUSTOMER_PREFIXES = [
     ('חוות נעמי', 'חוות נעמי'),
     ('נוי השדה', 'נוי השדה'),
     ('ינגו', 'ינגו'),
-    ('עוגיפלצת', 'עוגיפלצת'),
     ('כרמלה', 'כרמלה'),
     ('פוט לוקר', 'פוט לוקר'),
 ]
@@ -89,24 +84,20 @@ def _safe_sheet_name(name: str) -> str:
 # ── Status / trend helpers ─────────────────────────────────────────────────────
 # Delegated to business_logic.py (SSOT). Local wrappers for backward compat.
 
-def _compute_status(dec, jan, feb, mar) -> str:
+def _compute_status(*monthly_values) -> str:
     """Delegate to business_logic.compute_status (SSOT)."""
-    return compute_status(dec, jan, feb, mar)
+    return compute_status(*monthly_values)
 
 
-def _compute_trend_fraction(dec, feb):
-    """Dec→Feb trend as a fraction for Excel formatting.
-
-    Uses business_logic.compute_trend internally but returns a float fraction
-    (not integer %) because the Excel export formats trends as percentages.
-    """
+def _compute_trend_fraction(first, last):
+    """First→Last trend as a fraction for Excel formatting."""
     from business_logic import compute_trend_fraction
-    return compute_trend_fraction(dec, feb)
+    return compute_trend_fraction(first, last)
 
 
-def _compute_ordering_pattern(dec, jan, feb, mar) -> str:
+def _compute_ordering_pattern(*monthly_values) -> str:
     """Delegate to business_logic.compute_ordering_pattern (SSOT)."""
-    return compute_ordering_pattern(dec, jan, feb, mar)
+    return compute_ordering_pattern(*monthly_values)
 
 
 # ── Data extraction ────────────────────────────────────────────────────────────
@@ -242,13 +233,10 @@ def _extract_salepoint_data(data: dict) -> dict:
     groups = sorted(group_map.values(), key=lambda g: g['total_units'], reverse=True)
 
     for grp in groups:
-        dec_g = grp['months_data'].get('December 2025', 0)
-        jan_g = grp['months_data'].get('January 2026', 0)
-        feb_g = grp['months_data'].get('February 2026', 0)
-        mar_g = grp['months_data'].get('March 2026', 0)
+        month_vals = [grp['months_data'].get(m, 0) for m in MONTHS]
 
-        grp['dec_trend'] = _compute_trend_fraction(dec_g, feb_g)
-        grp['ordering_pattern'] = _compute_ordering_pattern(dec_g, jan_g, feb_g, mar_g)
+        grp['dec_trend'] = _compute_trend_fraction(month_vals[0], month_vals[-1]) if len(month_vals) >= 2 else None
+        grp['ordering_pattern'] = _compute_ordering_pattern(*month_vals)
 
         # Active SP count per month
         grp['active_per_month'] = {}
@@ -257,21 +245,20 @@ def _extract_salepoint_data(data: dict) -> dict:
                 1 for sp in grp['salepoints'].values() if sp['months_units'].get(m, 0) > 0
             )
 
-        # Feb avg units per active SP
-        feb_active = grp['active_per_month'].get('February 2026', 0)
-        grp['avg_units_per_sp_feb'] = (feb_g // feb_active) if feb_active > 0 else 0
+        # Avg units per active SP for last month
+        last_m = MONTHS[-1]
+        last_active = grp['active_per_month'].get(last_m, 0)
+        last_units = grp['months_data'].get(last_m, 0)
+        grp['avg_units_per_sp_feb'] = (last_units // last_active) if last_active > 0 else 0
 
         # Per-SP derived fields
         sps = sorted(grp['salepoints'].values(), key=lambda s: s['total_units'], reverse=True)
         grp['salepoints_sorted'] = sps
         for sp in sps:
-            d = sp['months_units'].get('December 2025', 0)
-            j = sp['months_units'].get('January 2026', 0)
-            f = sp['months_units'].get('February 2026', 0)
-            r = sp['months_units'].get('March 2026', 0)
-            sp['status'] = _compute_status(d, j, f, r)
-            sp['trend'] = _compute_trend_fraction(d, f)
-            sp['months_active'] = sum(1 for v in [d, j, f, r] if v > 0)
+            sp_vals = [sp['months_units'].get(m, 0) for m in MONTHS]
+            sp['status'] = _compute_status(*sp_vals)
+            sp['trend'] = _compute_trend_fraction(sp_vals[0], sp_vals[-1]) if len(sp_vals) >= 2 else None
+            sp['months_active'] = sum(1 for v in sp_vals if v > 0)
 
     return {
         'groups': groups,
@@ -343,83 +330,91 @@ def _create_summary_sheet(wb: Workbook, sp: dict):
     """Customer Summary — 17 cols, header row 1, data rows 2+."""
     ws = wb.create_sheet('Customer Summary', 0)
 
-    headers = [
-        '#', 'Distributor', 'Customer', 'Total Sale Points',
-        'Dec Active', 'Jan Active', 'Feb Active', 'Mar Active',
-        'Total Units', 'Dec Units', 'Jan Units', 'Feb Units', 'Mar Units',
-        'Total Revenue', 'Avg Units/Point (Feb)', 'Dec→Feb Trend', 'Ordering Pattern',
-    ]
+    n_m = len(MONTHS)
+    m_short = [MONTH_SHORT[m] for m in MONTHS]
+    last_short = m_short[-1] if m_short else 'Last'
+
+    headers = (
+        ['#', 'Distributor', 'Customer', 'Total Sale Points']
+        + [f'{s} Active' for s in m_short]
+        + ['Total Units']
+        + [f'{s} Units' for s in m_short]
+        + ['Total Revenue', f'Avg Units/Point ({last_short})',
+           f'{m_short[0]}→{m_short[-1]} Trend', 'Ordering Pattern']
+    )
     _apply_header_row(ws, 1, headers)
 
     # Number formats by column index (1-based)
-    num_fmts = {
-        9: '#,##0', 10: '#,##0', 11: '#,##0', 12: '#,##0', 13: '#,##0',
-        14: '₪#,##0', 15: '#,##0', 16: '0%',
-    }
+    # Cols: #(1), Dist(2), Cust(3), TotSP(4), [n_m active], TotUnits, [n_m units], TotRev, Avg, Trend, Pattern
+    num_fmts = {}
+    base_units = 4 + n_m + 1  # first unit column
+    for j in range(n_m):
+        num_fmts[base_units + j] = '#,##0'
+    num_fmts[base_units - 1] = '#,##0'  # Total Units
+    num_fmts[base_units + n_m] = '₪#,##0'  # Total Revenue
+    num_fmts[base_units + n_m + 1] = '#,##0'  # Avg
+    num_fmts[base_units + n_m + 2] = '0%'  # Trend
 
     for i, grp in enumerate(sp['groups'], 1):
-        row = i + 1  # data starts at row 2
+        row = i + 1
         fill = _row_fill(i)
 
-        dec = grp['months_data'].get('December 2025', 0)
-        jan = grp['months_data'].get('January 2026', 0)
-        feb = grp['months_data'].get('February 2026', 0)
-        mar = grp['months_data'].get('March 2026', 0)
+        month_units = [grp['months_data'].get(m, 0) for m in MONTHS]
         trend = grp.get('dec_trend')
 
-        values = [
-            i,
-            grp['distributor'],
-            grp['name'],
-            len(grp['salepoints']),
-            grp['active_per_month'].get('December 2025', 0),
-            grp['active_per_month'].get('January 2026', 0),
-            grp['active_per_month'].get('February 2026', 0),
-            grp['active_per_month'].get('March 2026', 0),
-            grp['total_units'],
-            dec, jan, feb, mar,
-            grp['total_revenue'],
-            grp.get('avg_units_per_sp_feb', 0),
-            trend,
-            grp.get('ordering_pattern', 'Consistent'),
-        ]
+        values = (
+            [i, grp['distributor'], grp['name'], len(grp['salepoints'])]
+            + [grp['active_per_month'].get(m, 0) for m in MONTHS]
+            + [grp['total_units']]
+            + month_units
+            + [grp['total_revenue'], grp.get('avg_units_per_sp_feb', 0),
+               trend, grp.get('ordering_pattern', 'Consistent')]
+        )
 
-        fonts = {16: _trend_font(trend)}
+        trend_col = 4 + n_m + 1 + n_m + 2  # Trend column index
+        fonts = {trend_col: _trend_font(trend)}
         _apply_data_row(ws, row, values, num_fmts=num_fmts, row_fill=fill, fonts=fonts)
 
     # Column widths
-    widths = {'A': 4, 'B': 10, 'C': 25, 'D': 14,
-              'E': 10, 'F': 10, 'G': 10, 'H': 10,
-              'I': 12, 'J': 10, 'K': 10, 'L': 10, 'M': 10,
-              'N': 13, 'O': 16, 'P': 13, 'Q': 15}
-    for col, w in widths.items():
-        ws.column_dimensions[col].width = w
+    total_cols = 4 + n_m + 1 + n_m + 3
+    for ci in range(1, total_cols + 1):
+        col_letter = get_column_letter(ci)
+        if ci <= 3:
+            ws.column_dimensions[col_letter].width = [4, 10, 25][ci - 1]
+        elif ci == 4:
+            ws.column_dimensions[col_letter].width = 14
+        else:
+            ws.column_dimensions[col_letter].width = 12
 
-    # Autofilter
-    ws.auto_filter.ref = f'A1:Q{len(sp["groups"]) + 1}'
+    ws.auto_filter.ref = f'A1:{get_column_letter(total_cols)}{len(sp["groups"]) + 1}'
 
 
 def _create_all_salepoints_sheet(wb: Workbook, sp: dict):
     """All Sale Points — 17 cols, header row 1, data rows 2+."""
     ws = wb.create_sheet('All Sale Points', 1)
 
-    headers = [
-        'Distributor', 'Customer', 'Sale Point Name',
-        'Dec Units', 'Jan Units', 'Feb Units', 'Mar Units',
-        'Total Units', 'Total Revenue', 'Months Active',
-        'Dec→Feb Change', 'Status',
-        'Chocolate', 'Vanilla', 'Mango', 'Pistachio', 'Dream Cake',
-    ]
+    m_short = [MONTH_SHORT[m] for m in MONTHS]
+    n_m = len(MONTHS)
+    headers = (
+        ['Distributor', 'Customer', 'Sale Point Name']
+        + [f'{s} Units' for s in m_short]
+        + ['Total Units', 'Total Revenue', 'Months Active',
+           f'{m_short[0]}→{m_short[-1]} Change', 'Status',
+           'Chocolate', 'Vanilla', 'Mango', 'Pistachio', 'Dream Cake']
+    )
     _apply_header_row(ws, 1, headers)
 
-    num_fmts = {
-        4: '#,##0', 5: '#,##0', 6: '#,##0', 7: '#,##0', 8: '#,##0',
-        9: '₪#,##0', 11: '0%',
-        13: '#,##0', 14: '#,##0', 15: '#,##0', 16: '#,##0', 17: '#,##0',
-    }
+    num_fmts = {}
+    for j in range(n_m):
+        num_fmts[4 + j] = '#,##0'
+    num_fmts[4 + n_m] = '#,##0'  # Total Units
+    num_fmts[4 + n_m + 1] = '₪#,##0'  # Total Revenue
+    num_fmts[4 + n_m + 3] = '0%'  # Trend
+    for j in range(5):
+        num_fmts[4 + n_m + 5 + j] = '#,##0'  # Flavor columns
 
     data_row = 2
-    data_idx = 1  # for alternating fills (independent of row number)
+    data_idx = 1
     for grp in sp['groups']:
         for spoint in grp.get('salepoints_sorted', sorted(grp['salepoints'].values(),
                                                            key=lambda s: s['total_units'],
@@ -429,30 +424,24 @@ def _create_all_salepoints_sheet(wb: Workbook, sp: dict):
             alt = _row_fill(data_idx)
             fill = _status_row_fill(status, alt)
 
-            d = spoint['months_units'].get('December 2025', 0)
-            j = spoint['months_units'].get('January 2026', 0)
-            f = spoint['months_units'].get('February 2026', 0)
-            r = spoint['months_units'].get('March 2026', 0)
+            sp_month_vals = [spoint['months_units'].get(m, 0) for m in MONTHS]
 
-            values = [
-                grp['distributor'],
-                grp['name'],
-                spoint['name'],
-                d, j, f, r,
-                spoint['total_units'],
-                spoint['total_revenue'],
-                spoint.get('months_active', 0),
-                trend,
-                status,
-                spoint['flavor_breakdown'].get('chocolate', 0),
-                spoint['flavor_breakdown'].get('vanilla', 0),
-                spoint['flavor_breakdown'].get('mango', 0),
-                spoint['flavor_breakdown'].get('pistachio', 0),
-                spoint['flavor_breakdown'].get('dream_cake', 0) + spoint['flavor_breakdown'].get('dream_cake_2', 0),
-            ]
+            values = (
+                [grp['distributor'], grp['name'], spoint['name']]
+                + sp_month_vals
+                + [spoint['total_units'], spoint['total_revenue'],
+                   spoint.get('months_active', 0), trend, status,
+                   spoint['flavor_breakdown'].get('chocolate', 0),
+                   spoint['flavor_breakdown'].get('vanilla', 0),
+                   spoint['flavor_breakdown'].get('mango', 0),
+                   spoint['flavor_breakdown'].get('pistachio', 0),
+                   spoint['flavor_breakdown'].get('dream_cake', 0) + spoint['flavor_breakdown'].get('dream_cake_2', 0)]
+            )
 
             sf = _status_font(status)
-            fonts = {11: _trend_font(trend), 12: sf}
+            trend_col = 4 + n_m + 3  # Trend column
+            status_col = 4 + n_m + 4  # Status column
+            fonts = {trend_col: _trend_font(trend), status_col: sf}
             _apply_data_row(ws, data_row, values, num_fmts=num_fmts,
                             row_fill=fill, fonts=fonts)
 
@@ -475,16 +464,10 @@ def _create_group_sheet(wb: Workbook, grp: dict):
     sheet_name = _safe_sheet_name(grp['name'])
     ws = wb.create_sheet(sheet_name)
 
-    dec_g = grp['months_data'].get('December 2025', 0)
-    jan_g = grp['months_data'].get('January 2026', 0)
-    feb_g = grp['months_data'].get('February 2026', 0)
-    mar_g = grp['months_data'].get('March 2026', 0)
-
+    m_short = [MONTH_SHORT[m] for m in MONTHS]
+    n_m = len(MONTHS)
     active = grp.get('active_per_month', {})
-    dec_a = active.get('December 2025', 0)
-    jan_a = active.get('January 2026', 0)
-    feb_a = active.get('February 2026', 0)
-    mar_a = active.get('March 2026', 0)
+    active_str = ' → '.join(f'{s}:{active.get(m, 0)}' for m, s in zip(MONTHS, m_short))
 
     # Row 1: Title (merged A1:F1)
     title = f"{grp['name']} ({grp['distributor']})"
@@ -496,11 +479,9 @@ def _create_group_sheet(wb: Workbook, grp: dict):
     ws['A2'] = 'Total Sale Points:'
     ws['A2'].font = Font(bold=True, size=10)
     ws['B2'] = len(grp['salepoints'])
-
     ws['C2'] = 'Total Units:'
     ws['C2'].font = Font(bold=True, size=10)
     ws['D2'] = grp['total_units']
-
     ws['E2'] = 'Total Revenue:'
     ws['E2'].font = Font(bold=True, size=10)
     ws['F2'] = grp['total_revenue']
@@ -509,66 +490,69 @@ def _create_group_sheet(wb: Workbook, grp: dict):
     # Row 3: Active points progression
     ws['A3'] = 'Active Points:'
     ws['A3'].font = Font(bold=True, size=10)
-    ws['B3'] = f'Dec:{dec_a} → Jan:{jan_a} → Feb:{feb_a} → Mar:{mar_a}'
-
-    # Row 4: empty
+    ws['B3'] = active_str
 
     # Row 5: Column headers
-    headers = ['#', 'Sale Point', 'Dec', 'Jan', 'Feb', 'Mar',
-               'Total', 'Months Active', 'Trend', 'Status',
-               'Choc', 'Van', 'Mango', 'Pist', 'DC']
+    headers = (
+        ['#', 'Sale Point']
+        + m_short
+        + ['Total', 'Months Active', 'Trend', 'Status',
+           'Choc', 'Van', 'Mango', 'Pist', 'DC']
+    )
     _apply_header_row(ws, 5, headers)
 
-    # Number formats by column (1-based)
-    num_fmts = {
-        3: '#,##0', 4: '#,##0', 5: '#,##0', 6: '#,##0', 7: '#,##0',
-        9: '0%',
-        11: '#,##0', 12: '#,##0', 13: '#,##0', 14: '#,##0', 15: '#,##0',
-    }
+    # Number formats
+    num_fmts = {}
+    for j in range(n_m):
+        num_fmts[3 + j] = '#,##0'
+    num_fmts[3 + n_m] = '#,##0'  # Total
+    num_fmts[3 + n_m + 2] = '0%'  # Trend
+    for j in range(5):
+        num_fmts[3 + n_m + 4 + j] = '#,##0'  # Flavor columns
 
     sps = grp.get('salepoints_sorted', sorted(grp['salepoints'].values(),
                                                key=lambda s: s['total_units'],
                                                reverse=True))
     data_idx = 1
-    for idx, sp in enumerate(sps, 1):
-        row = idx + 5  # data starts at row 6
-        status = sp.get('status', 'Active')
-        trend = sp.get('trend')
+    for idx, sp_item in enumerate(sps, 1):
+        row = idx + 5
+        status = sp_item.get('status', 'Active')
+        trend = sp_item.get('trend')
         alt = _row_fill(data_idx)
         fill = _status_row_fill(status, alt)
 
-        d = sp['months_units'].get('December 2025', 0)
-        j = sp['months_units'].get('January 2026', 0)
-        f = sp['months_units'].get('February 2026', 0)
-        r = sp['months_units'].get('March 2026', 0)
+        sp_month_vals = [sp_item['months_units'].get(m, 0) for m in MONTHS]
 
-        values = [
-            idx,
-            sp['name'],
-            d, j, f, r,
-            sp['total_units'],
-            sp.get('months_active', 0),
-            trend,
-            status,
-            sp['flavor_breakdown'].get('chocolate', 0),
-            sp['flavor_breakdown'].get('vanilla', 0),
-            sp['flavor_breakdown'].get('mango', 0),
-            sp['flavor_breakdown'].get('pistachio', 0),
-            sp['flavor_breakdown'].get('dream_cake', 0) + sp['flavor_breakdown'].get('dream_cake_2', 0),
-        ]
+        values = (
+            [idx, sp_item['name']]
+            + sp_month_vals
+            + [sp_item['total_units'], sp_item.get('months_active', 0),
+               trend, status,
+               sp_item['flavor_breakdown'].get('chocolate', 0),
+               sp_item['flavor_breakdown'].get('vanilla', 0),
+               sp_item['flavor_breakdown'].get('mango', 0),
+               sp_item['flavor_breakdown'].get('pistachio', 0),
+               sp_item['flavor_breakdown'].get('dream_cake', 0) + sp_item['flavor_breakdown'].get('dream_cake_2', 0)]
+        )
 
         sf = _status_font(status)
-        fonts = {9: _trend_font(trend), 10: sf}
+        trend_col = 3 + n_m + 2  # Trend
+        status_col = 3 + n_m + 3  # Status
+        fonts = {trend_col: _trend_font(trend), status_col: sf}
         _apply_data_row(ws, row, values, num_fmts=num_fmts, row_fill=fill, fonts=fonts)
 
         data_idx += 1
 
     # Column widths
-    widths = {'A': 4, 'B': 55, 'C': 8, 'D': 8, 'E': 8, 'F': 8,
-              'G': 9, 'H': 12, 'I': 9, 'J': 14,
-              'K': 7, 'L': 7, 'M': 7, 'N': 7, 'O': 7}
-    for col, w in widths.items():
-        ws.column_dimensions[col].width = w
+    total_cols = 2 + n_m + 8
+    for ci in range(1, total_cols + 1):
+        col_letter = get_column_letter(ci)
+        if ci == 1:
+            ws.column_dimensions[col_letter].width = 4
+        elif ci == 2:
+            ws.column_dimensions[col_letter].width = 55
+        else:
+            ws.column_dimensions[col_letter].width = 10
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
