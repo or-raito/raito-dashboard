@@ -15,12 +15,13 @@ from config import (
     FLAVOR_COLORS, PRODUCTS_ORDER, fmt, fc,
 )
 from registry import CUSTOMER_NAMES_EN
-from dashboard import _build_month_section, _build_excel_data_json
+from dashboard import _build_month_section, _build_excel_data_json, DIST_FILTERS
 from master_data_parser import parse_master_data
 from salepoint_dashboard import build_salepoint_tab
 from salepoint_excel import generate_salepoint_excel
-from cc_dashboard import build_cc_tab
+from cc_dashboard_v2 import build_cc_tab
 from geo_dashboard import build_geo_tab
+from agents_dashboard import build_agents_tab
 from pricing_engine import get_b2b_price_safe
 
 
@@ -273,10 +274,7 @@ def _read_cc_dashboard():
             '<option value="total">All Months</option>',
             '<option value="total" selected>All Months</option>'
         )
-        body_html = body_html.replace(
-            '<option value="mar">March 2026 (W10)</option>',
-            '<option value="mar">March 2026 (W10)</option>'  # remove implicit first-selected
-        )
+        # (no implicit first-selected to remove — dropdown defaults to All Months via JS state)
 
         result['html_body'] = body_html
 
@@ -1900,25 +1898,26 @@ def _build_agent_plan_tab():
 
     df = pd.read_excel(agent_file, header=None)
 
-    # Parse agents from rows 3..25 (0-indexed)
+    # Parse agents — new 8-column format (Apr 2026+):
+    # col 0: agent ID, col 1: name, col 2: customers, col 3: forecast,
+    # col 4: goal, col 5: daily needed, col 6: achieved ₪, col 7: achieved %
+    # Headers at row 2, data rows 3..25, totals row 26
     agents = []
+    excluded_agents = {'^^^11', '^^^18', '^^^38', '^^^7^'}
     for i in range(3, 26):
+        if i >= len(df):
+            break
         row = df.iloc[i]
         agent_num = str(row[0]).strip() if pd.notna(row[0]) else ''
         agent_name = str(row[1]).strip() if pd.notna(row[1]) else ''
         num_customers = int(row[2]) if pd.notna(row[2]) else 0
-        hist_nov = float(row[3]) if pd.notna(row[3]) else 0
-        hist_dec = float(row[4]) if pd.notna(row[4]) else 0
-        hist_jan = float(row[5]) if pd.notna(row[5]) else 0
-        hist_feb = float(row[6]) if pd.notna(row[6]) else 0
-        hist_total = float(row[7]) if pd.notna(row[7]) else 0
-        pct_share = float(row[8]) if pd.notna(row[8]) else 0
-        daily_avg = float(row[9]) if pd.notna(row[9]) else 0
-        goal_final = float(row[12]) if pd.notna(row[12]) else 0
-        daily_needed = float(row[13]) if pd.notna(row[13]) else 0
+        forecast = float(row[3]) if pd.notna(row[3]) else 0
+        goal_final = float(row[4]) if pd.notna(row[4]) else 0
+        daily_needed = float(row[5]) if pd.notna(row[5]) else 0
+        achieved = float(row[6]) if pd.notna(row[6]) else 0
+        achieved_pct = float(row[7]) if pd.notna(row[7]) else 0
 
         # Skip excluded agents (red rows in source file)
-        excluded_agents = {'^^^11', '^^^18', '^^^38', '^^^7^'}
         if agent_num in excluded_agents:
             continue
 
@@ -1927,12 +1926,11 @@ def _build_agent_plan_tab():
                 'num': agent_num,
                 'name': agent_name,
                 'customers': num_customers,
-                'hist_total': hist_total,
-                'pct_share': pct_share,
-                'daily_avg': daily_avg,
+                'forecast': forecast,
                 'goal': goal_final,
                 'daily_needed': daily_needed,
-                'achieved': 0,  # Will be filled by weekly updates
+                'achieved': achieved,
+                'achieved_pct': achieved_pct,
                 'weekly': {},   # {week_label: amount} — filled from weekly reports
             })
 
@@ -1960,43 +1958,35 @@ def _build_agent_plan_tab():
     agent_rows = ''
     for idx, a in enumerate(agents):
         pct = round(a['achieved'] / a['goal'] * 100, 1) if a['goal'] > 0 else 0
-        # Progress bar color
+        # Progress bar color based on performance vs time elapsed
         if pct >= 80:
             bar_color = '#10b981'
         elif pct >= 40:
             bar_color = '#f59e0b'
         else:
-            bar_color = '#e2e8f0'
+            bar_color = '#6366f1'
 
-        # Status badge
-        if pct >= 100:
-            status = '<span style="background:#ecfdf5;color:#10b981;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">Done</span>'
-        elif pct >= 50:
-            status = '<span style="background:#fffbeb;color:#f59e0b;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">On Track</span>'
-        elif a['achieved'] > 0:
-            status = '<span style="background:#fef2f2;color:#ef4444;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">Behind</span>'
-        else:
-            status = '<span style="background:#f1f5f9;color:#94a3b8;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600">Not Started</span>'
+        # Zebra striping
+        row_bg = '#fafbfc' if idx % 2 == 1 else '#fff'
 
         gap = a['goal'] - a['achieved']
-        agent_rows += f'''<tr>
-            <td style="font-weight:600;color:#1e293b">{idx+1}</td>
-            <td style="font-weight:600;color:#1e293b">{a['name']}</td>
-            <td style="color:#64748b">{a['num']}</td>
-            <td style="text-align:center">{a['customers']}</td>
-            <td style="text-align:right;font-weight:600">₪{a['goal']:,.0f}</td>
-            <td style="text-align:right;font-weight:600;color:#10b981">₪{a['achieved']:,.0f}</td>
-            <td style="min-width:120px">
-                <div style="display:flex;align-items:center;gap:6px">
-                    <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
-                        <div style="width:{min(pct,100):.1f}%;background:{bar_color};height:100%;border-radius:6px;transition:width 0.3s"></div>
+        agent_rows += f'''<tr style="background:{row_bg};border-bottom:1px solid #f1f5f9;transition:background 0.15s" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background='{row_bg}'">
+            <td style="padding:10px 8px;color:#94a3b8;font-size:11px;font-weight:500">{idx+1}</td>
+            <td style="padding:10px 8px;font-weight:600;color:#1e293b;font-size:12px">{a['name']}</td>
+            <td style="padding:10px 8px;color:#94a3b8;font-size:11px;font-family:monospace">{a['num']}</td>
+            <td style="padding:10px 8px;text-align:center;color:#64748b;font-size:12px">{a['customers']}</td>
+            <td style="padding:10px 8px;text-align:right;font-weight:600;color:#1e293b;font-size:12px">₪{a['goal']:,.0f}</td>
+            <td style="padding:10px 8px;text-align:right;font-weight:700;color:#10b981;font-size:12px">₪{a['achieved']:,.0f}</td>
+            <td style="padding:10px 8px;min-width:140px">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div style="flex:1;background:#e8eaed;border-radius:4px;height:6px;overflow:hidden">
+                        <div style="width:{min(pct,100):.1f}%;background:{bar_color};height:100%;border-radius:4px;transition:width 0.4s ease"></div>
                     </div>
-                    <span style="font-size:11px;font-weight:600;color:#64748b;min-width:36px">{pct:.0f}%</span>
+                    <span style="font-size:11px;font-weight:600;color:{bar_color};min-width:32px;text-align:right">{pct:.0f}%</span>
                 </div>
             </td>
-            <td style="text-align:right;color:#ef4444;font-size:12px">₪{gap:,.0f}</td>
-            <td style="text-align:right;font-size:12px;color:#64748b">₪{a['daily_needed']:,.0f}</td>
-            <td style="text-align:center">{status}</td>
+            <td style="padding:10px 8px;text-align:right;color:#ef4444;font-size:12px;font-weight:500">₪{gap:,.0f}</td>
+            <td style="padding:10px 8px;text-align:right;font-size:12px;color:#64748b">₪{a['daily_needed']:,.0f}</td>
         </tr>'''
 
     # Build JSON blob for client-side updates (weekly data will be appended here)
@@ -2075,61 +2065,50 @@ def _build_agent_plan_tab():
         </div>
     </div>
 
-    <!-- Weekly Progress placeholder -->
-    <div id="ap-weekly-chart" style="background:#fff;border:1px solid #f1f5f9;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:24px">
-        <h3 style="font-size:14px;font-weight:700;color:#1A1D23;margin-bottom:12px">Weekly Progress</h3>
-        <div style="text-align:center;padding:30px 0;color:#94a3b8;font-size:13px;border:2px dashed #e2e8f0;border-radius:12px">
-            <div style="font-size:24px;margin-bottom:8px">📊</div>
-            Weekly progress data from Ma'ayan will appear here.<br>
-            <span style="font-size:11px">Upload weekly reports to <code>data/agents/</code> to populate.</span>
-        </div>
-    </div>
-
     <!-- Agent Table -->
-    <div style="background:#fff;border:1px solid #f1f5f9;border-radius:16px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-            <h3 style="font-size:14px;font-weight:700;color:#1A1D23">Agent Performance</h3>
-            <div style="font-size:11px;color:#94a3b8">Sorted by goal (desc) · Goals set by historical performance</div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+        <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center">
+            <h3 style="font-size:15px;font-weight:700;color:#1A1D23;margin:0">Agent Performance</h3>
+            <div style="font-size:11px;color:#94a3b8">{total_agents} agents · sorted by goal</div>
         </div>
         <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse;font-size:12px">
                 <thead>
-                    <tr style="border-bottom:2px solid #e2e8f0">
-                        <th style="padding:8px 6px;text-align:left;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">#</th>
-                        <th style="padding:8px 6px;text-align:left;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Agent</th>
-                        <th style="padding:8px 6px;text-align:left;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">ID</th>
-                        <th style="padding:8px 6px;text-align:center;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Customers</th>
-                        <th style="padding:8px 6px;text-align:right;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Goal (₪)</th>
-                        <th style="padding:8px 6px;text-align:right;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Achieved (₪)</th>
-                        <th style="padding:8px 6px;text-align:left;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Progress</th>
-                        <th style="padding:8px 6px;text-align:right;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Gap (₪)</th>
-                        <th style="padding:8px 6px;text-align:right;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Daily Target</th>
-                        <th style="padding:8px 6px;text-align:center;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.3px">Status</th>
+                    <tr style="background:#f8fafc;border-bottom:1px solid #e5e7eb">
+                        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">#</th>
+                        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">Agent</th>
+                        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">ID</th>
+                        <th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">Customers</th>
+                        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">Goal</th>
+                        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">Achieved</th>
+                        <th style="padding:10px 8px;text-align:left;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px;min-width:140px">Progress</th>
+                        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">Gap</th>
+                        <th style="padding:10px 8px;text-align:right;font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px">Daily Needed</th>
                     </tr>
                 </thead>
                 <tbody>
                     {agent_rows}
-                    <!-- Totals Row -->
-                    <tr style="border-top:2px solid #e2e8f0;background:#f8fafc">
-                        <td></td>
-                        <td style="font-weight:700;color:#1e293b">Total</td>
-                        <td></td>
-                        <td style="text-align:center;font-weight:700">{total_customers}</td>
-                        <td style="text-align:right;font-weight:700;color:#5D5FEF">₪{total_goal:,.0f}</td>
-                        <td style="text-align:right;font-weight:700;color:#10b981">₪{total_achieved:,.0f}</td>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:6px">
-                                <div style="flex:1;background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden">
-                                    <div style="width:{min(pct_achieved,100):.1f}%;background:#5D5FEF;height:100%;border-radius:6px"></div>
+                </tbody>
+                <tfoot>
+                    <tr style="border-top:2px solid #e5e7eb;background:#f8fafc">
+                        <td style="padding:12px 8px"></td>
+                        <td style="padding:12px 8px;font-weight:700;color:#1e293b;font-size:12px">Total</td>
+                        <td style="padding:12px 8px"></td>
+                        <td style="padding:12px 8px;text-align:center;font-weight:700;color:#1e293b;font-size:12px">{total_customers}</td>
+                        <td style="padding:12px 8px;text-align:right;font-weight:700;color:#1e293b;font-size:12px">₪{total_goal:,.0f}</td>
+                        <td style="padding:12px 8px;text-align:right;font-weight:700;color:#10b981;font-size:12px">₪{total_achieved:,.0f}</td>
+                        <td style="padding:12px 8px;min-width:140px">
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <div style="flex:1;background:#e8eaed;border-radius:4px;height:6px;overflow:hidden">
+                                    <div style="width:{min(pct_achieved,100):.1f}%;background:#6366f1;height:100%;border-radius:4px"></div>
                                 </div>
-                                <span style="font-size:11px;font-weight:700;color:#5D5FEF;min-width:36px">{pct_achieved:.0f}%</span>
+                                <span style="font-size:11px;font-weight:700;color:#6366f1;min-width:32px;text-align:right">{pct_achieved:.0f}%</span>
                             </div>
                         </td>
-                        <td style="text-align:right;font-weight:700;color:#ef4444">₪{total_goal - total_achieved:,.0f}</td>
-                        <td style="text-align:right;font-weight:700;color:#64748b">₪{sum(a['daily_needed'] for a in agents):,.0f}</td>
-                        <td></td>
+                        <td style="padding:12px 8px;text-align:right;font-weight:700;color:#ef4444;font-size:12px">₪{total_goal - total_achieved:,.0f}</td>
+                        <td style="padding:12px 8px;text-align:right;font-weight:700;color:#64748b;font-size:12px">₪{sum(a['daily_needed'] for a in agents):,.0f}</td>
                     </tr>
-                </tbody>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -2178,27 +2157,27 @@ def generate_unified_dashboard(data, master_data=None):
         year_months.setdefault(year, []).append(m)
     years_sorted = sorted(year_months.keys())
 
-    # Build year filter buttons (default: 2026)
-    default_year = '2026'
-    year_btn_html = f'<button class="fbtn year-btn" onclick="boSetYear(\'all\')">All Years</button>\n'
+    # Build year filter dropdown (default: latest year from data)
+    default_year = years_sorted[-1] if years_sorted else str(__import__('datetime').date.today().year)
+    year_select_html = '<select id="boFiltYear" onchange="boSetYear(this.value)">\n'
+    year_select_html += '<option value="all">All Years</option>\n'
     for yr in years_sorted:
-        active = ' fbtn-active' if yr == default_year else ''
-        year_btn_html += f'<button class="fbtn year-btn{active}" onclick="boSetYear(\'{yr}\')">{yr}</button>\n'
+        sel = ' selected' if yr == default_year else ''
+        year_select_html += f'<option value="{yr}"{sel}>{yr}</option>\n'
+    year_select_html += '</select>\n'
 
-    # Build month filter buttons (hide non-2026 months by default)
+    # Build period filter dropdown (show only default year months initially)
     filter_ids = ['all'] + [f'm{i}' for i in range(len(months))]
     filter_labels = ['Overview'] + [MONTH_NAMES_HEB.get(m, m) for m in months]
-    month_btn_html = ''
+    period_select_html = '<select id="boFiltPeriod" onchange="boSetMonth(this.value)">\n'
     for fid, flabel in zip(filter_ids, filter_labels):
-        active = ' fbtn-active' if fid == 'all' else ''
         if fid == 'all':
             year_attr = 'all'
         else:
             idx = int(fid[1:])
             year_attr = months[idx].split()[-1]
-        # Hide month buttons that don't belong to default year
-        hide = ' style="display:none"' if year_attr != 'all' and year_attr != default_year else ''
-        month_btn_html += f'<button class="fbtn month-btn{active}"{hide} data-year="{year_attr}" onclick="boSetMonth(\'{fid}\')">{flabel}</button>\n'
+        period_select_html += f'<option value="{fid}" data-year="{year_attr}">{flabel}</option>\n'
+    period_select_html += '</select>\n'
 
     # Build brand filter buttons
     brand_btn_html = ''
@@ -2206,11 +2185,15 @@ def generate_unified_dashboard(data, master_data=None):
         active = ' fbtn-active' if bid == 'ab' else ''
         brand_btn_html += f'<button class="fbtn brand-btn{active}" onclick="boSetBrand(\'{bid}\')">{binfo["label"]}</button>\n'
 
-    btn_html = (f'<span>Year:</span> {year_btn_html}'
-                f'<span style="margin-left:16px">Period:</span> {month_btn_html}'
-                f'<span style="margin-left:16px">Brand:</span> {brand_btn_html}')
+    # Build distributor filter buttons
+    dist_btn_html = ''
+    for did, dinfo in DIST_FILTERS.items():
+        active = ' fbtn-active' if did == 'ad' else ''
+        dist_btn_html += f'<button class="fbtn dist-btn{active}" onclick="boSetDist(\'{did}\')">{dinfo["label"]}</button>\n'
 
-    # Build sections
+    # Year/Period use dropdowns; Brand/Distributor use pill buttons
+
+    # Build sections: one per (period × brand × distributor) combination
     sections = ''
 
     # Year-specific overviews
@@ -2218,9 +2201,10 @@ def generate_unified_dashboard(data, master_data=None):
     for yr in years_sorted:
         yr_months = year_months[yr]
         for bid, binfo in BRAND_FILTERS.items():
-            sec_id = f'y{yr}-{bid}'
             active_products = binfo['products']
-            sections += _build_month_section(data, yr_months, sec_id, active_products)
+            for did, dinfo in DIST_FILTERS.items():
+                sec_id = f'y{yr}-{bid}-{did}'
+                sections += _build_month_section(data, yr_months, sec_id, active_products, dinfo['key'])
         year_overview_ids[yr] = f'y{yr}'
 
     # All months overview + individual months
@@ -2231,12 +2215,14 @@ def generate_unified_dashboard(data, master_data=None):
             idx = int(fid[1:])
             month_list = [months[idx]]
         for bid, binfo in BRAND_FILTERS.items():
-            sec_id = f'{fid}-{bid}'
             active_products = binfo['products']
-            sections += _build_month_section(data, month_list, sec_id, active_products)
+            for did, dinfo in DIST_FILTERS.items():
+                sec_id = f'{fid}-{bid}-{did}'
+                sections += _build_month_section(data, month_list, sec_id, active_products, dinfo['key'])
 
     import json as _json
     year_overview_map_json = _json.dumps(year_overview_ids)
+    bo_latest_year = default_year
 
     # ── Build Agent Plan Tab ──
     agent_plan_content, agent_plan_json = _build_agent_plan_tab()
@@ -2249,6 +2235,9 @@ def generate_unified_dashboard(data, master_data=None):
 
     # ── Build Geo Tab (Tab 5) ──
     geo_content = build_geo_tab(data)
+
+    # ── Build Agents Monitor Tab (Tab 6) ──
+    agents_content = build_agents_tab()
 
     # ── Unified HTML ──
     html = f"""<!DOCTYPE html>
@@ -2504,6 +2493,14 @@ body {{
   font-weight:700; font-size:11px; color:var(--text-muted);
   text-transform:uppercase; letter-spacing:0.8px;
 }}
+#tab-bo .fbar select {{
+  padding:7px 28px 7px 12px; border:1px solid var(--border-light); border-radius:var(--radius);
+  background:var(--card); font-size:12px; font-weight:600; font-family:inherit;
+  color:var(--text); cursor:pointer; appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 10px center;
+}}
+#tab-bo .fbar select:focus {{ outline:none; border-color:var(--primary); }}
 #tab-bo .filter-group {{
   display:inline-flex; background:var(--surface); padding:3px; border-radius:var(--radius-pill);
 }}
@@ -3067,26 +3064,42 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
       <button class="upload-modal-close" onclick="closeUploadModal()">&times;</button>
     </div>
     <div class="upload-modal-body">
+      <div class="upl-field">
+        <label>Upload Type</label>
+        <select id="upl-type" onchange="_uplTypeChanged()">
+          <option value="distributor">Distributor Sales File</option>
+          <option value="geo_addresses">POS Addresses (GEO)</option>
+        </select>
+      </div>
       <div class="upl-drop-zone" id="upl-drop-zone" onclick="document.getElementById('upl-file-input').click()">
         <div class="upl-icon">📂</div>
         <div class="upl-text">Drag &amp; drop file here, or <span>browse</span></div>
-        <input type="file" id="upl-file-input" accept=".xlsx,.xls,.pdf" style="display:none">
+        <input type="file" id="upl-file-input" accept=".xlsx,.xls,.pdf,.csv" style="display:none">
         <div class="upl-file-name" id="upl-file-name"></div>
       </div>
-      <div class="upl-field">
-        <label>Distributor</label>
-        <select id="upl-distributor">
-          <option value="">Auto-detect from filename</option>
-          <option value="icedream">Icedream</option>
-          <option value="mayyan">Ma&apos;ayan</option>
-          <option value="biscotti">Biscotti</option>
-          <option value="karfree">Karfree (warehouse stock)</option>
-        </select>
+      <div id="upl-dist-options">
+        <div class="upl-field">
+          <label>Distributor</label>
+          <select id="upl-distributor">
+            <option value="">Auto-detect from filename</option>
+            <option value="icedream">Icedream</option>
+            <option value="mayyan">Ma&apos;ayan</option>
+            <option value="biscotti">Biscotti</option>
+            <option value="karfree">Karfree (warehouse stock)</option>
+          </select>
+        </div>
+        <label class="upl-toggle-row">
+          <input type="checkbox" id="upl-force">
+          <div class="upl-toggle-label">Force re-import<small>Overwrite existing data for this period</small></div>
+        </label>
       </div>
-      <label class="upl-toggle-row">
-        <input type="checkbox" id="upl-force">
-        <div class="upl-toggle-label">Force re-import<small>Overwrite existing data for this period</small></div>
-      </label>
+      <div id="upl-geo-options" style="display:none">
+        <label class="upl-toggle-row">
+          <input type="checkbox" id="upl-geo-geocode" checked>
+          <div class="upl-toggle-label">Re-geocode updated addresses<small>Run Google Maps geocoding for changed addresses</small></div>
+        </label>
+        <p style="font-size:11px;color:#9ca3af;margin:4px 0 0;padding:0 4px;">CSV must have columns: pos_id, pos_name, address_city, address_street</p>
+      </div>
       <div class="upl-spinner" id="upl-spinner">⏳ Uploading and ingesting data...</div>
       <div class="upl-result" id="upl-result"></div>
     </div>
@@ -3127,6 +3140,9 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
     <li><a onclick="switchTab('ap')" id="nav-ap">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
       Agent Plan</a></li>
+    <li><a onclick="switchTab('agents')" id="nav-agents">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Agents</a></li>
   </ul>
 
   <div class="sidebar-section">Data</div>
@@ -3158,7 +3174,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
 
 <!-- Business Overview Tab -->
 <div id="tab-bo" class="tab-content active">
-  <div class="fbar" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px"><span>Year</span> <div class="filter-group">{year_btn_html}</div><span style="margin-left:8px">Period</span> <div class="filter-group">{month_btn_html}</div><span style="margin-left:8px">Brand</span> <div class="filter-group">{brand_btn_html}</div></div>
+  <div class="fbar" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px"><span>Year</span> {year_select_html}<span style="margin-left:8px">Period</span> {period_select_html}<span style="margin-left:8px">Brand</span> <div class="filter-group">{brand_btn_html}</div><span style="margin-left:8px">Distributor</span> <div class="filter-group">{dist_btn_html}</div></div>
   <div class="ctr">
     {sections}
   </div>
@@ -3187,6 +3203,9 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
 <!-- Geo Analysis Tab -->
 {geo_content}
 
+<!-- Agents Monitor Tab -->
+{agents_content}
+
 </div><!-- /main-content -->
 </div><!-- /app-layout -->
 
@@ -3198,7 +3217,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
 
 function switchTab(tabId) {{
   // Hide all tabs
-  ['bo', 'cc', 'sp', 'ap', 'md', 'geo'].forEach(t => {{
+  ['bo', 'cc', 'sp', 'ap', 'md', 'geo', 'agents'].forEach(t => {{
     var tab = document.getElementById('tab-' + t);
     if (tab) tab.classList.remove('active');
   }});
@@ -3234,6 +3253,7 @@ function showExportModal(tab) {{
       else if (t.includes('Customer')) name = 'cc';
       else if (t.includes('Sale')) name = 'sp';
       else if (t.includes('Master')) name = 'md';
+      else if (t.includes('Geo')) name = 'geo';
     }}
   }}
   _exportTab = name;
@@ -3241,8 +3261,8 @@ function showExportModal(tab) {{
   var title = document.getElementById('export-modal-title');
   body.innerHTML = '';
 
-  // Brand radio (shown first for BO, CC, SP — not MD)
-  var brandHtml = (name !== 'md') ? _emcBrandRadio() : '';
+  // Brand radio (shown first for BO, CC, SP — not MD/GEO)
+  var brandHtml = (name !== 'md' && name !== 'geo') ? _emcBrandRadio() : '';
 
   if (name === 'bo') {{
     title.textContent = 'Export Business Overview';
@@ -3268,6 +3288,15 @@ function showExportModal(tab) {{
     title.textContent = 'Export Master Data';
     var mdSheets = [['Brands','brands',true],['Products','products',true],['Manufacturers','manufacturers',true],['Distributors','distributors',true],['Customers','customers',true],['Logistics','logistics',true],['Pricing','pricing',true]];
     body.innerHTML = _emcSection('Sheets', mdSheets, 'mds');
+  }} else if (name === 'geo') {{
+    title.textContent = 'Export POS Addresses';
+    var geoFilterOpts = [['All POS','all',true],['Missing addresses only','missing',false]];
+    body.innerHTML =
+      '<div class="export-modal-section"><div class="export-modal-section-title">Filter</div><div class="export-modal-checks">' +
+      '<label><input type="radio" name="emc-geo-filter" value="all" checked style="accent-color:var(--primary)">&nbsp;All POS</label>' +
+      '<label><input type="radio" name="emc-geo-filter" value="missing" style="accent-color:var(--primary)">&nbsp;Missing addresses only</label>' +
+      '</div></div>' +
+      '<p style="font-size:12px;color:#6b7280;margin:8px 0 0;padding:0 4px;">Exports CSV with columns: pos_id, pos_name, address_city, address_street.<br>Edit in Excel/Sheets, then upload back via Upload Data.</p>';
   }} else {{
     alert('Export not available for this tab.');
     return;
@@ -3344,6 +3373,8 @@ function runExport() {{
     spExportToExcel(_emcGetSelected('spc'), brand, _emcGetDist());
   }} else if (_exportTab === 'md') {{
     mdExportToExcel(_emcGetSelected('mds'));
+  }} else if (_exportTab === 'geo') {{
+    geoExportAddressCSV();
   }}
   closeExportModal();
 }}
@@ -3353,13 +3384,27 @@ function runExport() {{
 // ══════════════════════════════════════════════════════════════════════════════
 var _uplFile = null;
 
+function _uplTypeChanged() {{
+  var t = document.getElementById('upl-type').value;
+  document.getElementById('upl-dist-options').style.display = (t === 'distributor') ? '' : 'none';
+  document.getElementById('upl-geo-options').style.display = (t === 'geo_addresses') ? '' : 'none';
+  var fi = document.getElementById('upl-file-input');
+  fi.accept = (t === 'geo_addresses') ? '.csv' : '.xlsx,.xls,.pdf';
+  // Update modal title
+  var h3 = document.querySelector('.upload-modal-header h3');
+  if (h3) h3.textContent = (t === 'geo_addresses') ? 'Upload POS Addresses' : 'Upload Distributor File';
+}}
+
 function showUploadModal() {{
   // Reset state
   _uplFile = null;
   document.getElementById('upl-file-name').style.display = 'none';
   document.getElementById('upl-file-name').textContent = '';
+  document.getElementById('upl-type').value = 'distributor';
   document.getElementById('upl-distributor').value = '';
   document.getElementById('upl-force').checked = false;
+  document.getElementById('upl-dist-options').style.display = '';
+  document.getElementById('upl-geo-options').style.display = 'none';
   document.getElementById('upl-spinner').style.display = 'none';
   document.getElementById('upl-result').style.display = 'none';
   document.getElementById('upl-result').className = 'upl-result';
@@ -3408,14 +3453,57 @@ function _uplEsc(s) {{
 
 async function doUploadModal() {{
   if (!_uplFile) return;
+  var uploadType = document.getElementById('upl-type').value;
   var submitBtn = document.getElementById('upl-submit-btn');
   var spinner = document.getElementById('upl-spinner');
   var result = document.getElementById('upl-result');
 
   submitBtn.disabled = true;
   spinner.style.display = 'block';
+  spinner.textContent = (uploadType === 'geo_addresses')
+    ? '⏳ Uploading addresses and updating database…'
+    : '⏳ Uploading and ingesting data...';
   result.style.display = 'none';
 
+  // --- GEO address upload ---
+  if (uploadType === 'geo_addresses') {{
+    var geocode = document.getElementById('upl-geo-geocode').checked;
+    var fd = new FormData();
+    fd.append('file', _uplFile, _uplFile.name);
+    fd.append('geocode', geocode ? 'true' : 'false');
+    try {{
+      var resp = await fetch('/api/geo/upload-addresses', {{ method: 'POST', body: fd }});
+      var data = await resp.json();
+      spinner.style.display = 'none';
+      result.style.display = 'block';
+      if (data.error) {{
+        result.className = 'upl-result error';
+        result.innerHTML = '<div class="upl-result-title">✗ Error</div>' + _uplEsc(data.error);
+      }} else {{
+        result.className = 'upl-result success';
+        var html = '<div class="upl-result-title">✓ Addresses Updated</div>' +
+          '<table>' +
+          '<tr><td>Updated</td><td>' + (data.updated||0) + ' POS</td></tr>' +
+          '<tr><td>Skipped (no change)</td><td>' + (data.skipped||0) + '</td></tr>' +
+          '<tr><td>Errors</td><td>' + (data.errors||0) + '</td></tr>';
+        if (data.geocoded != null) {{
+          html += '<tr><td>Geocoded</td><td>' + data.geocoded + ' POS</td></tr>';
+        }}
+        html += '</table>';
+        result.innerHTML = html;
+        // Refresh GEO map if on geo tab
+        if (typeof geoUpdateMap === 'function') geoUpdateMap();
+      }}
+    }} catch(err) {{
+      spinner.style.display = 'none';
+      result.style.display = 'block';
+      result.className = 'upl-result error';
+      result.innerHTML = '<div class="upl-result-title">✗ Upload Failed</div>' + _uplEsc(err.message);
+    }}
+    return;
+  }}
+
+  // --- Standard distributor file upload ---
   var fd = new FormData();
   fd.append('file', _uplFile, _uplFile.name);
   fd.append('distributor', document.getElementById('upl-distributor').value);
@@ -3502,38 +3590,45 @@ async function doRefresh() {{
 // BUSINESS OVERVIEW TAB STATE
 // ══════════════════════════════════════════════════════════════════════════════
 
-var boCurrentYear = '2026';
+var boCurrentYear = '{bo_latest_year}';
 var boCurrentMonth = 'all';
 var boCurrentBrand = 'ab';
+var boCurrentDist = 'ad';
 var boYearOverviewMap = {year_overview_map_json};
+
+function boSyncPeriodDropdown() {{
+  var yr = boCurrentYear;
+  var sel = document.getElementById('boFiltPeriod');
+  if (!sel) return;
+  Array.from(sel.options).forEach(function(o) {{
+    var oy = o.getAttribute('data-year');
+    o.style.display = (yr === 'all' || oy === 'all' || oy === yr) ? '' : 'none';
+  }});
+  // If currently selected option is now hidden, reset to Overview
+  var cur = sel.options[sel.selectedIndex];
+  if (cur && cur.style.display === 'none') {{
+    sel.value = 'all';
+    boCurrentMonth = 'all';
+  }}
+}}
 
 function boSetYear(yr) {{
   boCurrentYear = yr;
-  document.querySelectorAll('#tab-bo .year-btn').forEach(b => b.classList.remove('fbtn-active'));
-  event.target.classList.add('fbtn-active');
-  // Show/hide month buttons based on year
-  document.querySelectorAll('#tab-bo .month-btn').forEach(function(b) {{
-    var btnYear = b.getAttribute('data-year');
-    if (yr === 'all' || btnYear === 'all' || btnYear === yr) {{
-      b.style.display = '';
-    }} else {{
-      b.style.display = 'none';
-    }}
-  }});
-  // Reset to Overview for the selected year
+  // Reset period to Overview
   boCurrentMonth = 'all';
-  document.querySelectorAll('#tab-bo .month-btn').forEach(b => b.classList.remove('fbtn-active'));
-  var ovBtn = document.querySelector('#tab-bo .month-btn[data-year="all"]');
-  if (ovBtn) ovBtn.classList.add('fbtn-active');
+  var pSel = document.getElementById('boFiltPeriod');
+  if (pSel) pSel.value = 'all';
+  boSyncPeriodDropdown();
   boUpdateVisibility();
 }}
 
 function boSetMonth(fid) {{
   boCurrentMonth = fid;
   boUpdateVisibility();
-  document.querySelectorAll('#tab-bo .month-btn').forEach(b => b.classList.remove('fbtn-active'));
-  event.target.classList.add('fbtn-active');
 }}
+
+// Initialize period sync on load
+document.addEventListener('DOMContentLoaded', function() {{ boSyncPeriodDropdown(); }});
 
 function boSetBrand(bid) {{
   boCurrentBrand = bid;
@@ -3542,17 +3637,24 @@ function boSetBrand(bid) {{
   event.target.classList.add('fbtn-active');
 }}
 
+function boSetDist(did) {{
+  boCurrentDist = did;
+  boUpdateVisibility();
+  document.querySelectorAll('#tab-bo .dist-btn').forEach(b => b.classList.remove('fbtn-active'));
+  event.target.classList.add('fbtn-active');
+}}
+
 function boUpdateVisibility() {{
   document.querySelectorAll('#tab-bo .month-section').forEach(function(s) {{
     s.style.display = 'none';
   }});
-  // Determine which section to show
+  // Determine which section to show (period-brand-distributor)
   var secId;
   if (boCurrentMonth === 'all' && boCurrentYear !== 'all') {{
     // Year overview
-    secId = boYearOverviewMap[boCurrentYear] + '-' + boCurrentBrand;
+    secId = boYearOverviewMap[boCurrentYear] + '-' + boCurrentBrand + '-' + boCurrentDist;
   }} else {{
-    secId = boCurrentMonth + '-' + boCurrentBrand;
+    secId = boCurrentMonth + '-' + boCurrentBrand + '-' + boCurrentDist;
   }}
   var el = document.getElementById('sec-' + secId);
   if (el) el.style.display = 'block';
@@ -3716,32 +3818,50 @@ function spExportToExcel(selCustomers, selBrands, selDist) {{
     return true;
   }});
 
+  // Dynamic month keys + labels from registry
+  var _spM = window.__SP_MONTHS__ || ['dec','jan','feb','mar'];
+  var _spML = window.__SP_MON_LABELS__ || ['Dec','Jan','Feb','Mar'];
+
   // Sheet 1: Summary
-  var s1=[[tc('SALE POINTS DEEP DIVE — Summary')],[],
-    [tc('#'),tc('Customer'),tc('Distributor'),tc('Sale Points'),tc('Dec'),tc('Jan'),tc('Feb'),tc('Mar'),tc('Total Units'),tc('Total Revenue')]];
+  var h1=[tc('#'),tc('Customer'),tc('Distributor'),tc('Sale Points')];
+  _spML.forEach(function(l){{h1.push(tc(l));}});
+  h1.push(tc('Total Units'));h1.push(tc('Total Revenue'));
+  var s1=[[tc('SALE POINTS DEEP DIVE — Summary')],[],h1];
   var gi=1;
   custs.forEach(function(c){{
     var pts=c.salepoints.filter(_spBrandMatch);
     if(pts.length===0) return;
-    var sp=pts.length, tu=0,tr=0,dec=0,jan=0,feb=0,mar=0;
-    pts.forEach(function(s){{tu+=_spBrandUnits(s);tr+=_spBrandRev(s);dec+=s.dec;jan+=s.jan;feb+=s.feb;mar+=s.mar;}});
-    s1.push([n(gi++),tc(c.name),tc(c.distributor),n(sp),n(dec),n(jan),n(feb),n(mar),n(tu),n(Math.round(tr),cf)]);
+    var sp=pts.length, tu=0,tr=0;
+    var mTotals={{}};_spM.forEach(function(m){{mTotals[m]=0;}});
+    pts.forEach(function(s){{tu+=_spBrandUnits(s);tr+=_spBrandRev(s);_spM.forEach(function(m){{mTotals[m]+=(s[m]||0);}});}});
+    var row=[n(gi++),tc(c.name),tc(c.distributor),n(sp)];
+    _spM.forEach(function(m){{row.push(n(mTotals[m]));}});
+    row.push(n(tu));row.push(n(Math.round(tr),cf));
+    s1.push(row);
   }});
   var ws1=XLSX.utils.aoa_to_sheet(s1);
-  ws1['!cols']=[{{wch:4}},{{wch:22}},{{wch:12}},{{wch:12}},{{wch:10}},{{wch:10}},{{wch:10}},{{wch:10}},{{wch:13}},{{wch:14}}];
+  var c1=[{{wch:4}},{{wch:22}},{{wch:12}},{{wch:12}}];_spM.forEach(function(){{c1.push({{wch:10}});}});c1.push({{wch:13}});c1.push({{wch:14}});
+  ws1['!cols']=c1;
   XLSX.utils.book_append_sheet(wb,ws1,'Summary');
 
   // Sheet 2: All Sale Points
-  var s2=[[tc('ALL SALE POINTS')],[],
-    [tc('#'),tc('Customer Group'),tc('Distributor'),tc('Sale Point'),tc('Status'),tc('Dec'),tc('Jan'),tc('Feb'),tc('Mar'),tc('Total'),tc('Revenue'),tc('Choc'),tc('Van'),tc('Mango'),tc('Pist'),tc('DC')]];
+  var h2=[tc('#'),tc('Customer Group'),tc('Distributor'),tc('Sale Point'),tc('Status')];
+  _spML.forEach(function(l){{h2.push(tc(l));}});
+  h2.push(tc('Total'));h2.push(tc('Revenue'));h2.push(tc('Choc'));h2.push(tc('Van'));h2.push(tc('Mango'));h2.push(tc('Pist'));h2.push(tc('DC'));
+  var s2=[[tc('ALL SALE POINTS')],[],h2];
   var ri=1;
   custs.forEach(function(c){{
     c.salepoints.filter(_spBrandMatch).forEach(function(s){{
-      s2.push([n(ri++),tc(c.name),tc(c.distributor),tc(s.name),tc(s.status),n(s.dec),n(s.jan),n(s.feb),n(s.mar),n(_spBrandUnits(s)),n(Math.round(_spBrandRev(s)),cf),n(s.choc),n(s.van),n(s.mango),n(s.pist),n(s.dc)]);
+      var row=[n(ri++),tc(c.name),tc(c.distributor),tc(s.name),tc(s.status)];
+      _spM.forEach(function(m){{row.push(n(s[m]||0));}});
+      row.push(n(_spBrandUnits(s)));row.push(n(Math.round(_spBrandRev(s)),cf));
+      row.push(n(s.choc));row.push(n(s.van));row.push(n(s.mango));row.push(n(s.pist));row.push(n(s.dc));
+      s2.push(row);
     }});
   }});
   var ws2=XLSX.utils.aoa_to_sheet(s2);
-  ws2['!cols']=[{{wch:4}},{{wch:18}},{{wch:12}},{{wch:36}},{{wch:12}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:10}},{{wch:12}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:8}}];
+  var c2=[{{wch:4}},{{wch:18}},{{wch:12}},{{wch:36}},{{wch:12}}];_spM.forEach(function(){{c2.push({{wch:8}});}});c2.push({{wch:10}});c2.push({{wch:12}});c2.push({{wch:8}});c2.push({{wch:8}});c2.push({{wch:8}});c2.push({{wch:8}});c2.push({{wch:8}});
+  ws2['!cols']=c2;
   XLSX.utils.book_append_sheet(wb,ws2,'All Sale Points');
 
   // Per-customer sheets
@@ -3749,14 +3869,21 @@ function spExportToExcel(selCustomers, selBrands, selDist) {{
     var pts = c.salepoints.filter(_spBrandMatch);
     if(pts.length===0) return;
     var name = c.name.substring(0,31);
-    var s=[[tc(c.name + ' — ' + c.distributor)],[],
-      [tc('#'),tc('Sale Point'),tc('Status'),tc('Dec'),tc('Jan'),tc('Feb'),tc('Mar'),tc('Total'),tc('Revenue'),tc('Choc'),tc('Van'),tc('Mango'),tc('Pist'),tc('DC')]];
+    var h=[tc('#'),tc('Sale Point'),tc('Status')];
+    _spML.forEach(function(l){{h.push(tc(l));}});
+    h.push(tc('Total'));h.push(tc('Revenue'));h.push(tc('Choc'));h.push(tc('Van'));h.push(tc('Mango'));h.push(tc('Pist'));h.push(tc('DC'));
+    var s=[[tc(c.name + ' — ' + c.distributor)],[],h];
     var ci=1;
     pts.forEach(function(sp){{
-      s.push([n(ci++),tc(sp.name),tc(sp.status),n(sp.dec),n(sp.jan),n(sp.feb),n(sp.mar),n(_spBrandUnits(sp)),n(Math.round(_spBrandRev(sp)),cf),n(sp.choc),n(sp.van),n(sp.mango),n(sp.pist),n(sp.dc)]);
+      var row=[n(ci++),tc(sp.name),tc(sp.status)];
+      _spM.forEach(function(m){{row.push(n(sp[m]||0));}});
+      row.push(n(_spBrandUnits(sp)));row.push(n(Math.round(_spBrandRev(sp)),cf));
+      row.push(n(sp.choc));row.push(n(sp.van));row.push(n(sp.mango));row.push(n(sp.pist));row.push(n(sp.dc));
+      s.push(row);
     }});
     var ws=XLSX.utils.aoa_to_sheet(s);
-    ws['!cols']=[{{wch:4}},{{wch:36}},{{wch:12}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:10}},{{wch:12}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:8}},{{wch:8}}];
+    var cw=[{{wch:4}},{{wch:36}},{{wch:12}}];_spM.forEach(function(){{cw.push({{wch:8}});}});cw.push({{wch:10}});cw.push({{wch:12}});cw.push({{wch:8}});cw.push({{wch:8}});cw.push({{wch:8}});cw.push({{wch:8}});cw.push({{wch:8}});
+    ws['!cols']=cw;
     XLSX.utils.book_append_sheet(wb,ws,name);
   }});
 
@@ -3849,11 +3976,26 @@ document.addEventListener('DOMContentLoaded', function() {{ mobileTabSync('bo');
 
 def main():
     """Main entry point — generate and save the unified dashboard."""
-    from parsers import consolidate_data
+    import os
 
-    # Load consolidated data
-    print("Loading consolidated data...")
-    data = consolidate_data()
+    # Load consolidated data — prefer DB (Phase 4) with Excel fallback
+    use_db = os.environ.get('RAITO_DATA_SOURCE', '').lower() == 'db'
+
+    if use_db:
+        try:
+            from db.database_manager import get_consolidated_data
+            print("Loading data from PostgreSQL (Phase 4)...")
+            data = get_consolidated_data()
+            print(f"  ✓ DB source: {len(data.get('months', []))} months loaded")
+        except Exception as e:
+            print(f"  ⚠ DB source failed ({e}) — falling back to Excel parsers")
+            from parsers import consolidate_data
+            print("Loading consolidated data...")
+            data = consolidate_data()
+    else:
+        from parsers import consolidate_data
+        print("Loading consolidated data...")
+        data = consolidate_data()
 
     # Parse master data
     print("Parsing master data...")

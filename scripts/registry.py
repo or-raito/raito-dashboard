@@ -141,6 +141,9 @@ CUSTOMER_NAMES_EN: dict[str, str] = {
     'טיב טעם':           'Tiv Taam',
     'ינגו':              'Yango Deli',
     'כרמלה':             'Carmella',
+    'חן כרמלה':          'Carmella',          # Biscotti uses this longer variant
+    'מתילדה':            'Matilda Yehud',     # Biscotti customer
+    'דלישס':             'Delicious RL',      # Biscotti customer
     'נוי השדה':          'Noy HaSade',
     'סונול':             'Sonol',
     'עוגיפלצת':          'Oogiplatset',
@@ -154,7 +157,10 @@ CUSTOMER_NAMES_EN: dict[str, str] = {
 # Known customer name prefixes for Icedream branch → customer aggregation
 CUSTOMER_PREFIXES: list[str] = [
     'דומינוס פיצה', 'דומינוס', 'גוד פארם', 'חוות נעמי', 'נוי השדה',
-    'וואלט', 'וולט', 'ינגו', 'כרמלה', 'עוגיפלצת',
+    'וואלט', 'וולט', 'ינגו',
+    'חן כרמלה', 'כרמלה',          # 'חן כרמלה' MUST come before 'כרמלה' (longest-prefix-first)
+    'מתילדה', 'דלישס',             # Biscotti-only customers
+    'עוגיפלצת',
 ]
 
 

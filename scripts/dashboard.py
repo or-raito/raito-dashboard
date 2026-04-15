@@ -203,25 +203,28 @@ def _build_svg_timeline_chart(data, active_products, value_key, title, line_colo
     return f'<div class="card full"><h3>{title}</h3>{header_html}' + '\n'.join(svg) + '</div>'
 
 
-def _build_svg_revenue_chart(data, month_list, active_products):
-    return _build_svg_timeline_chart(data, active_products, 'total_value',
+def _build_svg_revenue_chart(data, month_list, active_products, dist_key='all'):
+    _val_key = {'icedream': 'icedreams_value', 'mayyan': 'mayyan_value', 'biscotti': 'biscotti_value'}.get(dist_key, 'total_value')
+    return _build_svg_timeline_chart(data, active_products, _val_key,
                                      'Monthly Revenue (₪)', '#10b981', 'ag', '#065f46', _fc, show_mom=True,
                                      month_list=month_list)
 
 
-def _build_svg_units_chart(data, month_list, active_products):
-    return _build_svg_timeline_chart(data, active_products, 'units',
+def _build_svg_units_chart(data, month_list, active_products, dist_key='all'):
+    _unit_key = {'icedream': 'icedreams_units', 'mayyan': 'mayyan_units', 'biscotti': 'biscotti_units'}.get(dist_key, 'units')
+    return _build_svg_timeline_chart(data, active_products, _unit_key,
                                      'Monthly Sales (units)', '#5D5FEF', 'ag2', '#3b3d99', _fmt, show_mom=True,
                                      month_list=month_list)
 
 
-def _build_inventory_section(data, active_products=None):
+def _build_inventory_section(data, active_products=None, dist_filter='all'):
     """Build unified inventory section: Warehouse (Karfree) + Distributors."""
     wh = data.get('warehouse', {})
     dist_inv = data.get('dist_inv', {})
 
-    has_warehouse = wh and wh.get('products')
+    has_warehouse = wh and wh.get('products') and dist_filter == 'all'
     has_distributors = bool(dist_inv)
+    _inv_dist_list = [dist_filter] if dist_filter != 'all' else ['icedream', 'mayyan', 'biscotti']
 
     if not has_warehouse and not has_distributors:
         return ''
@@ -340,8 +343,9 @@ def _build_inventory_section(data, active_products=None):
 
     # ── Distributor inventory tables ──
     dist_html = ''
+    _dist_label_map = {'icedream': 'Icedream', 'mayyan': "Ma'ayan", 'biscotti': 'Biscotti'}
     if has_distributors:
-        for dist_key, dist_label in [('icedream', 'Icedream'), ('mayyan', "Ma'ayan"), ('biscotti', 'Biscotti')]:
+        for dist_key, dist_label in [(dk, _dist_label_map[dk]) for dk in _inv_dist_list]:
             ddata = dist_inv.get(dist_key)
             if not ddata or not ddata.get('products'):
                 continue
@@ -391,73 +395,76 @@ def _build_inventory_section(data, active_products=None):
                 return '-'
             return str(round(units / 2400, 1)) if units > 0 else '-'
 
-        s_rows = ''
-        grand_total = 0
-        grand_pallets = 0
-        for p in prod_order:
-            wh_u = wh_products.get(p, {}).get('units', 0)
-            ice_u = dist_inv.get('icedream', {}).get('products', {}).get(p, {}).get('units', 0)
-            may_u = dist_inv.get('mayyan', {}).get('products', {}).get(p, {}).get('units', 0)
-            bisc_u = dist_inv.get('biscotti', {}).get('products', {}).get(p, {}).get('units', 0)
-            total_u = wh_u + ice_u + may_u + bisc_u
-            if total_u == 0:
-                continue
-            name = PRODUCT_NAMES.get(p, p)
-            color = FLAVOR_COLORS.get(p, '#666')
-            dot = f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{color};margin-right:6px"></span>'
+        if dist_filter == 'all':
+            # Full multi-location summary
+            s_rows = ''
+            grand_total = 0
+            grand_pallets = 0
+            for p in prod_order:
+                wh_u = wh_products.get(p, {}).get('units', 0)
+                ice_u = dist_inv.get('icedream', {}).get('products', {}).get(p, {}).get('units', 0)
+                may_u = dist_inv.get('mayyan', {}).get('products', {}).get(p, {}).get('units', 0)
+                bisc_u = dist_inv.get('biscotti', {}).get('products', {}).get(p, {}).get('units', 0)
+                total_u = wh_u + ice_u + may_u + bisc_u
+                if total_u == 0:
+                    continue
+                name = PRODUCT_NAMES.get(p, p)
+                color = FLAVOR_COLORS.get(p, '#666')
+                dot = f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{color};margin-right:6px"></span>'
 
-            wh_p = _pallets_str(wh_u, p)
-            ice_p = _pallets_str(ice_u, p)
-            may_p = _pallets_str(may_u, p)
-            bisc_p = _pallets_str(bisc_u, p)
-            total_p = _pallets_str(total_u, p)
-            if p != 'dream_cake':
-                grand_pallets += round(total_u / 2400, 1)
+                wh_p = _pallets_str(wh_u, p)
+                ice_p = _pallets_str(ice_u, p)
+                may_p = _pallets_str(may_u, p)
+                bisc_p = _pallets_str(bisc_u, p)
+                total_p = _pallets_str(total_u, p)
+                if p != 'dream_cake':
+                    grand_pallets += round(total_u / 2400, 1)
 
-            s_rows += (f'<tr>'
-                       f'<td>{dot}<b>{name}</b></td>'
-                       f'<td style="text-align:center">{_fmt(wh_u) if wh_u else "-"}</td>'
-                       f'<td style="text-align:center;color:#888;font-size:12px">{wh_p}</td>'
-                       f'<td style="text-align:center">{_fmt(ice_u) if ice_u else "-"}</td>'
-                       f'<td style="text-align:center;color:#888;font-size:12px">{ice_p}</td>'
-                       f'<td style="text-align:center">{_fmt(may_u) if may_u else "-"}</td>'
-                       f'<td style="text-align:center;color:#888;font-size:12px">{may_p}</td>'
-                       f'<td style="text-align:center">{_fmt(bisc_u) if bisc_u else "-"}</td>'
-                       f'<td style="text-align:center;color:#888;font-size:12px">{bisc_p}</td>'
-                       f'<td style="text-align:center;font-weight:700">{_fmt(total_u)}</td>'
-                       f'<td style="text-align:center;font-weight:700;color:#555">{total_p}</td>'
+                s_rows += (f'<tr>'
+                           f'<td>{dot}<b>{name}</b></td>'
+                           f'<td style="text-align:center">{_fmt(wh_u) if wh_u else "-"}</td>'
+                           f'<td style="text-align:center;color:#888;font-size:12px">{wh_p}</td>'
+                           f'<td style="text-align:center">{_fmt(ice_u) if ice_u else "-"}</td>'
+                           f'<td style="text-align:center;color:#888;font-size:12px">{ice_p}</td>'
+                           f'<td style="text-align:center">{_fmt(may_u) if may_u else "-"}</td>'
+                           f'<td style="text-align:center;color:#888;font-size:12px">{may_p}</td>'
+                           f'<td style="text-align:center">{_fmt(bisc_u) if bisc_u else "-"}</td>'
+                           f'<td style="text-align:center;color:#888;font-size:12px">{bisc_p}</td>'
+                           f'<td style="text-align:center;font-weight:700">{_fmt(total_u)}</td>'
+                           f'<td style="text-align:center;font-weight:700;color:#555">{total_p}</td>'
+                           f'</tr>')
+                grand_total += total_u
+
+            # Recompute totals for filtered products
+            wh_total = sum(wh_products.get(p, {}).get('units', 0) for p in prod_order) if has_warehouse else 0
+            ice_total = sum(dist_inv.get('icedream', {}).get('products', {}).get(p, {}).get('units', 0) for p in prod_order)
+            may_total = sum(dist_inv.get('mayyan', {}).get('products', {}).get(p, {}).get('units', 0) for p in prod_order)
+            bisc_total = sum(dist_inv.get('biscotti', {}).get('products', {}).get(p, {}).get('units', 0) for p in prod_order)
+            s_rows += (f'<tr style="font-weight:700;border-top:2px solid #e2e8f0">'
+                       f'<td>Total</td>'
+                       f'<td style="text-align:center">{_fmt(wh_total) if wh_total else "-"}</td>'
+                       f'<td style="text-align:center;color:#888;font-size:12px">{round(wh_total / 2400, 1) if wh_total else "-"}</td>'
+                       f'<td style="text-align:center">{_fmt(ice_total) if ice_total else "-"}</td>'
+                       f'<td style="text-align:center;color:#888;font-size:12px">{round(ice_total / 2400, 1) if ice_total else "-"}</td>'
+                       f'<td style="text-align:center">{_fmt(may_total) if may_total else "-"}</td>'
+                       f'<td style="text-align:center;color:#888;font-size:12px">{round(may_total / 2400, 1) if may_total else "-"}</td>'
+                       f'<td style="text-align:center">{_fmt(bisc_total) if bisc_total else "-"}</td>'
+                       f'<td style="text-align:center;color:#888;font-size:12px">{round(bisc_total / 2400, 1) if bisc_total else "-"}</td>'
+                       f'<td style="text-align:center;font-weight:700">{_fmt(grand_total)}</td>'
+                       f'<td style="text-align:center;font-weight:700;color:#555">{round(grand_pallets, 1)}</td>'
                        f'</tr>')
-            grand_total += total_u
 
-        # Recompute totals for filtered products
-        wh_total = sum(wh_products.get(p, {}).get('units', 0) for p in prod_order) if has_warehouse else 0
-        ice_total = sum(dist_inv.get('icedream', {}).get('products', {}).get(p, {}).get('units', 0) for p in prod_order)
-        may_total = sum(dist_inv.get('mayyan', {}).get('products', {}).get(p, {}).get('units', 0) for p in prod_order)
-        bisc_total = sum(dist_inv.get('biscotti', {}).get('products', {}).get(p, {}).get('units', 0) for p in prod_order)
-        s_rows += (f'<tr style="font-weight:700;border-top:2px solid #e2e8f0">'
-                   f'<td>Total</td>'
-                   f'<td style="text-align:center">{_fmt(wh_total) if wh_total else "-"}</td>'
-                   f'<td style="text-align:center;color:#888;font-size:12px">{round(wh_total / 2400, 1) if wh_total else "-"}</td>'
-                   f'<td style="text-align:center">{_fmt(ice_total) if ice_total else "-"}</td>'
-                   f'<td style="text-align:center;color:#888;font-size:12px">{round(ice_total / 2400, 1) if ice_total else "-"}</td>'
-                   f'<td style="text-align:center">{_fmt(may_total) if may_total else "-"}</td>'
-                   f'<td style="text-align:center;color:#888;font-size:12px">{round(may_total / 2400, 1) if may_total else "-"}</td>'
-                   f'<td style="text-align:center">{_fmt(bisc_total) if bisc_total else "-"}</td>'
-                   f'<td style="text-align:center;color:#888;font-size:12px">{round(bisc_total / 2400, 1) if bisc_total else "-"}</td>'
-                   f'<td style="text-align:center;font-weight:700">{_fmt(grand_total)}</td>'
-                   f'<td style="text-align:center;font-weight:700;color:#555">{round(grand_pallets, 1)}</td>'
-                   f'</tr>')
-
-        summary_html = (f'<div class="card full" style="margin-bottom:14px">'
-                        f'<h3>Total Available Stock — All Locations</h3>'
-                        f'<table class="tbl tbl-prod-rank"><thead><tr>'
-                        f'<th>Product</th>'
-                        f'<th>Warehouse (Karfree)</th><th style="color:#888;font-size:11px">Pallets</th>'
-                        f'<th>Icedream</th><th style="color:#888;font-size:11px">Pallets</th>'
-                        f'<th>Ma\'ayan</th><th style="color:#888;font-size:11px">Pallets</th>'
-                        f'<th>Biscotti</th><th style="color:#888;font-size:11px">Pallets</th>'
-                        f'<th>Total Available</th><th style="color:#888;font-size:11px">Pallets</th>'
-                        f'</tr></thead><tbody>{s_rows}</tbody></table></div>')
+            summary_html = (f'<div class="card full" style="margin-bottom:14px">'
+                            f'<h3>Total Available Stock — All Locations</h3>'
+                            f'<table class="tbl tbl-prod-rank"><thead><tr>'
+                            f'<th>Product</th>'
+                            f'<th>Warehouse (Karfree)</th><th style="color:#888;font-size:11px">Pallets</th>'
+                            f'<th>Icedream</th><th style="color:#888;font-size:11px">Pallets</th>'
+                            f'<th>Ma\'ayan</th><th style="color:#888;font-size:11px">Pallets</th>'
+                            f'<th>Biscotti</th><th style="color:#888;font-size:11px">Pallets</th>'
+                            f'<th>Total Available</th><th style="color:#888;font-size:11px">Pallets</th>'
+                            f'</tr></thead><tbody>{s_rows}</tbody></table></div>')
+        # else: for single-distributor, the distributor inventory card below handles it
 
     # Wrap distributor cards in a flex row
     if dist_html:
@@ -561,11 +568,12 @@ def _build_flavor_svg_chart(data, months):
     return '\n'.join(svg)
 
 
-def _build_flavor_analysis(data, month_list, is_all, active_products=None):
+def _build_flavor_analysis(data, month_list, is_all, active_products=None, dist_key='all'):
     """Build units-only sales-by-flavor analysis for production planning.
     Overview: multi-line chart + monthly units table + inventory coverage.
     Per-month: bar chart with units per flavor.
     """
+    _fa_unit_key = {'icedream': 'icedreams_units', 'mayyan': 'mayyan_units', 'biscotti': 'biscotti_units'}.get(dist_key, 'units')
     all_products = ['chocolate', 'vanilla', 'mango', 'pistachio', 'dream_cake', 'dream_cake_2', 'magadat']
     products_order = [p for p in all_products if p in active_products] if active_products else all_products
     wh = data.get('warehouse', {})
@@ -596,7 +604,7 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
             has_data = False
             for month in months:
                 md = data['monthly_data'].get(month, {})
-                u = md.get('combined', {}).get(p, {}).get('units', 0)
+                u = md.get('combined', {}).get(p, {}).get(_fa_unit_key, 0)
                 monthly_units.append(u)
                 p_total += u
                 if u > 0:
@@ -659,9 +667,10 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
                         cust_units[chain] = cust_units.get(chain, 0) + u
                 # Biscotti customers (sum across all products in the filter)
                 for cust, pdata in md.get('biscotti_customers', {}).items():
+                    chain = extract_customer_name(cust)
                     u = sum((pdata.get(pp) or {}).get('units', 0) for pp in products_order)
                     if u > 0:
-                        cust_units[cust] = cust_units.get(cust, 0) + u
+                        cust_units[chain] = cust_units.get(chain, 0) + u
 
             donut_data = sorted(cust_units.items(), key=lambda x: x[1], reverse=True)
             top_n = donut_data[:10]
@@ -738,7 +747,7 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
                 ice_t = may_t = bisc_t = 0
                 for m in months:
                     c = data['monthly_data'].get(m, {}).get('combined', {}).get(p, {})
-                    p_total_u += c.get('units', 0)
+                    p_total_u += c.get(_fa_unit_key, 0)
                     ice_t += c.get('icedreams_units', 0)
                     may_t += c.get('mayyan_units', 0)
                     bisc_t += c.get('biscotti_units', 0)
@@ -940,7 +949,7 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
         total_u = 0
         for p in products_order:
             c = md.get('combined', {}).get(p, {})
-            u = c.get('units', 0)
+            u = c.get(_fa_unit_key, 0)
             if u > 0:
                 flavor_data.append((p, u))
                 total_u += u
@@ -967,9 +976,10 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
                 if u > 0:
                     cust_units[chain] = cust_units.get(chain, 0) + u
             for cust, pdata in md.get('biscotti_customers', {}).items():
+                chain = extract_customer_name(cust)
                 u = sum((pdata.get(pp) or {}).get('units', 0) for pp in products_order)
                 if u > 0:
-                    cust_units[cust] = cust_units.get(cust, 0) + u
+                    cust_units[chain] = cust_units.get(chain, 0) + u
 
             cust_sorted_donut = sorted(cust_units.items(), key=lambda x: x[1], reverse=True)
             top_n = cust_sorted_donut[:10]
@@ -1132,11 +1142,12 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
 
         # Biscotti customers
         for cust, pdata in md.get('biscotti_customers', {}).items():
-            if cust not in cust_flavor:
-                cust_flavor[cust] = {}
+            chain = extract_customer_name(cust)
+            if chain not in cust_flavor:
+                cust_flavor[chain] = {}
             for p in flavor_products:
                 u = pdata.get(p, {}).get('units', 0) if isinstance(pdata.get(p), dict) else 0
-                cust_flavor[cust][p] = cust_flavor[cust].get(p, 0) + u
+                cust_flavor[chain][p] = cust_flavor[chain].get(p, 0) + u
 
         # Filter out zero-total customers, sort by total desc
         cust_totals = {c: sum(pvals.values()) for c, pvals in cust_flavor.items()}
@@ -1187,10 +1198,41 @@ def _build_flavor_analysis(data, month_list, is_all, active_products=None):
                 f'<h3>Units Sold by Flavor</h3>{donut_section}{cust_table_html}</div>')
 
 
-def _build_month_section(data, month_list, section_id, active_products):
+def _compute_kpis_dist(data, month_list, active_products, dist_key='all'):
+    """Compute KPIs filtered by distributor. dist_key: 'all', 'icedream', 'mayyan', 'biscotti'."""
+    if dist_key == 'all':
+        return _compute_kpis(data, month_list, active_products)
+    # Distributor-specific KPIs
+    _unit_key = {'icedream': 'icedreams_units', 'mayyan': 'mayyan_units', 'biscotti': 'biscotti_units'}[dist_key]
+    _val_key = {'icedream': 'icedreams_value', 'mayyan': 'mayyan_value', 'biscotti': 'biscotti_value'}[dist_key]
+    tu = tr = tc = tgm = 0
+    for month in month_list:
+        md = data['monthly_data'].get(month, {})
+        for p in active_products:
+            c = md.get('combined', {}).get(p, {})
+            u = c.get(_unit_key, 0)
+            v = c.get(_val_key, 0)
+            if u > 0:
+                tu += u
+                tr += v
+                pcost = round(u * get_production_cost(p), 2)
+                tc += pcost
+                tgm += round(v - pcost, 2) if p != 'magadat' else 0
+    # For single dist, tmy/tic/tbi reflect only the selected distributor
+    tmy = tu if dist_key == 'mayyan' else 0
+    tic = tu if dist_key == 'icedream' else 0
+    tbi = tu if dist_key == 'biscotti' else 0
+    td = tu
+    mp = 100 if dist_key == 'mayyan' else 0
+    ip = 100 if dist_key == 'icedream' else 0
+    bp = 100 if dist_key == 'biscotti' else 0
+    return tu, tr, tc, tgm, tmy, tic, tbi, mp, ip, bp
+
+
+def _build_month_section(data, month_list, section_id, active_products, dist_key='all'):
     """Build one month section (KPIs + charts + tables)."""
     products = data['products']
-    tu, tr, tc, tgm, tmy, tic, tbi, mp, ip, bp = _compute_kpis(data, month_list, active_products)
+    tu, tr, tc, tgm, tmy, tic, tbi, mp, ip, bp = _compute_kpis_dist(data, month_list, active_products, dist_key)
     is_all = len(month_list) > 1
     label = 'Overview' if is_all else MONTH_NAMES_HEB.get(month_list[0], month_list[0])
 
@@ -1237,13 +1279,15 @@ def _build_month_section(data, month_list, section_id, active_products):
         )
 
     # ── Modern KPI Cards with big numbers ──
+    _rev_key = {'icedream': 'icedreams_value', 'mayyan': 'mayyan_value', 'biscotti': 'biscotti_value'}.get(dist_key, 'total_value')
+    _unit_key = {'icedream': 'icedreams_units', 'mayyan': 'mayyan_units', 'biscotti': 'biscotti_units'}.get(dist_key, 'units')
     rev_trend = ''
     if is_all and len(month_list) >= 2:
         # Calculate revenue trend from last two months with data
         rev_vals = []
         for m in month_list:
             md = data['monthly_data'].get(m, {})
-            rv = sum(md.get('combined', {}).get(p, {}).get('total_value', 0) for p in active_products)
+            rv = sum(md.get('combined', {}).get(p, {}).get(_rev_key, 0) for p in active_products)
             if rv > 0:
                 rev_vals.append(rv)
         if len(rev_vals) >= 2:
@@ -1258,7 +1302,7 @@ def _build_month_section(data, month_list, section_id, active_products):
         unit_vals = []
         for m in month_list:
             md = data['monthly_data'].get(m, {})
-            uv = sum(md.get('combined', {}).get(p, {}).get('units', 0) for p in active_products)
+            uv = sum(md.get('combined', {}).get(p, {}).get(_unit_key, 0) for p in active_products)
             if uv > 0:
                 unit_vals.append(uv)
         if len(unit_vals) >= 2:
@@ -1293,21 +1337,23 @@ def _build_month_section(data, month_list, section_id, active_products):
     {creator_rows_html}
   </div>'''
 
-    # Supply Chain card — filtered by active_products
+    # Supply Chain card — KPI shows Karfree (warehouse) only for 'all' distributor,
+    # or the specific distributor's stock when filtered.
     wh = data.get('warehouse', {})
     wh_products_kpi = wh.get('products', {})
-
-    # Filter inventory to active products only
-    filtered_inv_total = 0
-    if wh_products_kpi:
-        for p in active_products:
-            pd_kpi = wh_products_kpi.get(p)
-            if pd_kpi:
-                filtered_inv_total += pd_kpi.get('units', 0)
-    # Also add distributor inventory for filtered products
     dist_inv_data = data.get('dist_inv', {})
-    for dk in ['icedream', 'mayyan', 'biscotti']:
-        dprods = dist_inv_data.get(dk, {}).get('products', {})
+
+    filtered_inv_total = 0
+    if dist_key == 'all':
+        # Show only Karfree warehouse inventory in KPI cube
+        if wh_products_kpi:
+            for p in active_products:
+                pd_kpi = wh_products_kpi.get(p)
+                if pd_kpi:
+                    filtered_inv_total += pd_kpi.get('units', 0)
+    else:
+        # Show only the selected distributor's stock
+        dprods = dist_inv_data.get(dist_key, {}).get('products', {})
         for p in active_products:
             pd_d = dprods.get(p)
             if pd_d:
@@ -1316,14 +1362,15 @@ def _build_month_section(data, month_list, section_id, active_products):
 
     # Build per-flavor rows for inventory KPI
     flavor_rows_html = ''
-    if inv_total > 0 and wh_products_kpi:
+    if inv_total > 0:
         prod_order_kpi = [p for p in ['chocolate', 'vanilla', 'mango', 'pistachio', 'dream_cake', 'magadat'] if p in active_products]
         rows_list = []
         for p in prod_order_kpi:
-            # Sum across all locations for this product
-            u = wh_products_kpi.get(p, {}).get('units', 0)
-            for dk in ['icedream', 'mayyan', 'biscotti']:
-                u += dist_inv_data.get(dk, {}).get('products', {}).get(p, {}).get('units', 0)
+            # Show stock for the relevant location
+            if dist_key == 'all':
+                u = wh_products_kpi.get(p, {}).get('units', 0)
+            else:
+                u = dist_inv_data.get(dist_key, {}).get('products', {}).get(p, {}).get('units', 0)
             if u == 0:
                 continue
             color = FLAVOR_COLORS.get(p, '#888')
@@ -1344,10 +1391,17 @@ def _build_month_section(data, month_list, section_id, active_products):
                 + '</div>'
             )
 
+    _dist_stock_titles = {'icedream': 'Icedream Stock', 'mayyan': "Ma'ayan Stock", 'biscotti': 'Biscotti Stock'}
+    if dist_key == 'all':
+        _inv_title = 'Karfree Inventory'
+        _inv_sub = 'warehouse units'
+    else:
+        _inv_title = _dist_stock_titles[dist_key]
+        _inv_sub = 'distributor units'
     supply_card = f'''<div class="kpi" style="align-items:flex-start">
-    <div class="kpi-title" style="width:100%">Total Inventory</div>
+    <div class="kpi-title" style="width:100%">{_inv_title}</div>
     <div class="big-number-md" style="color:var(--primary)">{_fmt(inv_total) if inv_total > 0 else '---'}</div>
-    <div class="stat-label" style="margin-top:4px">{'units in stock' if inv_total > 0 else 'Awaiting data'}</div>
+    <div class="stat-label" style="margin-top:4px">{_inv_sub if inv_total > 0 else 'Awaiting data'}</div>
     {flavor_rows_html}
   </div>'''
 
@@ -1379,30 +1433,40 @@ def _build_month_section(data, month_list, section_id, active_products):
     # ── Revenue & Units Charts ──
     units_card = ''
     if is_all and len(month_list) >= 2:
-        rev_card = _build_svg_revenue_chart(data, month_list, active_products)
-        units_card = _build_svg_units_chart(data, month_list, active_products)
+        rev_card = _build_svg_revenue_chart(data, month_list, active_products, dist_key)
+        units_card = _build_svg_units_chart(data, month_list, active_products, dist_key)
     else:
         rev_card = ''  # Revenue card removed from per-month view
 
     # ── Summary Table (sorted by revenue desc) ──
+    _dist_unit_key = {'icedream': 'icedreams_units', 'mayyan': 'mayyan_units', 'biscotti': 'biscotti_units'}.get(dist_key)
+    _dist_val_key = {'icedream': 'icedreams_value', 'mayyan': 'mayyan_value', 'biscotti': 'biscotti_value'}.get(dist_key)
     rows_data = []
     for month in month_list:
         md = data['monthly_data'][month]
         mh = MONTH_NAMES_HEB.get(month, month)
         for p in active_products:
             c = md['combined'].get(p, {})
-            u = c.get('units', 0)
+            if dist_key == 'all':
+                u = c.get('units', 0)
+                val = c.get('total_value', 0)
+            else:
+                u = c.get(_dist_unit_key, 0)
+                val = c.get(_dist_val_key, 0)
             if u == 0:
                 continue
             disc = PRODUCT_STATUS.get(p) == 'discontinued'
             badge = '<span class="badge disc">Disc.</span>' if disc else (
                 '<span class="badge new">New</span>' if PRODUCT_STATUS.get(p) == 'new' else '')
             ds = ' style="color:#999;font-style:italic"' if disc else ''
-            val = c.get('total_value', 0)
-            row_html = (f'<tr{ds}><td><b>{mh}</b></td><td>{PRODUCT_NAMES.get(p,p)} {badge}</td>'
-                        f'<td>{_fmt(c.get("mayyan_units",0))}</td><td>{_fmt(c.get("icedreams_units",0))}</td>'
-                        f'<td>{_fmt(c.get("biscotti_units",0))}</td>'
-                        f'<td><b>{_fmt(u)}</b></td><td>{_fc(val)}</td></tr>')
+            if dist_key == 'all':
+                row_html = (f'<tr{ds}><td><b>{mh}</b></td><td>{PRODUCT_NAMES.get(p,p)} {badge}</td>'
+                            f'<td>{_fmt(c.get("mayyan_units",0))}</td><td>{_fmt(c.get("icedreams_units",0))}</td>'
+                            f'<td>{_fmt(c.get("biscotti_units",0))}</td>'
+                            f'<td><b>{_fmt(u)}</b></td><td>{_fc(val)}</td></tr>')
+            else:
+                row_html = (f'<tr{ds}><td><b>{mh}</b></td><td>{PRODUCT_NAMES.get(p,p)} {badge}</td>'
+                            f'<td><b>{_fmt(u)}</b></td><td>{_fc(val)}</td></tr>')
             rows_data.append((val, row_html))
     rows_data.sort(key=lambda x: x[0], reverse=True)
     top_rows = '\n'.join(r for _, r in rows_data[:10])
@@ -1418,14 +1482,21 @@ def _build_month_section(data, month_list, section_id, active_products):
     else:
         show_more_summary = '</table>'
 
+    if dist_key == 'all':
+        summary_hdr = '<th>Month</th><th>Product</th><th>Ma\'ayan (units)</th><th>Icedream (units)</th><th>Biscotti (units)</th><th>Total Units</th><th>Revenue (₪)</th>'
+    else:
+        _dist_label = {'icedream': 'Icedream', 'mayyan': "Ma'ayan", 'biscotti': 'Biscotti'}[dist_key]
+        summary_hdr = f'<th>Month</th><th>Product</th><th>Units</th><th>Revenue (₪)</th>'
     summary_tbl = (f'<div class="card full" style="margin-bottom:14px"><h3>Detailed Summary - {label}</h3>'
-                   f'<table class="tbl"><thead><tr><th>Month</th><th>Product</th><th>Ma\'ayan (units)</th>'
-                   f'<th>Icedream (units)</th><th>Biscotti (units)</th><th>Total Units</th><th>Revenue (₪)</th></tr></thead>'
+                   f'<table class="tbl"><thead><tr>{summary_hdr}</tr></thead>'
                    f'<tbody>{top_rows}</tbody>'
                    f'{show_more_summary}</div>')
 
     # ── Icedream Customers (aggregated by chain, sorted by revenue desc) ──
     from config import extract_customer_name
+    _show_ice = dist_key in ('all', 'icedream')
+    _show_may = dist_key in ('all', 'mayyan')
+    _show_bis = dist_key in ('all', 'biscotti')
     ice_pl = [p for p in ['chocolate', 'vanilla', 'mango', 'pistachio', 'magadat', 'dream_cake'] if p in active_products]
     ice_h = ''.join(f'<th>{PRODUCT_NAMES[p]} (units)</th>' for p in ice_pl)
     ice_h += ''.join(f'<th>{PRODUCT_NAMES[p]} (₪)</th>' for p in ice_pl)
@@ -1476,6 +1547,8 @@ def _build_month_section(data, month_list, section_id, active_products):
                    f'<tbody>{ice_top}</tbody>'
                    f'{show_more_ice}</div>')
     else:
+        ice_tbl = ''
+    if not _show_ice:
         ice_tbl = ''
 
     # ── Ma'ayan Chains (aggregated by normalized chain name, sorted by revenue desc) ──
@@ -1537,21 +1610,35 @@ def _build_month_section(data, month_list, section_id, active_products):
                    f'{show_more_may}</div>')
     else:
         may_tbl = ''
+    if not _show_may:
+        may_tbl = ''
 
-    # ── Biscotti Customers (placeholder or real data) ──
+    # ── Biscotti Customers (aggregated by chain — same pattern as Icedream/Ma'ayan) ──
     bisc_pl = [p for p in ['dream_cake_2', 'dream_cake'] if p in active_products]
     bisc_rows_data = []
     for month in month_list:
         md = data['monthly_data'][month]
         mh = MONTH_NAMES_HEB.get(month, month)
+        # Aggregate branches into chains via extract_customer_name
+        # (e.g. "וולט מרקט הרצליה" + "וולט מרקט תל אביב" → "Wolt Market")
+        chains = {}
         for cust, pdata in md.get('biscotti_customers', {}).items():
+            chain = extract_customer_name(cust)
+            if chain not in chains:
+                chains[chain] = {}
+            for p in bisc_pl:
+                if p not in chains[chain]:
+                    chains[chain][p] = {'units': 0, 'value': 0}
+                chains[chain][p]['units'] += (pdata.get(p) or {}).get('units', 0)
+                chains[chain][p]['value'] += (pdata.get(p) or {}).get('value', 0)
+        for chain, pdata in chains.items():
             ctu = sum(pdata.get(p, {}).get('units', 0) for p in bisc_pl)
             ctv = sum(pdata.get(p, {}).get('value', 0) for p in bisc_pl)
             if ctu == 0:
                 continue
-            bisc_h_cols = ''.join(f'<td>{_fmt((pdata.get(p) or {}).get("units", 0))}</td>' for p in bisc_pl)
-            bisc_v_cols = ''.join(f'<td>{_fc((pdata.get(p) or {}).get("value", 0))}</td>' for p in bisc_pl)
-            r = f'<td>{mh}</td><td><b>{cust}</b></td>{bisc_h_cols}{bisc_v_cols}<td class="tot">{_fmt(ctu)}</td><td class="tot">{_fc(ctv)}</td>'
+            bisc_h_cols = ''.join(f'<td>{_fmt(pdata.get(p, {}).get("units", 0))}</td>' for p in bisc_pl)
+            bisc_v_cols = ''.join(f'<td>{_fc(pdata.get(p, {}).get("value", 0))}</td>' for p in bisc_pl)
+            r = f'<td>{mh}</td><td><b>{chain}</b></td>{bisc_h_cols}{bisc_v_cols}<td class="tot">{_fmt(ctu)}</td><td class="tot">{_fc(ctv)}</td>'
             bisc_rows_data.append((ctv, f'<tr>{r}</tr>'))
     bisc_rows_data.sort(key=lambda x: x[0], reverse=True)
 
@@ -1572,23 +1659,29 @@ def _build_month_section(data, month_list, section_id, active_products):
                         f'Dream Cake (chilled) will be distributed through Biscotti.</p></div>')
         else:
             bisc_tbl = ''
+    if not _show_bis:
+        bisc_tbl = ''
 
     # ── Top Customers (aggregated by chain) ──
     all_c = {}
     for month in month_list:
         md = data['monthly_data'][month]
-        for c, pd in md.get('icedreams_customers', {}).items():
-            chain = extract_customer_name(c)
-            k = f"Icedream: {chain}"
-            all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products)
-        for key, pd in md.get('mayyan_accounts_revenue', {}).items():
-            source_chain, acct = key if isinstance(key, tuple) else ('', key)
-            norm = extract_customer_name(acct, source_customer=source_chain)
-            k = f"Ma'ayan: {norm}"
-            all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products if isinstance(pd.get(p), dict))
-        for cust, pd in md.get('biscotti_customers', {}).items():
-            k = f"Biscotti: {cust}"
-            all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products if isinstance(pd.get(p), dict))
+        if _show_ice:
+            for c, pd in md.get('icedreams_customers', {}).items():
+                chain = extract_customer_name(c)
+                k = f"Icedream: {chain}" if dist_key == 'all' else chain
+                all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products)
+        if _show_may:
+            for key, pd in md.get('mayyan_accounts_revenue', {}).items():
+                source_chain, acct = key if isinstance(key, tuple) else ('', key)
+                norm = extract_customer_name(acct, source_customer=source_chain)
+                k = f"Ma'ayan: {norm}" if dist_key == 'all' else norm
+                all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products if isinstance(pd.get(p), dict))
+        if _show_bis:
+            for cust, pd in md.get('biscotti_customers', {}).items():
+                chain = extract_customer_name(cust)
+                k = f"Biscotti: {chain}" if dist_key == 'all' else chain
+                all_c[k] = all_c.get(k, 0) + sum(pd.get(p, {}).get('units', 0) for p in active_products if isinstance(pd.get(p), dict))
     all_c = {k: v for k, v in all_c.items() if v > 0}
     tc_list = sorted(all_c.items(), key=lambda x: x[1], reverse=True)[:10]
     mc = tc_list[0][1] if tc_list else 1
@@ -1596,12 +1689,12 @@ def _build_month_section(data, month_list, section_id, active_products):
     top_tbl = f'<div class="card full" style="margin-bottom:14px"><h3>Top Customers (units)</h3>{top_bars}</div>' if tc_list else ''
 
     # Flavor analysis - for all views
-    flavor_section = _build_flavor_analysis(data, month_list, is_all, active_products)
+    flavor_section = _build_flavor_analysis(data, month_list, is_all, active_products, dist_key)
 
     # Inventory section - only in overview
-    inv_section = _build_inventory_section(data, active_products) if is_all else ''
+    inv_section = _build_inventory_section(data, active_products, dist_key) if is_all else ''
 
-    display = 'block' if section_id == 'y2026-ab' else 'none'
+    display = 'block' if section_id == 'y2026-ab-ad' else 'none'
     return (f'<div class="month-section" id="sec-{section_id}" style="display:{display}">\n'
             f'{kpis}\n{rev_card}\n{units_card}\n{flavor_section}\n{inv_section}\n{summary_tbl}\n{ice_tbl}\n{may_tbl}\n{bisc_tbl}\n{top_tbl}\n</div>')
 
@@ -1610,6 +1703,13 @@ BRAND_FILTERS = {
     'ab': {'label': 'All Brands', 'products': ['chocolate', 'vanilla', 'mango', 'dream_cake', 'dream_cake_2', 'magadat', 'pistachio']},
     'turbo': {'label': 'Turbo', 'products': ['chocolate', 'vanilla', 'mango', 'pistachio', 'magadat']},
     'danis': {'label': "Dani's", 'products': ['dream_cake', 'dream_cake_2']},
+}
+
+DIST_FILTERS = {
+    'ad': {'label': 'All Distributors', 'key': 'all'},
+    'ice': {'label': 'Icedream', 'key': 'icedream'},
+    'may': {'label': "Ma'ayan", 'key': 'mayyan'},
+    'bis': {'label': 'Biscotti', 'key': 'biscotti'},
 }
 
 def _build_excel_data_json(data):
@@ -1821,11 +1921,18 @@ def generate_dashboard(data):
         active = ' fbtn-active' if bid == 'ab' else ''
         brand_btn_html += f'<button class="fbtn brand-btn{active}" onclick="setBrand(\'{bid}\')">{binfo["label"]}</button>\n'
 
+    # Build distributor filter buttons
+    dist_btn_html = ''
+    for did, dinfo in DIST_FILTERS.items():
+        active = ' fbtn-active' if did == 'ad' else ''
+        dist_btn_html += f'<button class="fbtn dist-btn{active}" onclick="setDist(\'{did}\')">{dinfo["label"]}</button>\n'
+
     btn_html = (f'<span>Year:</span> {year_btn_html}'
                 f'<span style="margin-left:16px">Period:</span> {month_btn_html}'
-                f'<span style="margin-left:16px">Brand:</span> {brand_btn_html}')
+                f'<span style="margin-left:16px">Brand:</span> {brand_btn_html}'
+                f'<span style="margin-left:16px">Distributor:</span> {dist_btn_html}')
 
-    # Build sections: one per (period × brand) combination
+    # Build sections: one per (period × brand × distributor) combination
     # Periods: 'all' (all months overview), 'y{year}' (year overview), 'm{i}' (individual month)
     sections = ''
 
@@ -1834,9 +1941,10 @@ def generate_dashboard(data):
     for yr in years_sorted:
         yr_months = year_months[yr]
         for bid, binfo in BRAND_FILTERS.items():
-            sec_id = f'y{yr}-{bid}'
-            active_products = binfo['products']
-            sections += _build_month_section(data, yr_months, sec_id, active_products)
+            for did, dinfo in DIST_FILTERS.items():
+                sec_id = f'y{yr}-{bid}-{did}'
+                active_products = binfo['products']
+                sections += _build_month_section(data, yr_months, sec_id, active_products, dinfo['key'])
         year_overview_ids[yr] = f'y{yr}'
 
     # All months overview + individual months
@@ -1847,9 +1955,10 @@ def generate_dashboard(data):
             idx = int(fid[1:])
             month_list = [months[idx]]
         for bid, binfo in BRAND_FILTERS.items():
-            sec_id = f'{fid}-{bid}'
             active_products = binfo['products']
-            sections += _build_month_section(data, month_list, sec_id, active_products)
+            for did, dinfo in DIST_FILTERS.items():
+                sec_id = f'{fid}-{bid}-{did}'
+                sections += _build_month_section(data, month_list, sec_id, active_products, dinfo['key'])
 
     # Build year→overview mapping for JS
     import json as _json
@@ -1925,17 +2034,17 @@ body {{ font-family:'Segoe UI',Tahoma,sans-serif; background:var(--bg); color:va
   <div class="ts">Auto-generated | {now_str}</div>
 </div>
 <script>
-var curYear='all', curMonth='all', curBrand='ab';
+var curYear='all', curMonth='all', curBrand='ab', curDist='ad';
 var yearOverviewMap={year_overview_map_json};
 function updateView(){{
   document.querySelectorAll('.month-section').forEach(function(s){{s.style.display='none';}});
-  // Determine which section to show
+  // Determine which section to show (period-brand-distributor)
   var secId;
   if(curMonth==='all' && curYear!=='all'){{
     // Year overview
-    secId=yearOverviewMap[curYear]+'-'+curBrand;
+    secId=yearOverviewMap[curYear]+'-'+curBrand+'-'+curDist;
   }} else {{
-    secId=curMonth+'-'+curBrand;
+    secId=curMonth+'-'+curBrand+'-'+curDist;
   }}
   var el=document.getElementById('sec-'+secId);
   if(el) el.style.display='block';
@@ -1969,6 +2078,12 @@ function setMonth(id){{
 function setBrand(id){{
   curBrand=id;
   document.querySelectorAll('.brand-btn').forEach(function(b){{b.classList.remove('fbtn-active');}});
+  event.target.classList.add('fbtn-active');
+  updateView();
+}}
+function setDist(id){{
+  curDist=id;
+  document.querySelectorAll('.dist-btn').forEach(function(b){{b.classList.remove('fbtn-active');}});
   event.target.classList.add('fbtn-active');
   updateView();
 }}
