@@ -308,6 +308,10 @@ All scripts in `scripts/` directory:
 | `cc_dashboard.py` | CC tab generator — fully dynamic. `build_cc_tab(data)` accepts the shared `data` dict (same object as BO). All customer revenue/units/margins computed dynamically from parsed files — zero hardcoded price literals or static customer totals. Single pipeline complete (25 Mar 2026). |
 | `salepoint_dashboard.py` | **Sale Points tab generator** — builds SP HTML tab. Uses `pricing_engine` for all revenue calculations and `business_logic.enrich_salepoint` for pre-computed status/trend (Option A). Includes brand filter with engine-injected prices. |
 | `salepoint_excel.py` | **Sale Points Excel export** → `docs/sale_points_deep_dive.xlsx`. Uses `pricing_engine.get_b2b_price_safe` and delegates status/trend to `business_logic` (SSOT). Per-customer-group sheets with dark navy headers, alternating row fills. |
+| **Geo Analysis Tab** | |
+| `geo_dashboard.py` | **GEO tab generator** — builds the Geo Analysis HTML tab. Google Maps with choropleth, two boundary layers (District from `municipalities_geo`, City from `cities_geo`), POS drill-down, inline address editing, CSV export/upload. All JS inline in Python f-strings (use `\\x27` for JS single quotes, not `\'`). |
+| `geo_api.py` | **GEO Flask API** — Blueprint at `/api/geo/*`. Endpoints: `/municipalities` (district GeoJSON), `/cities` (city GeoJSON, simplified via `ST_Simplify`), `/choropleth` + `/choropleth-city` (KPI aggregation), `/pos` (POS drill-down, supports `layer=district\|city`), `/export-addresses` (CSV), `/upload-addresses` (bulk CSV import + re-geocode), `/update-pos` (inline edit). Distributor filtering uses DB subquery (`WHERE key LIKE %s`) not hardcoded IDs. |
+| `fetch_city_boundaries.py` | **One-time script** — downloads 429 Israeli city/town boundary polygons from GitHub (`idoivri/israel-municipalities-polygons`), creates `cities_geo` table with PostGIS geometry, links cities to districts via `ST_Within(centroid, district.geom)`. Run via Cloud Shell against Cloud SQL. |
 | **Other** | |
 | `excel_report.py` | Excel summary generator → `docs/supply_chain_summary.xlsx` |
 | `excel_dashboard.py` | Full Excel dashboard → `docs/Raito_Business_Overview.xlsx` |
@@ -934,6 +938,10 @@ Key constraints:
 
 **`karfree` distributor row:** Inventory-only. No sales transactions. Added to `distributors` table as key `'karfree'`.
 
+**GEO tables (PostGIS):**
+- `municipalities_geo` — ~15 Israeli district boundaries (municipality_id, name_he, name_en, region, geom). Loaded from GeoJSON file.
+- `cities_geo` — 429 city/town boundaries (city_id, name_he, name_en, muni_id, district_id, geom). Loaded via `fetch_city_boundaries.py` from GitHub. Requires `GRANT ALL ON TABLE cities_geo TO raito` (table owned by `raito_app`).
+
 ---
 
 ### SQL Pipeline Files (scripts/db/)
@@ -1084,3 +1092,11 @@ In addition to the CC weekly chart array updates documented above:
 **Decision 110 (29 Mar 2026):** Fixed `parse_mayyan_file(filepath, price_table=None)` crash when called without `price_table`. Added `if price_table is None: price_table = _load_mayyan_price_table()` guard at function entry. Root cause: `_mayyan_chain_price(None, chain, product)` raised `TypeError: argument of type 'NoneType' is not iterable` at `product in price_table`.
 
 **Decision 111 (29 Mar 2026):** Weekly chart Option B (dynamic fetch) confirmed already implemented — JS at bottom of `cc_dashboard.py` calls `fetch('/api/weekly-overrides')` on every page load and patches the hardcoded arrays with DB values. Flask endpoint `/api/weekly-overrides` (GET) reads `weekly_chart_overrides` table. Future weekly uploads auto-update the chart without code changes. Hardcoded arrays in `cc_dashboard.py` remain as base/fallback values and must be kept current as of the latest integrated file.
+
+**Decision 112 (31 Mar 2026):** GEO tab — City boundary layer added. 429 Israeli city/town polygons loaded into `cities_geo` table (PostGIS) from GitHub open data (`idoivri/israel-municipalities-polygons`). Boundaries dropdown in GEO controls bar switches between "District" (existing `municipalities_geo`, ~15 polygons) and "City" (new `cities_geo`, 416 visible). City geometries are simplified server-side via `ST_Simplify(geom, 0.001)` to reduce payload from ~30MB to ~3MB. Frontend fetches with `cache: 'no-store'` to avoid stale empty responses. POS drill-down passes `&layer=city` so spatial lookup uses `cities_geo` instead of `municipalities_geo`.
+
+**Decision 113 (31 Mar 2026):** GEO tab — Export/Upload buttons wired into existing sidebar buttons. Export: CSV download of POS addresses (`pos_id, pos_name, address_city, address_street`) with "All POS" or "Missing only" filter, via `/api/geo/export-addresses`. Upload: CSV import of edited addresses back to DB via `/api/geo/upload-addresses`, with optional re-geocoding of changed addresses.
+
+**Decision 114 (31 Mar 2026):** GEO tab — Distributor filter fixed. `DISTRIBUTOR_ID_MAP` (hardcoded `{icedream:1, mayyan:2, biscotti:3}`) was wrong — actual DB IDs depend on insert order and the key is `"icedreams"` (with 's'), not `"icedream"`. Replaced with `_build_dist_clause()` that generates `sp.distributor_id IN (SELECT id FROM distributors WHERE key LIKE %s)` using pattern map `DISTRIBUTOR_KEY_PATTERNS` (`icedream→'icedream%'`, `mayyan→'mayyan%'`, `biscotti→'biscotti%'`). Also replaced `DISTRIBUTOR_NAME_MAP` in POS endpoint with a JOIN to `distributors` table for correct labels.
+
+**Decision 115 (31 Mar 2026):** GEO tab — Map/table layout changed to 50/50 split. Map: `height: calc(50vh - 50px)`, table: same. Previous: map fixed 300px, table `calc(100vh - 300px - 100px)`. Both have `min-height: 250px`.
