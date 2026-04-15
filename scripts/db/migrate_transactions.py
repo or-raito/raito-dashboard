@@ -108,17 +108,21 @@ def resolve_distributor(key):
 # ═════════════════════════════════════════════════════════════════════════════
 
 MONTH_TO_DATE = {
+    'November 2025': date(2025, 11, 1),
     'December 2025': date(2025, 12, 1),
     'January 2026':  date(2026, 1, 1),
     'February 2026': date(2026, 2, 1),
     'March 2026':    date(2026, 3, 1),
+    'April 2026':    date(2026, 4, 1),
 }
 
 MONTH_TO_NUM = {
+    'November 2025': (2025, 11),
     'December 2025': (2025, 12),
     'January 2026':  (2026, 1),
     'February 2026': (2026, 2),
     'March 2026':    (2026, 3),
+    'April 2026':    (2026, 4),
 }
 
 

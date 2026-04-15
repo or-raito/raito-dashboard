@@ -122,7 +122,7 @@ CUSTOMER_ALIASES = {
     "Naomi's Farm":   ["חוות נעמי"],
     "Tiv Taam":       ["טיב טעם"],
     "Yango Deli":     ["ינגו", "ינגו דלי ישראל בע\"מ"],
-    "Carmella":       ["כרמלה"],
+    "Carmella":       ["כרמלה", "חן כרמלה למסחר בע\"מ"],
     "Noy HaSade":     ["נוי השדה"],
     "Sonol":          ["סונול"],
     "Oogiplatset":    ["עוגיפלצת", "עוגיפלצת בע\"מ"],
@@ -131,6 +131,8 @@ CUSTOMER_ALIASES = {
     "Paz Yellow":     ["פז ילו", "פז יילו", "פז  ילו"],
     "Private Market": ["שוק פרטי"],
     "Biscotti Chain": ["ביסקוטי"],
+    "Matilda Yehud":          ["מתילדה יהוד", "מתילדה יהוד (אונר שיווק מזון בע\"מ)"],
+    "Delicious Rishon LeZion": ["דלישס ראשון לציון"],
 }
 
 # Customers tracked in the CC dashboard (the ~18 major accounts)
@@ -150,6 +152,8 @@ CUSTOMER_PRIMARY_DIST = {
     "Naomi's Farm": "icedream", "Yango Deli": "icedream", "Carmella": "icedream",
     "Foot Locker": "icedream", "Oogiplatset": "icedream",
     "Biscotti Chain": "biscotti",
+    "Matilda Yehud": "biscotti",
+    "Delicious Rishon LeZion": "biscotti",
 }
 
 
