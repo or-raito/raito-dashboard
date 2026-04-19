@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 _REQUIRED: dict[str, list[str]] = {
     'brands':        ['key', 'name'],
-    'products':      ['sku_key', 'name_en', 'brand_key', 'status'],  # brand_key mapped by frontend
+    'products':      ['sku_key', 'name_en', 'brand', 'status'],
     'manufacturers': ['key', 'name'],
     'distributors':  ['key', 'name'],
     'customers':     ['key', 'name_he', 'name_en'],
@@ -47,7 +47,7 @@ _REQUIRED: dict[str, list[str]] = {
 # Fields that are identity / FK — changing them cascades and needs confirmation
 _GATED_FIELDS: dict[str, list[str]] = {
     'brands':        ['key'],
-    'products':      ['sku_key', 'brand_key'],
+    'products':      ['sku_key', 'brand'],
     'manufacturers': ['key'],
     'distributors':  ['key'],
     'customers':     ['key'],
@@ -150,13 +150,13 @@ def _check_fk_references(entity: str, record: dict,
     """Check that FK fields reference existing records."""
     # Products → Brands
     if entity == 'products':
-        brand_key = record.get('brand_key', '')
-        if brand_key:
+        brand_val = record.get('brand_key', '') or record.get('brand', '')
+        if brand_val:
             brands = all_data.get('brands', [])
-            brand_keys = {b.get('brand_key', '') or b.get('key', '') for b in brands}
-            if brand_key not in brand_keys:
+            brand_keys = {b.get('key', '') or b.get('brand_key', '') for b in brands}
+            if brand_val not in brand_keys:
                 errors.append(
-                    f"brand_key '{brand_key}' not found in brands. "
+                    f"brand '{brand_val}' not found in brands. "
                     f"Available: {', '.join(sorted(brand_keys))}."
                 )
 
@@ -228,7 +228,7 @@ def _check_assortment(entity: str, record: dict,
     brand = ''
     for p in products:
         if p.get('sku_key') == sku_key:
-            brand = (p.get('brand_key') or '').strip().lower()
+            brand = (p.get('brand') or p.get('brand_key') or '').strip().lower()
             break
 
     if not brand:
@@ -290,7 +290,7 @@ def _check_delete_references(entity: str, record: dict,
 
 # Entity → [(referencing_entity, field_that_points_here)]
 _REFERENCE_MAP: dict[str, list[tuple[str, str]]] = {
-    'brands':        [('products', 'brand_key')],
+    'brands':        [('products', 'brand'), ('products', 'brand_key')],
     'products':      [('pricing', 'sku_key'), ('logistics', 'product_key')],
     'manufacturers': [('products', 'manufacturer')],
     'distributors':  [('pricing', 'distributor'), ('customers', 'distributor')],
