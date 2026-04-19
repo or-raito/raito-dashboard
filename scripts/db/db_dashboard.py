@@ -119,15 +119,20 @@ _cache_rebuilding = False
 
 
 def _invalidate_cache():
-    """Clear the cached HTML and start a background rebuild.
+    """Mark the cache as stale and start a background rebuild.
 
     Safe to call from any write route. The background thread pre-generates
     the HTML so the next GET / does not have to wait 10-30s.
+
+    IMPORTANT: We do NOT null _cached_html here. The old (stale) HTML continues
+    to be served while the rebuild runs. This prevents GET / from blocking
+    synchronously when the rebuild takes a long time (e.g. dev env with no
+    Excel data).
     """
     global _cached_html, _cache_rebuilding
 
     with _cache_lock:
-        _cached_html = None
+        # Keep _cached_html as-is (serve stale while rebuilding)
         if _cache_rebuilding:
             log.info("Cache already rebuilding — skipping duplicate spawn")
             return
@@ -151,13 +156,13 @@ def _invalidate_cache():
 
     t = threading.Thread(target=_rebuild, daemon=True)
     t.start()
-    # Safety: reset the flag after 180s in case the thread hangs
+    # Safety: reset the flag after 45s in case the thread hangs
     def _safety_reset():
         import time
-        time.sleep(180)
+        time.sleep(45)
         with _cache_lock:
             if _cache_rebuilding:
-                log.warning("Background rebuild timed out after 180s — resetting flag")
+                log.warning("Background rebuild timed out after 45s — resetting flag")
                 _cache_rebuilding = False  # noqa: F841
     threading.Thread(target=_safety_reset, daemon=True).start()
 
@@ -803,8 +808,12 @@ _MD_PK = {
     'distributors':  'key',
     'customers':     'key',
     'logistics':     'product_key',
-    'pricing':       'barcode',
+    'pricing':       '_pk',       # synthetic composite: sku_key::customer::distributor
 }
+
+def _pricing_pk(rec: dict) -> str:
+    """Generate a composite PK for pricing records."""
+    return f"{rec.get('sku_key', '')}::{rec.get('customer', '')}::{rec.get('distributor', '')}"
 
 _MD_ENTITIES = list(_MD_PK.keys())
 
@@ -1044,7 +1053,12 @@ def api_list(entity):
         return jsonify({'error': f'Unknown entity: {entity}'}), 404
     try:
         _md_ensure_table()
-        return jsonify(_md_read(entity))
+        items = _md_read(entity)
+        # Inject synthetic composite PK for pricing records
+        if entity == 'pricing':
+            for r in items:
+                r['_pk'] = _pricing_pk(r)
+        return jsonify(items)
     except Exception as e:
         log.error("api_list %s: %s", entity, e)
         return jsonify({'error': str(e)}), 500
@@ -1090,12 +1104,21 @@ def api_create(entity):
         _md_ensure_table()
         _md_ensure_audit_table()
         record   = request.get_json(force=True) or {}
+        # Strip synthetic _pk if the client sent it
+        record.pop('_pk', None)
         pk_field = _MD_PK[entity]
-        pk_val   = record.get(pk_field)
         items    = _md_read(entity)
 
-        if pk_val and any(r.get(pk_field) == pk_val for r in items):
-            return jsonify({'error': f'Duplicate key: {pk_val}'}), 409
+        # Duplicate check: use composite PK for pricing
+        if entity == 'pricing':
+            new_pk = _pricing_pk(record)
+            if any(_pricing_pk(r) == new_pk for r in items):
+                return jsonify({'error': f'Duplicate pricing: {new_pk}'}), 409
+            pk_val = new_pk
+        else:
+            pk_val = record.get(pk_field)
+            if pk_val and any(r.get(pk_field) == pk_val for r in items):
+                return jsonify({'error': f'Duplicate key: {pk_val}'}), 409
 
         # Validate
         all_data = _md_read_all()
@@ -1132,11 +1155,18 @@ def api_update(entity, pk):
         _md_ensure_table()
         _md_ensure_audit_table()
         record   = request.get_json(force=True) or {}
+        record.pop('_pk', None)  # strip synthetic PK
         pk_field = _MD_PK[entity]
         items    = _md_read(entity)
 
+        def _item_pk(item):
+            """Get the PK value for an item, computing composite PK for pricing."""
+            if entity == 'pricing':
+                return _pricing_pk(item)
+            return str(item.get(pk_field, ''))
+
         for i, item in enumerate(items):
-            if str(item.get(pk_field, '')) == pk:
+            if _item_pk(item) == pk:
                 all_data = _md_read_all()
                 all_data[entity] = items
                 errors, warnings = _validate(
@@ -1179,10 +1209,15 @@ def api_delete(entity, pk):
         pk_field = _MD_PK[entity]
         items    = _md_read(entity)
 
+        def _item_pk(r):
+            if entity == 'pricing':
+                return _pricing_pk(r)
+            return str(r.get(pk_field, ''))
+
         deleted_record = None
         new_items = []
         for r in items:
-            if str(r.get(pk_field, '')) == pk:
+            if _item_pk(r) == pk:
                 deleted_record = r
             else:
                 new_items.append(r)

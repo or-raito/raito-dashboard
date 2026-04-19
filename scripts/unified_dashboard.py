@@ -1186,8 +1186,8 @@ def _build_master_data_tab(master_data):
     manufacturers: {pk:'key'},
     distributors:  {pk:'key'},
     customers:     {pk:'key'},
-    logistics:     {pk:'id'},
-    pricing:       {pk:'id'}
+    logistics:     {pk:'product_key'},
+    pricing:       {pk:'_pk'}
   };
 
   /* ── API helper ── */
