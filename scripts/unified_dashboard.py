@@ -1563,8 +1563,14 @@ def _build_master_data_tab(master_data):
       var omStyle='';
       if(omN!==null){ omStyle=omN<10?'color:#ef4444;font-weight:700':omN<20?'color:#f59e0b;font-weight:600':'color:#10b981;font-weight:600'; }
       rows+='<tr>';
+      // Resolve product name from products list if not stored in pricing
+      var pName = p.name_en || '';
+      if(!pName && p.sku_key) {
+        var prod = S.products.find(function(pr){return pr.sku_key===p.sku_key;});
+        if(prod) pName = prod.name_en || '';
+      }
       rows+='<td><span class="md-brand-tag">'+esc(p.sku_key)+'</span></td>';
-      rows+='<td style="font-size:12px">'+esc(p.name_en)+'</td>';
+      rows+='<td style="font-size:12px">'+esc(pName)+'</td>';
       rows+='<td>'+esc(p.customer)+'</td>';
       rows+='<td>'+esc(p.distributor)+'</td>';
       rows+='<td style="text-align:center">'+pct(p.commission_pct)+'</td>';
