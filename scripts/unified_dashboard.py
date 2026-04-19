@@ -1940,7 +1940,7 @@ def _build_master_data_tab(master_data):
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({password: pw})
     }).then(function(r){ return r.json(); }).then(function(d){
-      if(d.ok) {
+      if(d.status==='ok') {
         _mdLoggedIn = true;
         document.getElementById('md-login-overlay').style.display = 'none';
         _updateAuthUI();
