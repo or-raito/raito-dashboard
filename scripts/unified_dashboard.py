@@ -1182,7 +1182,7 @@ def _build_master_data_tab(master_data):
   /* ── API entity → table field mapping ── */
   var ENTITY_MAP = {
     brands:        {pk:'key'},
-    products:      {pk:'sku_key'},
+    products:      {pk:'sku_key', fkFields:{brand:'brand_key'}},
     manufacturers: {pk:'key'},
     distributors:  {pk:'key'},
     customers:     {pk:'key'},

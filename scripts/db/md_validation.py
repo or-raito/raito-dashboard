@@ -35,8 +35,8 @@ log = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _REQUIRED: dict[str, list[str]] = {
-    'brands':        ['brand_key', 'brand_name'],
-    'products':      ['sku_key', 'name_en', 'brand_key', 'status'],
+    'brands':        ['key', 'name'],
+    'products':      ['sku_key', 'name_en', 'brand_key', 'status'],  # brand_key mapped by frontend
     'manufacturers': ['key', 'name'],
     'distributors':  ['key', 'name'],
     'customers':     ['key', 'name_he', 'name_en'],
@@ -46,7 +46,7 @@ _REQUIRED: dict[str, list[str]] = {
 
 # Fields that are identity / FK — changing them cascades and needs confirmation
 _GATED_FIELDS: dict[str, list[str]] = {
-    'brands':        ['brand_key'],
+    'brands':        ['key'],
     'products':      ['sku_key', 'brand_key'],
     'manufacturers': ['key'],
     'distributors':  ['key'],
@@ -263,7 +263,7 @@ def _check_delete_references(entity: str, record: dict,
                              errors: list[str]) -> None:
     """Block deletion if other entities reference this record."""
     pk_map = {
-        'brands':        'brand_key',
+        'brands':        'key',
         'products':      'sku_key',
         'manufacturers': 'key',
         'distributors':  'key',
