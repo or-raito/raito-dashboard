@@ -90,10 +90,12 @@ def resolve_customer(name_raw, source_chain=None):
 # ═════════════════════════════════════════════════════════════════════════════
 
 MONTH_TO_DATE = {
+    'November 2025': date(2025, 11, 1),
     'December 2025': date(2025, 12, 1),
     'January 2026':  date(2026, 1, 1),
     'February 2026': date(2026, 2, 1),
     'March 2026':    date(2026, 3, 1),
+    'April 2026':    date(2026, 4, 1),
 }
 
 
@@ -108,7 +110,7 @@ def discover_sale_points(data):
         [{distributor_key, branch_name_he, customer_name_en, customer_id,
           first_month, last_month}]
     """
-    months_ordered = ['December 2025', 'January 2026', 'February 2026', 'March 2026']
+    months_ordered = ['November 2025', 'December 2025', 'January 2026', 'February 2026', 'March 2026', 'April 2026']
 
     # key = (distributor_key, branch_name_he) → metadata
     sale_points = {}

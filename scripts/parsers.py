@@ -848,6 +848,10 @@ def parse_mayyan_file(filepath, price_table=None):
                     addr = str(row.get(address_col) or '').strip() if address_col else ''
                     city = str(row.get(city_col) or '').strip() if city_col else ''
                     key_val = str(row.get(acct_key_col) or '').strip() if acct_key_col else ''
+                    # Tiv Taam stores: when chain collapses to שוק פרטי,
+                    # identify by acct_key prefix 31900xx
+                    if chain_name == 'שוק פרטי' and key_val.startswith('31900'):
+                        chain_name = 'טיב טעם'
                     label_parts = [p for p in (addr, city) if p and p.lower() != 'nan']
                     label = ', '.join(label_parts)
                     if label and key_val:
