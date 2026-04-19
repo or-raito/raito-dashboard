@@ -133,23 +133,33 @@ def _invalidate_cache():
             return
         _cache_rebuilding = True
 
-    log.info("Cache invalidated — spawning background rebuild")
+    log.info("Cache invalidated — spawning background rebuild (non-blocking)")
 
     def _rebuild():
         global _cached_html, _cache_rebuilding
         try:
+            log.info("Background rebuild starting...")
             html = _generate_dashboard_html()
             with _cache_lock:
                 _cached_html = html
                 _cache_rebuilding = False
-            log.info("Background rebuild complete")
+            log.info("Background rebuild complete (%d KB)", len(html) // 1024)
         except Exception as exc:
-            log.error("Background rebuild failed: %s", exc)
+            log.error("Background rebuild failed: %s", exc, exc_info=True)
             with _cache_lock:
                 _cache_rebuilding = False
 
     t = threading.Thread(target=_rebuild, daemon=True)
     t.start()
+    # Safety: reset the flag after 180s in case the thread hangs
+    def _safety_reset():
+        import time
+        time.sleep(180)
+        with _cache_lock:
+            if _cache_rebuilding:
+                log.warning("Background rebuild timed out after 180s — resetting flag")
+                _cache_rebuilding = False  # noqa: F841
+    threading.Thread(target=_safety_reset, daemon=True).start()
 
 
 @app.route('/')

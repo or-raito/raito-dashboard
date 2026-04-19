@@ -41,7 +41,7 @@ _REQUIRED: dict[str, list[str]] = {
     'distributors':  ['key', 'name'],
     'customers':     ['key', 'name_he', 'name_en'],
     'logistics':     ['product_key'],
-    'pricing':       ['barcode', 'sku_key', 'customer'],
+    'pricing':       ['sku_key', 'customer'],
 }
 
 # Fields that are identity / FK — changing them cascades and needs confirmation
@@ -182,15 +182,26 @@ def _check_fk_references(entity: str, record: dict,
         customer = record.get('customer', '')
         if customer:
             customers = all_data.get('customers', [])
-            cust_keys = {c.get('key', '') for c in customers}
-            if customer not in cust_keys:
+            # Match by key, name_he, or name_en (form dropdowns may send any)
+            cust_all = set()
+            for c in customers:
+                cust_all.add(c.get('key', ''))
+                cust_all.add(c.get('name_he', ''))
+                cust_all.add(c.get('name_en', ''))
+            cust_all.discard('')
+            if customer not in cust_all:
                 errors.append(f"customer '{customer}' not found in customers.")
 
         distributor = record.get('distributor', '')
         if distributor:
             dists = all_data.get('distributors', [])
-            dist_keys = {d.get('key', '') for d in dists}
-            if distributor not in dist_keys:
+            # Match by key or name
+            dist_all = set()
+            for d in dists:
+                dist_all.add(d.get('key', ''))
+                dist_all.add(d.get('name', ''))
+            dist_all.discard('')
+            if distributor not in dist_all:
                 errors.append(f"distributor '{distributor}' not found in distributors.")
 
     # Logistics → Products

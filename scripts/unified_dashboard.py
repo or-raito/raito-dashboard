@@ -862,8 +862,8 @@ def _build_master_data_tab(master_data):
 <div id="md-dirty-banner">
   <div class="mdb-icon">✏️</div>
   <div class="mdb-text">
-    <strong>You have unsaved changes</strong>
-    <div class="mdb-steps">
+    <strong id="md-dirty-msg">You have unsaved changes</strong>
+    <div class="mdb-steps" id="md-dirty-steps">
       <span class="mdb-step"><span class="mdb-num">1</span> Click Save to Excel below</span>
       <span style="color:#d97706">→</span>
       <span class="mdb-step"><span class="mdb-num">2</span> Replace the original <code style="font-size:11px">Raito_Master_Data.xlsx</code> with the exported file</span>
@@ -1282,7 +1282,7 @@ def _build_master_data_tab(master_data):
     ]},
     pricing: { label:'Pricing Entry', fields:[
       {key:'sku_key',       label:'Product',          type:'fk_select', lookup:'products', valKey:'sku_key', labelKey:'name_en', required:true},
-      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'name_en', labelKey:'name_en'},
+      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'key', labelKey:'name_he'},
       {key:'distributor',   label:'Distributor',      type:'fk_select', lookup:'distributors', valKey:'key', labelKey:'name'},
       {key:'commission_pct',label:'Commission (0-1)', type:'number'},
       {key:'sale_price',    label:'Sale Price (₪)',    type:'number'},
