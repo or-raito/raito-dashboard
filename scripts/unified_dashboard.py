@@ -1260,13 +1260,31 @@ def _build_master_data_tab(master_data):
     t.textContent=msg; t.style.opacity='1';
     setTimeout(function(){t.style.opacity='0';},2200);
   }
+  var _pollTimer = null;
   function markDirty() {
     var b=document.getElementById('md-dirty-banner');
     if(b) b.style.display='flex';
+    var msg = document.getElementById('md-dirty-msg');
+    var steps = document.getElementById('md-dirty-steps');
+    if(msg) msg.textContent = 'Syncing dashboard...';
+    if(steps) steps.innerHTML = '<span style="color:var(--text-muted)">Background rebuild in progress. Other tabs will update automatically.</span>';
+    /* Start polling cache status */
+    if(_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(function(){
+      fetch(API_BASE + '/cache-status').then(function(r){return r.json();})
+      .then(function(d){
+        if(d.status === 'ready') {
+          clearInterval(_pollTimer); _pollTimer = null;
+          if(msg) msg.textContent = 'Dashboard synced';
+          if(steps) steps.innerHTML = '<b style="color:#16a34a">All tabs are up to date.</b> Refresh the page to see changes in BO/CC/SP/GEO.';
+        }
+      }).catch(function(){});
+    }, 2000);
   }
   function markClean() {
     var b=document.getElementById('md-dirty-banner');
     if(b) b.style.display='none';
+    if(_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
   }
   function setCount(id, n) {
     var e=document.getElementById('cnt-'+id);
