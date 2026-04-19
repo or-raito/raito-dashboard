@@ -3865,10 +3865,15 @@ function spExportToExcel(selCustomers, selBrands, selDist) {{
   XLSX.utils.book_append_sheet(wb,ws2,'All Sale Points');
 
   // Per-customer sheets
+  var _usedNames = {{}};
   custs.forEach(function(c){{
     var pts = c.salepoints.filter(_spBrandMatch);
     if(pts.length===0) return;
     var name = c.name.substring(0,31);
+    // Deduplicate sheet names (e.g. "Wolt Market" appears under multiple distributors)
+    if(_usedNames[name]) {{ name = (c.name + ' (' + (c.distributor||'').substring(0,3) + ')').substring(0,31); }}
+    if(_usedNames[name]) {{ name = name.substring(0,28) + '_' + (Object.keys(_usedNames).length); }}
+    _usedNames[name] = true;
     var h=[tc('#'),tc('Sale Point'),tc('Status')];
     _spML.forEach(function(l){{h.push(tc(l));}});
     h.push(tc('Total'));h.push(tc('Revenue'));h.push(tc('Choc'));h.push(tc('Van'));h.push(tc('Mango'));h.push(tc('Pist'));h.push(tc('DC'));
