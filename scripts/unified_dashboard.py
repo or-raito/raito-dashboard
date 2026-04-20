@@ -848,6 +848,9 @@ def _build_master_data_tab(master_data):
       <span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;"></span>
       Offline
     </span>
+    <span id="md-auth-status" style="display:none;font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;cursor:pointer;" onclick="mdShowLogin()"></span>
+    <button id="md-import-btn" class="md-btn md-btn-secondary" style="display:none;" onclick="mdShowUpload()">📥 Import Excel</button>
+    <button id="md-export-srv-btn" class="md-btn md-btn-secondary" style="display:none;" onclick="mdExportFromServer()">📤 Export Excel</button>
     <button class="md-btn md-btn-secondary" onclick="mdSave()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Save to Excel
@@ -859,8 +862,8 @@ def _build_master_data_tab(master_data):
 <div id="md-dirty-banner">
   <div class="mdb-icon">✏️</div>
   <div class="mdb-text">
-    <strong>You have unsaved changes</strong>
-    <div class="mdb-steps">
+    <strong id="md-dirty-msg">You have unsaved changes</strong>
+    <div class="mdb-steps" id="md-dirty-steps">
       <span class="mdb-step"><span class="mdb-num">1</span> Click Save to Excel below</span>
       <span style="color:#d97706">→</span>
       <span class="mdb-step"><span class="mdb-num">2</span> Replace the original <code style="font-size:11px">Raito_Master_Data.xlsx</code> with the exported file</span>
@@ -976,15 +979,9 @@ def _build_master_data_tab(master_data):
     <div class="md-section-card">
       <div class="md-filter-bar">
         <label>Type</label>
-        <select id="flt-cust-type" onchange="mdRender('customers')">
-          <option value="all">All Types</option>
-          <option>Retail</option><option>B2B</option><option>Online</option><option>HoReCa</option>
-        </select>
+        <select id="flt-cust-type" onchange="mdRender('customers')"><option value="all">All Types</option></select>
         <label>Status</label>
-        <select id="flt-cust-status" onchange="mdRender('customers')">
-          <option value="all">All Statuses</option>
-          <option>Active</option><option>Potential</option><option>Inactive</option><option>Churned</option>
-        </select>
+        <select id="flt-cust-status" onchange="mdRender('customers')"><option value="all">All Statuses</option></select>
         <label>Distributor</label>
         <select id="flt-cust-dist" onchange="mdRender('customers')"><option value="all">All Distributors</option></select>
       </div>
@@ -1022,6 +1019,7 @@ def _build_master_data_tab(master_data):
           <span class="md-count" id="cnt-pricing"></span>
         </div>
         <button class="md-btn md-btn-primary" onclick="mdAdd('pricing')">+ Add Price</button>
+        <button class="md-btn md-btn-secondary" onclick="mdShowBulkPrice()">💰 Bulk Update</button>
       </div>
       <div style="overflow-x:auto">
         <table class="md-tbl" style="min-width:900px">
@@ -1084,6 +1082,75 @@ def _build_master_data_tab(master_data):
   </div>
 </div>
 
+<!-- ── Login Overlay ── -->
+<div id="md-login-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:#fff;border-radius:16px;padding:32px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <h3 style="margin:0 0 8px;font-size:18px;">🔐 Admin Login</h3>
+    <p style="font-size:13px;color:#64748b;margin:0 0 20px;">Enter the admin password to edit Master Data.</p>
+    <input id="md-login-pw" type="password" placeholder="Password" style="width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;font-size:14px;margin-bottom:12px;" onkeydown="if(event.key==='Enter')mdDoLogin()">
+    <p id="md-login-err" style="color:#ef4444;font-size:12px;margin:0 0 12px;display:none;"></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="md-btn md-btn-secondary" onclick="document.getElementById('md-login-overlay').style.display='none'">Cancel</button>
+      <button class="md-btn md-btn-primary" onclick="mdDoLogin()">Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Upload Overlay ── -->
+<div id="md-upload-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:#fff;border-radius:16px;padding:32px;width:560px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <h3 style="margin:0 0 16px;font-size:18px;">📥 Bulk Import from Excel</h3>
+    <div id="md-upload-drop" style="border:2px dashed #cbd5e1;border-radius:12px;padding:40px 20px;text-align:center;cursor:pointer;margin-bottom:16px;"
+         onclick="document.getElementById('md-upload-file').click()"
+         ondragover="event.preventDefault();this.style.borderColor='#5D5FEF';"
+         ondragleave="this.style.borderColor='#cbd5e1';"
+         ondrop="event.preventDefault();this.style.borderColor='#cbd5e1';mdHandleUploadFile(event.dataTransfer.files[0]);">
+      <p style="margin:0;color:#64748b;">Drag .xlsx file here or click to browse</p>
+      <input id="md-upload-file" type="file" accept=".xlsx" style="display:none;" onchange="mdHandleUploadFile(this.files[0])">
+    </div>
+    <div id="md-upload-preview" style="display:none;"></div>
+    <div id="md-upload-actions" style="display:none;justify-content:flex-end;gap:10px;margin-top:16px;">
+      <button class="md-btn md-btn-secondary" onclick="document.getElementById('md-upload-overlay').style.display='none'">Cancel</button>
+      <button class="md-btn md-btn-primary" onclick="mdCommitUpload()">✅ Apply Changes</button>
+    </div>
+    <div style="text-align:right;margin-top:12px;">
+      <button class="md-btn md-btn-secondary" onclick="document.getElementById('md-upload-overlay').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Bulk Price Overlay ── -->
+<div id="md-bulkprice-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:#fff;border-radius:16px;padding:32px;width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <h3 style="margin:0 0 16px;font-size:18px;">💰 Bulk Price Update</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div><label style="font-size:12px;font-weight:600;color:#64748b;">Distributor</label>
+        <select id="bp-distributor" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"><option value="">All</option></select></div>
+      <div><label style="font-size:12px;font-weight:600;color:#64748b;">Customer</label>
+        <select id="bp-customer" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"><option value="">All</option></select></div>
+      <div style="grid-column:1/-1;"><label style="font-size:12px;font-weight:600;color:#64748b;">Products (hold Ctrl/⌘ for multiple)</label>
+        <select id="bp-skus" multiple style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;min-height:80px;"><option value="">All Products</option></select></div>
+      <div><label style="font-size:12px;font-weight:600;color:#64748b;">Operation</label>
+        <select id="bp-operation" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;" onchange="document.getElementById('bp-value').placeholder=this.value==='pct'?'e.g. 5 for +5%':'New price in ₪'">
+          <option value="pct">Percentage (%)</option><option value="set">Set Price (₪)</option></select></div>
+      <div><label style="font-size:12px;font-weight:600;color:#64748b;">Value</label>
+        <input id="bp-value" type="number" step="any" placeholder="e.g. 5 for +5%" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"></div>
+      <div><label style="font-size:12px;font-weight:600;color:#64748b;">Field</label>
+        <select id="bp-field" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+          <option value="sale_price">Sale Price</option><option value="cost">Cost</option></select></div>
+    </div>
+    <button class="md-btn md-btn-primary" onclick="mdBulkPricePreview()" style="margin-bottom:16px;">Preview Changes</button>
+    <div id="bp-preview" style="display:none;"></div>
+    <div id="bp-actions" style="display:none;justify-content:flex-end;gap:10px;margin-top:16px;">
+      <button class="md-btn md-btn-secondary" onclick="document.getElementById('md-bulkprice-overlay').style.display='none'">Cancel</button>
+      <button class="md-btn md-btn-primary" onclick="mdBulkPriceApply()">✅ Apply Price Changes</button>
+    </div>
+    <div style="text-align:right;margin-top:12px;">
+      <button class="md-btn md-btn-secondary" onclick="document.getElementById('md-bulkprice-overlay').style.display='none'">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Toast ── -->
 <div id="md-toast"></div>
 
@@ -1115,8 +1182,8 @@ def _build_master_data_tab(master_data):
     manufacturers: {pk:'key'},
     distributors:  {pk:'key'},
     customers:     {pk:'key'},
-    logistics:     {pk:'id'},
-    pricing:       {pk:'id'}
+    logistics:     {pk:'product_key'},
+    pricing:       {pk:'_pk'}
   };
 
   /* ── API helper ── */
@@ -1211,7 +1278,7 @@ def _build_master_data_tab(master_data):
     ]},
     pricing: { label:'Pricing Entry', fields:[
       {key:'sku_key',       label:'Product',          type:'fk_select', lookup:'products', valKey:'sku_key', labelKey:'name_en', required:true},
-      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'name_en', labelKey:'name_en'},
+      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'key', labelKey:'name_en'},
       {key:'distributor',   label:'Distributor',      type:'fk_select', lookup:'distributors', valKey:'key', labelKey:'name'},
       {key:'commission_pct',label:'Commission (0-1)', type:'number'},
       {key:'sale_price',    label:'Sale Price (₪)',    type:'number'},
@@ -1246,13 +1313,23 @@ def _build_master_data_tab(master_data):
     arr.forEach(function(r){ var v=r[key]; if(v&&!seen[v]){seen[v]=1;out.push(v);} });
     return out;
   }
-  function populateSel(id, opts, allLabel, cur) {
+  function populateSel(id, opts, allLabel, cur, labelFn) {
     var el=document.getElementById(id); if(!el) return;
     var prev = cur||el.value||'all';
     el.innerHTML = opts.map(function(o){
-      var l = o==='all' ? allLabel : o;
+      var l = o==='all' ? allLabel : (labelFn ? labelFn(o) : o);
       return '<option value="'+esc(o)+'"'+(o===prev?' selected':'')+'>'+esc(l)+'</option>';
     }).join('');
+  }
+  /* Resolve distributor key → display name */
+  function distLabel(key) {
+    var d = S.distributors.find(function(d){return d.key===key;});
+    return d ? d.name : key;
+  }
+  /* Resolve customer key → display name */
+  function custLabel(key) {
+    var c = S.customers.find(function(c){return c.key===key;});
+    return c ? (c.name_en || c.name_he || key) : key;
   }
   function showToast(msg) {
     var t=document.getElementById('md-toast');
@@ -1260,13 +1337,31 @@ def _build_master_data_tab(master_data):
     t.textContent=msg; t.style.opacity='1';
     setTimeout(function(){t.style.opacity='0';},2200);
   }
+  var _pollTimer = null;
   function markDirty() {
     var b=document.getElementById('md-dirty-banner');
     if(b) b.style.display='flex';
+    var msg = document.getElementById('md-dirty-msg');
+    var steps = document.getElementById('md-dirty-steps');
+    if(msg) msg.textContent = 'Syncing dashboard...';
+    if(steps) steps.innerHTML = '<span style="color:var(--text-muted)">Background rebuild in progress. Other tabs will update automatically.</span>';
+    /* Start polling cache status */
+    if(_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(function(){
+      fetch(API_BASE + '/cache-status').then(function(r){return r.json();})
+      .then(function(d){
+        if(d.status === 'ready') {
+          clearInterval(_pollTimer); _pollTimer = null;
+          if(msg) msg.textContent = 'Dashboard synced';
+          if(steps) steps.innerHTML = '<b style="color:#16a34a">All tabs are up to date.</b> Refresh the page to see changes in BO/CC/SP/GEO.';
+        }
+      }).catch(function(){});
+    }, 2000);
   }
   function markClean() {
     var b=document.getElementById('md-dirty-banner');
     if(b) b.style.display='none';
+    if(_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
   }
   function setCount(id, n) {
     var e=document.getElementById('cnt-'+id);
@@ -1284,14 +1379,14 @@ def _build_master_data_tab(master_data):
     mdRender(sec);
   };
 
-  function mdRender(sec) {
+  window.mdRender = function mdRender(sec) {
     var fn = {
       brands: rBrands, products: rProducts, manufacturers: rManufacturers,
       distributors: rDistributors, customers: rCustomers,
       pricing: rPricing, logistics: rLogistics, portfolio: rPortfolio
     }[sec];
     if(fn) fn();
-  }
+  };
 
   /* ── BRANDS ── */
   // Per-brand accent colours (cycles if more brands added)
@@ -1428,7 +1523,9 @@ def _build_master_data_tab(master_data):
   /* ── CUSTOMERS ── */
   function rCustomers() {
     var tf=getVal('flt-cust-type'), sf=getVal('flt-cust-status'), df=getVal('flt-cust-dist');
-    populateSel('flt-cust-dist', uniqueVals(S.customers,'distributor'), 'All Distributors', df);
+    populateSel('flt-cust-type',  uniqueVals(S.customers,'type'),        'All Types',        tf);
+    populateSel('flt-cust-status',uniqueVals(S.customers,'status'),      'All Statuses',     sf);
+    populateSel('flt-cust-dist',  uniqueVals(S.customers,'distributor'), 'All Distributors', df, distLabel);
     var data=S.customers.filter(function(c){
       if(tf&&tf!=='all'&&c.type!==tf) return false;
       if(sf&&sf!=='all'&&c.status!==sf) return false;
@@ -1441,7 +1538,10 @@ def _build_master_data_tab(master_data):
       rows+='<tr><td><b>'+esc(c.name_he)+'</b></td>';
       rows+='<td style="font-size:12px;color:var(--text-muted)">'+esc(c.name_en)+'</td>';
       rows+='<td>'+esc(c.type)+'</td>';
-      rows+='<td>'+esc(c.distributor)+'</td>';
+      var cdist = c.distributor || '';
+      var cdistRec = S.distributors.find(function(d){return d.key===cdist;});
+      if(cdistRec) cdist = cdistRec.name || cdist;
+      rows+='<td>'+esc(cdist)+'</td>';
       rows+='<td>'+esc(c.chain)+'</td>';
       rows+='<td>'+chip(c.status)+'</td>';
       rows+='<td>'+esc(c.contact)+'</td>';
@@ -1456,7 +1556,7 @@ def _build_master_data_tab(master_data):
   function rPricing() {
     var sf=getVal('flt-pricing-sku'), stf=getVal('flt-pricing-status'), df=getVal('flt-pricing-dist');
     populateSel('flt-pricing-sku',  uniqueVals(S.pricing,'sku_key'),    'All SKUs',         sf);
-    populateSel('flt-pricing-dist', uniqueVals(S.pricing,'distributor'),'All Distributors', df);
+    populateSel('flt-pricing-dist', uniqueVals(S.pricing,'distributor'),'All Distributors', df, distLabel);
     var data=S.pricing.filter(function(p){
       if(sf&&sf!=='all'&&p.sku_key!==sf) return false;
       if(stf&&stf!=='all'&&p.status!==stf) return false;
@@ -1474,10 +1574,23 @@ def _build_master_data_tab(master_data):
       var omStyle='';
       if(omN!==null){ omStyle=omN<10?'color:#ef4444;font-weight:700':omN<20?'color:#f59e0b;font-weight:600':'color:#10b981;font-weight:600'; }
       rows+='<tr>';
+      // Resolve product name from products list if not stored in pricing
+      var pName = p.name_en || '';
+      if(!pName && p.sku_key) {
+        var prod = S.products.find(function(pr){return pr.sku_key===p.sku_key;});
+        if(prod) pName = prod.name_en || '';
+      }
       rows+='<td><span class="md-brand-tag">'+esc(p.sku_key)+'</span></td>';
-      rows+='<td style="font-size:12px">'+esc(p.name_en)+'</td>';
-      rows+='<td>'+esc(p.customer)+'</td>';
-      rows+='<td>'+esc(p.distributor)+'</td>';
+      rows+='<td style="font-size:12px">'+esc(pName)+'</td>';
+      // Resolve customer and distributor display names from keys
+      var custDisplay = p.customer || '';
+      var custRec = S.customers.find(function(c){return c.key===p.customer;});
+      if(custRec) custDisplay = custRec.name_en || custRec.name_he || p.customer;
+      var distDisplay = p.distributor || '';
+      var distRec = S.distributors.find(function(d){return d.key===p.distributor;});
+      if(distRec) distDisplay = distRec.name || p.distributor;
+      rows+='<td>'+esc(custDisplay)+'</td>';
+      rows+='<td>'+esc(distDisplay)+'</td>';
       rows+='<td style="text-align:center">'+pct(p.commission_pct)+'</td>';
       rows+='<td style="text-align:right;font-weight:600">'+price(p.sale_price)+'</td>';
       rows+='<td style="text-align:right">'+price(p.cost)+'</td>';
@@ -1577,12 +1690,15 @@ def _build_master_data_tab(master_data):
   window.mdDel = function(sheet, idx) {
     if(!confirm('Delete this entry?')) return;
     if(API_OK) {
-      var map = ENTITY_MAP[sheet];
-      var pk = S[sheet][idx][map.pk];
-      apiCall('DELETE', '/'+sheet+'/'+encodeURIComponent(pk)).then(function(){
-        reloadEntity(sheet);
-        showToast('Deleted ✓ (removed from database)');
-      }).catch(function(e){ alert('Error: '+e.message); });
+      requireAuth(function(){
+        var map = ENTITY_MAP[sheet];
+        var pk = S[sheet][idx][map.pk];
+        apiCallAuth('DELETE', '/'+sheet+'/'+encodeURIComponent(pk)).then(function(){
+          reloadEntity(sheet);
+          showToast('Deleted ✓ (removed from database)');
+          markDirty();
+        }).catch(function(e){ alert('Error: '+e.message); });
+      });
     } else {
       S[sheet].splice(idx,1);
       mdRender(sheet);
@@ -1660,23 +1776,27 @@ def _build_master_data_tab(master_data):
       rec[k]=v;
     });
     if(API_OK) {
-      /* ── API mode: persist directly to SQLite ── */
-      var apiRec = toApiRecord(_mSheet, rec);
-      var map = ENTITY_MAP[_mSheet];
-      if(_mMode==='add') {
-        apiCall('POST', '/'+_mSheet, apiRec).then(function(res){
-          mdModalClose();
-          reloadEntity(_mSheet);
-          showToast('Created ✓ (saved to database)');
-        }).catch(function(e){ alert('Error: '+e.message); });
-      } else {
-        var pk = S[_mSheet][_mIdx][map.pk];
-        apiCall('PUT', '/'+_mSheet+'/'+encodeURIComponent(pk), apiRec).then(function(res){
-          mdModalClose();
-          reloadEntity(_mSheet);
-          showToast('Updated ✓ (saved to database)');
-        }).catch(function(e){ alert('Error: '+e.message); });
-      }
+      /* ── API mode: persist directly to DB with auth ── */
+      requireAuth(function(){
+        var apiRec = toApiRecord(_mSheet, rec);
+        var map = ENTITY_MAP[_mSheet];
+        if(_mMode==='add') {
+          apiCallAuth('POST', '/'+_mSheet, apiRec).then(function(res){
+            mdModalClose();
+            reloadEntity(_mSheet);
+            showToast('Created ✓ (saved to database)');
+            markDirty();
+          }).catch(function(e){ alert('Error: '+e.message); });
+        } else {
+          var pk = S[_mSheet][_mIdx][map.pk];
+          apiCallAuth('PUT', '/'+_mSheet+'/'+encodeURIComponent(pk), apiRec).then(function(res){
+            mdModalClose();
+            reloadEntity(_mSheet);
+            showToast('Updated ✓ (saved to database)');
+            markDirty();
+          }).catch(function(e){ alert('Error: '+e.message); });
+        }
+      });
     } else {
       /* ── Offline mode: mutate local state ── */
       if(_mMode==='add') S[_mSheet].push(rec);
@@ -1827,6 +1947,247 @@ def _build_master_data_tab(master_data):
     }).catch(function(e) { alert('Rebuild error: '+e.message); });
   };
 
+  /* ── Auth helpers (Phase 3) ── */
+  var _mdLoggedIn = false;
+  var _pendingAuthAction = null;
+
+  window.mdShowLogin = function() {
+    document.getElementById('md-login-overlay').style.display = 'flex';
+    document.getElementById('md-login-pw').value = '';
+    document.getElementById('md-login-err').style.display = 'none';
+    setTimeout(function(){ document.getElementById('md-login-pw').focus(); }, 100);
+  };
+  window.mdDoLogin = function() {
+    var pw = document.getElementById('md-login-pw').value;
+    fetch(API_BASE + '/auth/login', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: pw})
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(d.status==='ok') {
+        _mdLoggedIn = true;
+        document.getElementById('md-login-overlay').style.display = 'none';
+        _updateAuthUI();
+        showToast('Logged in ✓');
+        if(_pendingAuthAction) { var fn=_pendingAuthAction; _pendingAuthAction=null; fn(); }
+      } else {
+        document.getElementById('md-login-err').textContent = d.error||'Invalid password';
+        document.getElementById('md-login-err').style.display = 'block';
+      }
+    }).catch(function(e){
+      document.getElementById('md-login-err').textContent = 'Connection error';
+      document.getElementById('md-login-err').style.display = 'block';
+    });
+  };
+  function _checkAuth() {
+    fetch(API_BASE + '/auth/status', {credentials:'include'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){ _mdLoggedIn = !!d.authenticated; _updateAuthUI(); })
+      .catch(function(){ _mdLoggedIn = false; });
+  }
+  function _updateAuthUI() {
+    var el = document.getElementById('md-auth-status');
+    if(!el) return;
+    el.style.display = 'inline-flex';
+    if(_mdLoggedIn) {
+      el.style.background = '#dcfce7'; el.style.color = '#166534';
+      el.innerHTML = '🔓 Admin';
+    } else {
+      el.style.background = '#fef3c7'; el.style.color = '#92400e';
+      el.innerHTML = '🔒 Login';
+    }
+  }
+  function requireAuth(fn) {
+    if(_mdLoggedIn) { fn(); return; }
+    _pendingAuthAction = fn;
+    mdShowLogin();
+  }
+  function apiCallAuth(method, path, body) {
+    return fetch(API_BASE + path, {
+      method: method, credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function(r){
+      if(r.status === 401) { _mdLoggedIn=false; _updateAuthUI(); throw new Error('Not authenticated — please login'); }
+      return r.json().then(function(d){
+        if(!r.ok) {
+          /* Handle validation errors */
+          if(d.errors && d.errors.length) throw new Error('Validation: ' + d.errors.join('; '));
+          if(d.warnings && d.warnings.length) {
+            if(confirm('⚠️ Warnings:\\n' + d.warnings.join('\\n') + '\\n\\nProceed anyway?')) {
+              body = body || {};
+              body._confirm_warnings = true;
+              return apiCallAuth(method, path, body);
+            }
+            throw new Error('Cancelled by user');
+          }
+          throw new Error(d.error || 'API error');
+        }
+        return d;
+      });
+    });
+  }
+
+  /* ── Bulk upload (Phase 3) ── */
+  var _uploadData = null;
+  window.mdShowUpload = function() {
+    requireAuth(function(){
+      _uploadData = null;
+      document.getElementById('md-upload-preview').style.display = 'none';
+      document.getElementById('md-upload-preview').innerHTML = '';
+      document.getElementById('md-upload-actions').style.display = 'none';
+      document.getElementById('md-upload-overlay').style.display = 'flex';
+    });
+  };
+  window.mdHandleUploadFile = function(file) {
+    if(!file) return;
+    var formData = new FormData();
+    formData.append('file', file);
+    fetch(API_BASE + '/master-data/upload-excel', {
+      method:'POST', credentials:'include', body: formData
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(d.error) { alert(d.error); return; }
+      _uploadData = d;
+      _renderUploadPreview(d.diff);
+    }).catch(function(e){ alert('Upload error: '+e.message); });
+  };
+  function _renderUploadPreview(diff) {
+    var html = '<h4 style="margin:0 0 12px;font-size:14px;">Changes Preview</h4>';
+    var hasChanges = false;
+    for(var entity in diff) {
+      var d = diff[entity];
+      var added = d.added?d.added.length:0, changed = d.changed?d.changed.length:0, removed = d.removed?d.removed.length:0;
+      if(added+changed+removed === 0) continue;
+      hasChanges = true;
+      html += '<div style="margin-bottom:12px;padding:12px;background:#f8fafc;border-radius:8px;">';
+      html += '<b style="text-transform:capitalize;">'+entity+'</b>: ';
+      if(added) html += '<span style="color:#16a34a">+'+added+' new</span> ';
+      if(changed) html += '<span style="color:#d97706">~'+changed+' changed</span> ';
+      if(removed) html += '<span style="color:#ef4444">-'+removed+' removed</span> ';
+      html += '<span style="color:#64748b">('+d.unchanged+' unchanged)</span>';
+      html += '</div>';
+    }
+    if(!hasChanges) html += '<p style="color:#64748b;">No changes detected.</p>';
+    document.getElementById('md-upload-preview').innerHTML = html;
+    document.getElementById('md-upload-preview').style.display = 'block';
+    if(hasChanges) document.getElementById('md-upload-actions').style.display = 'flex';
+  }
+  window.mdCommitUpload = function() {
+    fetch(API_BASE + '/master-data/upload-excel?commit=1', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({confirm: true})
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(d.error) { alert(d.error); return; }
+      document.getElementById('md-upload-overlay').style.display = 'none';
+      showToast('Bulk import applied ✓');
+      reloadAllEntities();
+      markDirty();
+    }).catch(function(e){ alert('Commit error: '+e.message); });
+  };
+
+  /* ── Export from server (Phase 3) ── */
+  window.mdExportFromServer = function() {
+    window.open(API_BASE + '/master-data/export-excel', '_blank');
+  };
+
+  /* ── Bulk price (Phase 3) ── */
+  var _bulkPriceChanges = null;
+  function _bpSelectedSkus() {
+    var sel = document.getElementById('bp-skus');
+    var vals = [];
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].selected && sel.options[i].value) vals.push(sel.options[i].value);
+    }
+    return vals;
+  }
+  function _bpBody(commit) {
+    return {
+      filter: {
+        distributor: document.getElementById('bp-distributor').value,
+        customer: document.getElementById('bp-customer').value,
+        sku_keys: _bpSelectedSkus()
+      },
+      operation: document.getElementById('bp-operation').value,
+      value: parseFloat(document.getElementById('bp-value').value)||0,
+      field: document.getElementById('bp-field').value,
+      commit: !!commit
+    };
+  }
+  window.mdShowBulkPrice = function() {
+    requireAuth(function(){
+      _bulkPriceChanges = null;
+      document.getElementById('bp-preview').style.display = 'none';
+      document.getElementById('bp-preview').innerHTML = '';
+      document.getElementById('bp-actions').style.display = 'none';
+      /* Populate dropdowns */
+      var distSel = document.getElementById('bp-distributor');
+      var custSel = document.getElementById('bp-customer');
+      var skuSel  = document.getElementById('bp-skus');
+      distSel.innerHTML = '<option value="">All</option>';
+      custSel.innerHTML = '<option value="">All</option>';
+      skuSel.innerHTML  = '';
+      (S.distributors||[]).forEach(function(d){
+        distSel.innerHTML += '<option value="'+esc(d.key||d.name||'')+'">'+esc(d.name||d.key||'')+'</option>';
+      });
+      (S.customers||[]).forEach(function(c){
+        custSel.innerHTML += '<option value="'+esc(c.key||c.name_en||'')+'">'+esc(c.name_en||c.key||'')+'</option>';
+      });
+      (S.products||[]).forEach(function(p){
+        skuSel.innerHTML += '<option value="'+esc(p.sku_key||'')+'">'+esc(p.sku_key)+' — '+esc(p.name_en||p.name_he||'')+'</option>';
+      });
+      document.getElementById('md-bulkprice-overlay').style.display = 'flex';
+    });
+  };
+  window.mdBulkPricePreview = function() {
+    apiCallAuth('POST', '/pricing/bulk-apply', _bpBody(false))
+      .then(function(d){
+        _bulkPriceChanges = d.changes || d.preview || [];
+        var html = '<h4 style="margin:0 0 8px;font-size:14px;">'+_bulkPriceChanges.length+' rows affected</h4>';
+        html += '<div style="max-height:200px;overflow-y:auto;">';
+        _bulkPriceChanges.slice(0,20).forEach(function(c){
+          html += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f1f5f9;">';
+          /* Resolve product name */
+          var pName = c.sku_key || '';
+          var prod = S.products.find(function(p){return p.sku_key===c.sku_key;});
+          if(prod) pName = prod.name_en || prod.name_he || c.sku_key;
+          /* Resolve customer name */
+          var cName = c.customer || '';
+          var cust = S.customers.find(function(cu){return cu.key===c.customer;});
+          if(cust) cName = cust.name_en || cust.name_he || c.customer;
+          html += '<b>'+esc(pName)+'</b> '+esc(cName)+': ';
+          html += '<span style="color:#ef4444;text-decoration:line-through;">₪'+c.old_value+'</span> → ';
+          html += '<span style="color:#16a34a;font-weight:600;">₪'+c.new_value+'</span></div>';
+        });
+        if(_bulkPriceChanges.length>20) html += '<p style="color:#64748b;font-size:12px;">...and '+ (_bulkPriceChanges.length-20)+' more</p>';
+        html += '</div>';
+        document.getElementById('bp-preview').innerHTML = html;
+        document.getElementById('bp-preview').style.display = 'block';
+        if(_bulkPriceChanges.length) document.getElementById('bp-actions').style.display = 'flex';
+      }).catch(function(e){ alert('Preview error: '+e.message); });
+  };
+  window.mdBulkPriceApply = function() {
+    apiCallAuth('POST', '/pricing/bulk-apply', _bpBody(true))
+      .then(function(d){
+        document.getElementById('md-bulkprice-overlay').style.display = 'none';
+        showToast('Bulk price update applied ✓');
+        reloadEntity('pricing');
+        markDirty();
+      }).catch(function(e){ alert('Apply error: '+e.message); });
+  };
+
+  /* ── Reload all entities ── */
+  function reloadAllEntities() {
+    var entities = ['brands','products','manufacturers','distributors','customers','logistics','pricing'];
+    var loads = entities.map(function(e){ return apiCall('GET','/'+e); });
+    loads.push(apiCall('GET','/portfolio'));
+    Promise.all(loads).then(function(results){
+      entities.forEach(function(e,i){ S[e] = results[i]; });
+      S.portfolio = results[results.length-1];
+      if(_cur) mdRender(_cur);
+    }).catch(function(){});
+  }
+
   /* ── Init with API detection ── */
   function mdInit() {
     /* Try to detect API server */
@@ -1841,6 +2202,12 @@ def _build_master_data_tab(master_data):
           if(st) { st.style.background='#dcfce7'; st.style.color='#166534'; st.innerHTML='<span style=\"width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;\"></span> API Connected'; }
           var rbBtn = document.getElementById('md-rebuild-btn');
           if(rbBtn) rbBtn.style.display = '';
+          /* Show auth + import/export buttons */
+          _checkAuth();
+          var impBtn = document.getElementById('md-import-btn');
+          if(impBtn) impBtn.style.display = '';
+          var expBtn = document.getElementById('md-export-srv-btn');
+          if(expBtn) expBtn.style.display = '';
           var banner = document.getElementById('md-dirty-banner');
           if(banner) {
             banner.querySelector('.mdb-steps').innerHTML =

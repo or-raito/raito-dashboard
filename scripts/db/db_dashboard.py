@@ -29,10 +29,7 @@ PROJECT_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(SCRIPTS_DIR))
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from flask import Flask, Response, send_file, request, jsonify
-
-# ── Flask app (global — Gunicorn entry point) ─────────────────────────────
-app = Flask(__name__)
+from flask import Flask, Response, send_file, request, jsonify, session
 
 # Configure logging for Cloud Run (structured stdout)
 logging.basicConfig(
@@ -40,6 +37,19 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(message)s',
 )
 log = logging.getLogger(__name__)
+
+# ── Flask app (global — Gunicorn entry point) ─────────────────────────────
+app = Flask(__name__)
+
+# ── Auth (Phase 2) ───────────────────────────────────────────────────────
+try:
+    from db.auth import setup_auth, require_admin
+    setup_auth(app)
+    log.info("Auth module loaded — write routes require admin session")
+except ImportError:
+    log.warning("auth module not found — write routes UNPROTECTED")
+    def require_admin(f):  # noqa: F811 — fallback no-op
+        return f
 
 # ── Geo Layer Blueprint ───────────────────────────────────────────────────
 # Registers /api/geo/municipalities, /api/geo/choropleth, /api/geo/pos
@@ -99,7 +109,62 @@ def _generate_dashboard_html():
 # ── Cache ─────────────────────────────────────────────────────────────────
 # In production the dashboard data changes at most weekly (new Excel ingestion).
 # We cache the generated HTML and refresh on demand via /refresh.
+# Phase 4: writes invalidate the cache and trigger a background rebuild so
+# the next GET / is fast and other tabs reflect the changes.
+import threading
+
 _cached_html = None
+_cache_lock = threading.Lock()
+_cache_rebuilding = False
+
+
+def _invalidate_cache():
+    """Mark the cache as stale and start a background rebuild.
+
+    Safe to call from any write route. The background thread pre-generates
+    the HTML so the next GET / does not have to wait 10-30s.
+
+    IMPORTANT: We do NOT null _cached_html here. The old (stale) HTML continues
+    to be served while the rebuild runs. This prevents GET / from blocking
+    synchronously when the rebuild takes a long time (e.g. dev env with no
+    Excel data).
+    """
+    global _cached_html, _cache_rebuilding
+
+    with _cache_lock:
+        # Keep _cached_html as-is (serve stale while rebuilding)
+        if _cache_rebuilding:
+            log.info("Cache already rebuilding — skipping duplicate spawn")
+            return
+        _cache_rebuilding = True
+
+    log.info("Cache invalidated — spawning background rebuild (non-blocking)")
+
+    def _rebuild():
+        global _cached_html, _cache_rebuilding
+        try:
+            log.info("Background rebuild starting...")
+            html = _generate_dashboard_html()
+            with _cache_lock:
+                _cached_html = html
+                _cache_rebuilding = False
+            log.info("Background rebuild complete (%d KB)", len(html) // 1024)
+        except Exception as exc:
+            log.error("Background rebuild failed: %s", exc, exc_info=True)
+            with _cache_lock:
+                _cache_rebuilding = False
+
+    t = threading.Thread(target=_rebuild, daemon=True)
+    t.start()
+    # Safety: reset the flag after 45s in case the thread hangs
+    def _safety_reset():
+        import time
+        time.sleep(45)
+        with _cache_lock:
+            if _cache_rebuilding:
+                log.warning("Background rebuild timed out after 45s — resetting flag")
+                _cache_rebuilding = False  # noqa: F841
+    threading.Thread(target=_safety_reset, daemon=True).start()
 
 
 @app.route('/')
@@ -693,11 +758,8 @@ def upload():
         weekly_override = max(weekly_overrides, key=lambda r: r['week_num']) if weekly_overrides else None
 
         # ── Step 3: Invalidate dashboard cache ───────────────────────────────────
-        # Next request to / will call parsers.consolidate_data() which picks up
-        # the newly copied file automatically.
-        global _cached_html
-        _cached_html = None
-        log.info("Dashboard cache invalidated — will regenerate from updated data files")
+        # Invalidate cache + start background rebuild so next GET / is fast
+        _invalidate_cache()
 
         response = {
             'filename': safe_name,
@@ -746,8 +808,12 @@ _MD_PK = {
     'distributors':  'key',
     'customers':     'key',
     'logistics':     'product_key',
-    'pricing':       'barcode',
+    'pricing':       '_pk',       # synthetic composite: sku_key::customer::distributor
 }
+
+def _pricing_pk(rec: dict) -> str:
+    """Generate a composite PK for pricing records."""
+    return f"{rec.get('sku_key', '')}::{rec.get('customer', '')}::{rec.get('distributor', '')}"
 
 _MD_ENTITIES = list(_MD_PK.keys())
 
@@ -859,6 +925,58 @@ def _md_write(entity: str, data: list) -> None:
         conn.close()
 
 
+# ── Audit log (Phase 2) ─────────────────────────────────────────────────────
+
+def _md_ensure_audit_table() -> None:
+    """Create master_data_audit table if absent."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS master_data_audit (
+                id          SERIAL PRIMARY KEY,
+                entity      TEXT NOT NULL,
+                pk_value    TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                old_value   JSONB,
+                new_value   JSONB,
+                actor       TEXT NOT NULL DEFAULT 'anonymous',
+                occurred_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_entity
+            ON master_data_audit (entity, occurred_at DESC)
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _md_audit_log(entity: str, pk_value: str, action: str,
+                  old_value: dict | None, new_value: dict | None,
+                  actor: str = 'anonymous') -> None:
+    """Write one audit row. Called after a successful write."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO master_data_audit
+                (entity, pk_value, action, old_value, new_value, actor, occurred_at)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        """, (
+            entity, pk_value, action,
+            _json.dumps(old_value) if old_value else None,
+            _json.dumps(new_value) if new_value else None,
+            actor,
+        ))
+        conn.commit()
+    except Exception as exc:
+        log.warning("audit_log write failed (non-fatal): %s", exc)
+    finally:
+        conn.close()
+
+
 def _md_rebuild_portfolio(md: dict) -> None:
     """Recompute the portfolio matrix from current md state and save to DB.
     Row format matches master_data_parser.py exactly so the JS renderer works:
@@ -935,32 +1053,91 @@ def api_list(entity):
         return jsonify({'error': f'Unknown entity: {entity}'}), 404
     try:
         _md_ensure_table()
-        return jsonify(_md_read(entity))
+        items = _md_read(entity)
+        # Inject synthetic composite PK for pricing records
+        if entity == 'pricing':
+            for r in items:
+                r['_pk'] = _pricing_pk(r)
+        return jsonify(items)
     except Exception as e:
         log.error("api_list %s: %s", entity, e)
         return jsonify({'error': str(e)}), 500
 
 
+# ── Validation import (Phase 2) ──────────────────────────────────────────────
+
+try:
+    from db.md_validation import validate_record as _validate
+    log.info("Validation module loaded")
+except ImportError:
+    log.warning("md_validation not found — write routes UNVALIDATED")
+    def _validate(entity, record, all_data, action='create', old_record=None):
+        return [], []
+
+
+def _actor() -> str:
+    """Return the current admin username from the session, or 'anonymous'."""
+    return session.get('md_user', 'anonymous')
+
+
+# ── /api/cache-status  GET (Phase 4 — poll after writes) ────────────────────
+
+@app.route('/api/cache-status')
+def api_cache_status():
+    """Return the current state of the dashboard HTML cache."""
+    return jsonify({
+        'cached': _cached_html is not None,
+        'rebuilding': _cache_rebuilding,
+        'status': 'ready' if _cached_html is not None else (
+            'rebuilding' if _cache_rebuilding else 'stale'),
+    })
+
+
 # ── /api/<entity>  POST (create) ──────────────────────────────────────────────
 
 @app.route('/api/<string:entity>', methods=['POST'])
+@require_admin
 def api_create(entity):
     if entity not in _MD_PK:
         return jsonify({'error': f'Unknown entity: {entity}'}), 404
     try:
         _md_ensure_table()
+        _md_ensure_audit_table()
         record   = request.get_json(force=True) or {}
+        # Strip synthetic _pk if the client sent it
+        record.pop('_pk', None)
         pk_field = _MD_PK[entity]
-        pk_val   = record.get(pk_field)
         items    = _md_read(entity)
-        if pk_val and any(r.get(pk_field) == pk_val for r in items):
-            return jsonify({'error': f'Duplicate key: {pk_val}'}), 409
+
+        # Duplicate check: use composite PK for pricing
+        if entity == 'pricing':
+            new_pk = _pricing_pk(record)
+            if any(_pricing_pk(r) == new_pk for r in items):
+                return jsonify({'error': f'Duplicate pricing: {new_pk}'}), 409
+            pk_val = new_pk
+        else:
+            pk_val = record.get(pk_field)
+            if pk_val and any(r.get(pk_field) == pk_val for r in items):
+                return jsonify({'error': f'Duplicate key: {pk_val}'}), 409
+
+        # Validate
+        all_data = _md_read_all()
+        all_data[entity] = items
+        errors, warnings = _validate(entity, record, all_data, action='create')
+        if errors:
+            return jsonify({'errors': errors}), 422
+        if warnings and not request.args.get('confirmed'):
+            return jsonify({'warnings': warnings, 'confirm_required': True}), 409
+
         items.append(record)
         _md_write(entity, items)
-        # Rebuild portfolio if a relevant entity changed
+        _md_audit_log(entity, str(pk_val or ''), 'create', None, record, _actor())
+
         if entity in ('products', 'customers', 'pricing'):
             md = _md_read_all()
             _md_rebuild_portfolio(md)
+
+        _invalidate_cache()
         return jsonify(record), 201
     except Exception as e:
         log.error("api_create %s: %s", entity, e)
@@ -970,22 +1147,51 @@ def api_create(entity):
 # ── /api/<entity>/<pk>  PUT (update) ──────────────────────────────────────────
 
 @app.route('/api/<string:entity>/<path:pk>', methods=['PUT'])
+@require_admin
 def api_update(entity, pk):
     if entity not in _MD_PK:
         return jsonify({'error': f'Unknown entity: {entity}'}), 404
     try:
         _md_ensure_table()
+        _md_ensure_audit_table()
         record   = request.get_json(force=True) or {}
+        record.pop('_pk', None)  # strip synthetic PK
         pk_field = _MD_PK[entity]
         items    = _md_read(entity)
+
+        def _item_pk(item):
+            """Get the PK value for an item, computing composite PK for pricing."""
+            if entity == 'pricing':
+                return _pricing_pk(item)
+            return str(item.get(pk_field, ''))
+
         for i, item in enumerate(items):
-            if str(item.get(pk_field, '')) == pk:
-                items[i] = record
+            if _item_pk(item) == pk:
+                all_data = _md_read_all()
+                all_data[entity] = items
+                errors, warnings = _validate(
+                    entity, record, all_data,
+                    action='update', old_record=item,
+                )
+                if errors:
+                    return jsonify({'errors': errors}), 422
+                if warnings and not request.args.get('confirmed'):
+                    return jsonify({'warnings': warnings, 'confirm_required': True}), 409
+
+                old_record = dict(item)
+                merged = dict(item)   # start with all old fields
+                merged.update(record) # overwrite with submitted fields
+                items[i] = merged
                 _md_write(entity, items)
+                _md_audit_log(entity, pk, 'update', old_record, record, _actor())
+
                 if entity in ('products', 'customers', 'pricing'):
                     md = _md_read_all()
                     _md_rebuild_portfolio(md)
+
+                _invalidate_cache()
                 return jsonify(record)
+
         return jsonify({'error': f'Not found: {pk}'}), 404
     except Exception as e:
         log.error("api_update %s/%s: %s", entity, pk, e)
@@ -995,23 +1201,218 @@ def api_update(entity, pk):
 # ── /api/<entity>/<pk>  DELETE ────────────────────────────────────────────────
 
 @app.route('/api/<string:entity>/<path:pk>', methods=['DELETE'])
+@require_admin
 def api_delete(entity, pk):
     if entity not in _MD_PK:
         return jsonify({'error': f'Unknown entity: {entity}'}), 404
     try:
         _md_ensure_table()
+        _md_ensure_audit_table()
         pk_field = _MD_PK[entity]
         items    = _md_read(entity)
-        new_items = [r for r in items if str(r.get(pk_field, '')) != pk]
-        if len(new_items) == len(items):
+
+        def _item_pk(r):
+            if entity == 'pricing':
+                return _pricing_pk(r)
+            return str(r.get(pk_field, ''))
+
+        deleted_record = None
+        new_items = []
+        for r in items:
+            if _item_pk(r) == pk:
+                deleted_record = r
+            else:
+                new_items.append(r)
+
+        if deleted_record is None:
             return jsonify({'error': f'Not found: {pk}'}), 404
+
+        all_data = _md_read_all()
+        all_data[entity] = items
+        errors, _ = _validate(entity, deleted_record, all_data, action='delete')
+        if errors:
+            return jsonify({'errors': errors}), 422
+
         _md_write(entity, new_items)
+        _md_audit_log(entity, pk, 'delete', deleted_record, None, _actor())
+
         if entity in ('products', 'customers', 'pricing'):
             md = _md_read_all()
             _md_rebuild_portfolio(md)
+
+        _invalidate_cache()
         return jsonify({'deleted': pk})
     except Exception as e:
         log.error("api_delete %s/%s: %s", entity, pk, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/master-data/upload-excel  POST (bulk import) ────────────────────────
+
+_pending_upload: dict | None = None   # server-side staging for bulk import
+
+@app.route('/api/master-data/upload-excel', methods=['POST'])
+@require_admin
+def api_md_upload_excel():
+    """Bulk import from .xlsx. Step 1: upload file → diff preview.
+    Step 2: POST with ?commit=1 → apply changes."""
+    global _pending_upload
+    try:
+        from db.md_excel_roundtrip import parse_upload, diff_preview
+    except ImportError:
+        from md_excel_roundtrip import parse_upload, diff_preview
+
+    try:
+        _md_ensure_table()
+        _md_ensure_audit_table()
+        commit = request.args.get('commit') == '1'
+
+        if commit:
+            uploaded = _pending_upload
+            if not uploaded:
+                return jsonify({'error': 'No pending upload.'}), 400
+            current = _md_read_all()
+            actor = _actor()
+            entities_written = []
+            for entity_key, rows in uploaded.items():
+                if entity_key in _MD_PK:
+                    old_data = current.get(entity_key, [])
+                    _md_write(entity_key, rows)
+                    _md_audit_log(entity_key, '*bulk*', 'bulk_upload',
+                                  {'count': len(old_data)},
+                                  {'count': len(rows)}, actor)
+                    entities_written.append(entity_key)
+            md = _md_read_all()
+            _md_rebuild_portfolio(md)
+            _pending_upload = None
+            _invalidate_cache()
+            return jsonify({'status': 'ok', 'entities_updated': entities_written})
+
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded.'}), 400
+        f = request.files['file']
+        if not f.filename or not f.filename.endswith('.xlsx'):
+            return jsonify({'error': 'File must be .xlsx'}), 400
+        file_bytes = f.read()
+        uploaded = parse_upload(file_bytes)
+        current = _md_read_all()
+        preview = diff_preview(uploaded, current)
+        _pending_upload = uploaded
+        return jsonify({'status': 'preview', 'diff': preview})
+    except Exception as e:
+        log.error("api_md_upload_excel: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/master-data/export-excel  GET ───────────────────────────────────────
+
+@app.route('/api/master-data/export-excel', methods=['GET'])
+def api_md_export_excel():
+    """Download all master data as a formatted .xlsx file."""
+    try:
+        from db.md_excel_roundtrip import export_xlsx
+    except ImportError:
+        from md_excel_roundtrip import export_xlsx
+    try:
+        _md_ensure_table()
+        all_data = _md_read_all()
+        xlsx_bytes = export_xlsx(all_data)
+        return Response(
+            xlsx_bytes,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={'Content-Disposition': 'attachment; filename=Raito_Master_Data_export.xlsx'},
+        )
+    except Exception as e:
+        log.error("api_md_export_excel: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/pricing/bulk-apply  POST ────────────────────────────────────────────
+
+@app.route('/api/pricing/bulk-apply', methods=['POST'])
+@require_admin
+def api_pricing_bulk_apply():
+    """Bulk price change. Body: {filter, operation, value, field, commit}."""
+    try:
+        from db.md_excel_roundtrip import bulk_price_preview, apply_bulk_price
+    except ImportError:
+        from md_excel_roundtrip import bulk_price_preview, apply_bulk_price
+    try:
+        _md_ensure_table()
+        _md_ensure_audit_table()
+        body = request.get_json(force=True) or {}
+        filter_spec = body.get('filter', {})
+        operation = body.get('operation', '')
+        value = body.get('value', 0)
+        field = body.get('field', 'sale_price')
+        commit = body.get('commit', False)
+
+        if operation not in ('pct', 'absolute', 'set'):
+            return jsonify({'error': "operation must be 'pct', 'set', or 'absolute'"}), 400
+        if not isinstance(value, (int, float)):
+            return jsonify({'error': 'value must be a number'}), 400
+        if field not in ('sale_price', 'cost'):
+            return jsonify({'error': "field must be 'sale_price' or 'cost'"}), 400
+
+        pricing = _md_read('pricing')
+        changes = bulk_price_preview(pricing, filter_spec, operation, value, field)
+
+        if not commit:
+            return jsonify({'status': 'preview', 'changes': changes, 'count': len(changes)})
+
+        updated_pricing = apply_bulk_price(pricing, changes)
+        _md_write('pricing', updated_pricing)
+        _md_audit_log('pricing', '*bulk*', 'bulk_price',
+                      {'operation': operation, 'value': value, 'field': field,
+                       'filter': filter_spec},
+                      {'affected_count': len(changes)}, _actor())
+        md = _md_read_all()
+        _md_rebuild_portfolio(md)
+        _invalidate_cache()
+        return jsonify({'status': 'ok', 'applied': len(changes)})
+    except Exception as e:
+        log.error("api_pricing_bulk_apply: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/audit-log  GET ─────────────────────────────────────────────────────
+
+@app.route('/api/audit-log', methods=['GET'])
+@require_admin
+def api_audit_log():
+    """Return recent audit log entries. Supports ?entity=X&limit=N."""
+    try:
+        _md_ensure_audit_table()
+        entity = request.args.get('entity')
+        limit = int(request.args.get('limit', 50))
+        conn = _md_conn()
+        try:
+            cur = conn.cursor()
+            if entity:
+                cur.execute("""
+                    SELECT id, entity, pk_value, action, old_value, new_value, actor, occurred_at
+                    FROM master_data_audit WHERE entity = %s
+                    ORDER BY occurred_at DESC LIMIT %s
+                """, (entity, limit))
+            else:
+                cur.execute("""
+                    SELECT id, entity, pk_value, action, old_value, new_value, actor, occurred_at
+                    FROM master_data_audit
+                    ORDER BY occurred_at DESC LIMIT %s
+                """, (limit,))
+            rows = []
+            for r in cur.fetchall():
+                rows.append({
+                    'id': r[0], 'entity': r[1], 'pk_value': r[2],
+                    'action': r[3], 'old_value': r[4], 'new_value': r[5],
+                    'actor': r[6],
+                    'occurred_at': r[7].isoformat() if r[7] else None,
+                })
+            return jsonify(rows)
+        finally:
+            conn.close()
+    except Exception as e:
+        log.error("api_audit_log: %s", e)
         return jsonify({'error': str(e)}), 500
 
 
@@ -1041,6 +1442,109 @@ def api_lookup(entity):
         return jsonify(items)
     except Exception as e:
         log.error("api_lookup %s: %s", entity, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/normalize  (one-time data cleanup) ───────────────────────────────────
+
+@app.route('/api/normalize', methods=['POST'])
+@require_admin
+def api_normalize():
+    """Normalize FK references across all entities to use proper keys.
+
+    Fixes seed data that stored display names (e.g. 'Icedream') instead of
+    keys (e.g. 'icedreams') for distributor references. Also deduplicates
+    customer records and removes orphan test data.
+    """
+    try:
+        _md_ensure_table()
+        md = _md_read_all()
+        changes = []
+
+        # Build lookup maps
+        dists = md.get('distributors', [])
+        custs = md.get('customers', [])
+
+        # Distributor: display name → key
+        dist_name_to_key = {}
+        for d in dists:
+            k = d.get('key', '')
+            n = d.get('name', '')
+            dist_name_to_key[n] = k
+            # Also map common short forms
+            for short in [n.split('(')[0].strip(), n.split(' ')[0].strip()]:
+                if short:
+                    dist_name_to_key[short] = k
+        # Known aliases
+        dist_name_to_key['Icedream'] = 'icedreams'
+        dist_name_to_key["Ma'ayan"] = 'mayyan_froz'
+        dist_name_to_key['Biscotti'] = 'biscotti'
+        dist_name_to_key['Ma\'ayan'] = 'mayyan_froz'
+
+        # Customer: display name → key
+        cust_name_to_key = {}
+        cust_key_map = {}
+        for c in custs:
+            ck = c.get('key', '')
+            cust_key_map[ck] = c
+            for field in ('name_en', 'name_he', 'key'):
+                v = c.get(field, '')
+                if v:
+                    cust_name_to_key[v] = ck
+
+        # ── Normalize customers.distributor → key ──
+        for c in custs:
+            old_dist = c.get('distributor', '')
+            if old_dist and old_dist not in [d.get('key') for d in dists]:
+                new_dist = dist_name_to_key.get(old_dist)
+                if new_dist:
+                    c['distributor'] = new_dist
+                    changes.append(f"customer {c.get('name_en','?')}: distributor {old_dist} → {new_dist}")
+
+        # ── Deduplicate customers by key ──
+        seen_keys = {}
+        deduped_custs = []
+        for c in custs:
+            ck = c.get('key', '')
+            if ck in seen_keys:
+                changes.append(f"customer duplicate removed: {c.get('name_en','?')} (key={ck})")
+            else:
+                seen_keys[ck] = True
+                deduped_custs.append(c)
+        custs = deduped_custs
+
+        # ── Normalize pricing.distributor → key, pricing.customer → key ──
+        pricing = md.get('pricing', [])
+        for p in pricing:
+            old_dist = p.get('distributor', '')
+            if old_dist and old_dist not in [d.get('key') for d in dists]:
+                new_dist = dist_name_to_key.get(old_dist)
+                if new_dist:
+                    p['distributor'] = new_dist
+                    changes.append(f"pricing {p.get('sku_key','?')}/{p.get('customer','?')}: distributor {old_dist} → {new_dist}")
+
+            old_cust = p.get('customer', '')
+            if old_cust and old_cust not in [c.get('key') for c in custs]:
+                new_cust = cust_name_to_key.get(old_cust)
+                if new_cust:
+                    p['customer'] = new_cust
+                    changes.append(f"pricing {p.get('sku_key','?')}/{old_cust}: customer → {new_cust}")
+
+        # ── Write back ──
+        if changes:
+            _md_write('customers', custs)
+            _md_write('pricing', pricing)
+            _md_audit_log('*system*', '*normalize*', 'normalize',
+                          {'changes_count': len(changes)},
+                          {'changes': changes[:50]}, _actor())
+
+        return jsonify({
+            'status': 'ok',
+            'changes': changes,
+            'total_changes': len(changes),
+        })
+    except Exception as e:
+        log.error("api_normalize: %s", e, exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 
@@ -1123,18 +1627,20 @@ def api_weekly_overrides_post():
 
 @app.route('/api/rebuild', methods=['POST'])
 def api_rebuild():
-    """Recompute portfolio, invalidate dashboard cache — next load reflects changes."""
-    global _cached_html
+    """Recompute portfolio, invalidate dashboard cache + background rebuild."""
     try:
         _md_ensure_table()
         md = _md_read_all()
         _md_rebuild_portfolio(md)
-        from db.database_manager import reset_cache
-        reset_cache()
-        _cached_html = None
-        log.info("API rebuild triggered — dashboard cache invalidated")
+        try:
+            from db.database_manager import reset_cache
+            reset_cache()
+        except Exception:
+            pass
+        _invalidate_cache()
+        log.info("API rebuild triggered — background rebuild started")
         return jsonify({'status': 'rebuilding',
-                        'message': 'Dashboard will regenerate on next page load'})
+                        'message': 'Dashboard rebuilding in background'})
     except Exception as e:
         log.error("api_rebuild: %s", e)
         return jsonify({'error': str(e)}), 500
