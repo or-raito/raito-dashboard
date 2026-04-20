@@ -1249,11 +1249,14 @@ def api_delete(entity, pk):
 
 # ── /api/master-data/upload-excel  POST (bulk import) ────────────────────────
 
+_pending_upload: dict | None = None   # server-side staging for bulk import
+
 @app.route('/api/master-data/upload-excel', methods=['POST'])
 @require_admin
 def api_md_upload_excel():
     """Bulk import from .xlsx. Step 1: upload file → diff preview.
     Step 2: POST with ?commit=1 → apply changes."""
+    global _pending_upload
     try:
         from db.md_excel_roundtrip import parse_upload, diff_preview
     except ImportError:
@@ -1265,7 +1268,7 @@ def api_md_upload_excel():
         commit = request.args.get('commit') == '1'
 
         if commit:
-            uploaded = session.get('_md_upload_data')
+            uploaded = _pending_upload
             if not uploaded:
                 return jsonify({'error': 'No pending upload.'}), 400
             current = _md_read_all()
@@ -1281,7 +1284,7 @@ def api_md_upload_excel():
                     entities_written.append(entity_key)
             md = _md_read_all()
             _md_rebuild_portfolio(md)
-            session.pop('_md_upload_data', None)
+            _pending_upload = None
             _invalidate_cache()
             return jsonify({'status': 'ok', 'entities_updated': entities_written})
 
@@ -1294,7 +1297,7 @@ def api_md_upload_excel():
         uploaded = parse_upload(file_bytes)
         current = _md_read_all()
         preview = diff_preview(uploaded, current)
-        session['_md_upload_data'] = uploaded
+        _pending_upload = uploaded
         return jsonify({'status': 'preview', 'diff': preview})
     except Exception as e:
         log.error("api_md_upload_excel: %s", e)

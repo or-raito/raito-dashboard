@@ -36,7 +36,7 @@ SHEET_COLUMNS: dict[str, list[dict]] = {
         {'key': 'barcode',      'label': 'Barcode'},
         {'key': 'name_he',      'label': 'Name HE'},
         {'key': 'name_en',      'label': 'Name EN'},
-        {'key': 'brand_key',    'label': 'Brand Key'},
+        {'key': 'brand',         'label': 'Brand Key'},
         {'key': 'category',     'label': 'Category'},
         {'key': 'status',       'label': 'Status'},
         {'key': 'launch_date',  'label': 'Launch Date'},
@@ -110,7 +110,7 @@ SHEET_TO_ENTITY: dict[str, tuple[str, str]] = {
     'Distributors':  ('distributors',  'key'),
     'Customers':     ('customers',     'key'),
     'Logistics':     ('logistics',     'product_key'),
-    'Pricing':       ('pricing',       'barcode'),
+    'Pricing':       ('pricing',       '_composite'),  # sku_key::customer::distributor
 }
 
 
@@ -161,6 +161,18 @@ def parse_upload(file_bytes: bytes) -> dict[str, list[dict]]:
 # Diff preview: compare uploaded data against current DB data
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _row_pk(row: dict, pk_field: str) -> str:
+    """Compute PK for a row. Handles composite pricing PK."""
+    if pk_field == '_composite':
+        parts = [
+            str(row.get('sku_key', '')).strip(),
+            str(row.get('customer', '')).strip(),
+            str(row.get('distributor', '')).strip(),
+        ]
+        return '::'.join(parts) if any(parts) else ''
+    return str(row.get(pk_field, '')).strip()
+
+
 def diff_preview(
     uploaded: dict[str, list[dict]],
     current: dict[str, list[dict]],
@@ -188,7 +200,7 @@ def diff_preview(
         # Index current by PK
         cur_by_pk: dict[str, dict] = {}
         for r in cur_rows:
-            pk = str(r.get(pk_field, '')).strip()
+            pk = _row_pk(r, pk_field)
             if pk:
                 cur_by_pk[pk] = r
 
@@ -198,7 +210,7 @@ def diff_preview(
         unchanged = 0
 
         for r in up_rows:
-            pk = str(r.get(pk_field, '')).strip()
+            pk = _row_pk(r, pk_field)
             if not pk:
                 continue
             seen_pks.add(pk)
@@ -304,21 +316,26 @@ def bulk_price_preview(
     return results
 
 
+def _pricing_composite(row: dict) -> str:
+    """Build composite key for pricing lookup."""
+    return f"{row.get('sku_key', '')}::{row.get('customer', '')}::{row.get('distributor', '')}"
+
+
 def apply_bulk_price(
     pricing: list[dict],
     changes: list[dict],
 ) -> list[dict]:
     """Apply bulk price changes to pricing data. Returns the updated list."""
-    # Build a lookup of changes by barcode
+    # Build a lookup of changes by composite key
     change_map = {}
     for c in changes:
-        change_map[c['barcode']] = c
+        change_map[_pricing_composite(c)] = c
 
     updated = []
     for row in pricing:
-        bc = row.get('barcode', '')
-        if bc in change_map:
-            c = change_map[bc]
+        pk = _pricing_composite(row)
+        if pk in change_map:
+            c = change_map[pk]
             row = dict(row)  # copy
             row[c['field']] = c['new_value']
             # Recompute margins
