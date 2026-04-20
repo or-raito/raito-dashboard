@@ -52,7 +52,7 @@ _GATED_FIELDS: dict[str, list[str]] = {
     'distributors':  ['key'],
     'customers':     ['key'],
     'logistics':     ['product_key'],
-    'pricing':       ['barcode'],
+    'pricing':       ['sku_key', 'customer', 'distributor'],
 }
 
 # Valid status values per entity (lowercased for comparison)

@@ -1179,7 +1179,9 @@ def api_update(entity, pk):
                     return jsonify({'warnings': warnings, 'confirm_required': True}), 409
 
                 old_record = dict(item)
-                items[i] = record
+                merged = dict(item)   # start with all old fields
+                merged.update(record) # overwrite with submitted fields
+                items[i] = merged
                 _md_write(entity, items)
                 _md_audit_log(entity, pk, 'update', old_record, record, _actor())
 
