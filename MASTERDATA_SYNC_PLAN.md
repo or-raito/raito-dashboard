@@ -207,7 +207,7 @@ _Build succeeded in 1m36s. Image `raito-dashboard-dev:latest` pushed to Artifact
 
 ⚠️ **CONTEXT LEARNED 2026-04-16:**
 - Prod `DATABASE_URL` lives in **Secret Manager** (secret `raito-db-url`, not a plain env var).
-- Prod env vars found: `GOOGLE_MAPS_API_KEY=AIzaSyAb5SZBgElJOQ3GCbCrXiRJLcfdjt0hT_w`, `RAITO_DATA_SOURCE=db`, `DATABASE_URL` from `raito-db-url:latest`.
+- Prod env vars found: `GOOGLE_MAPS_API_KEY` (from env), `RAITO_DATA_SOURCE=db`, `DATABASE_URL` from `raito-db-url:latest`.
 - Therefore dev needs a parallel secret `raito-db-url-dev` with `/raito` → `/raito_dev` substituted, plus SA binding to access it.
 
 **✅ ALL BLOCKS DONE 2026-04-19.** Dev service live at `https://raito-dashboard-dev-20004010285.me-west1.run.app`. Org policy blocks `allUsers` IAM — access via `gcloud run services proxy raito-dashboard-dev --region=me-west1 --port=8080` + Cloud Shell Web Preview.
@@ -249,7 +249,7 @@ gcloud run deploy raito-dashboard-dev \
   --region=me-west1 \
   --project=raito-house-of-brands \
   --add-cloudsql-instances=raito-house-of-brands:me-west1:raito-db \
-  --set-env-vars=GOOGLE_MAPS_API_KEY=AIzaSyAb5SZBgElJOQ3GCbCrXiRJLcfdjt0hT_w,RAITO_DATA_SOURCE=db \
+  --set-env-vars=GOOGLE_MAPS_API_KEY=<YOUR_KEY>,RAITO_DATA_SOURCE=db \
   --set-secrets=DATABASE_URL=raito-db-url-dev:latest \
   --memory=1Gi \
   --cpu=1 \
