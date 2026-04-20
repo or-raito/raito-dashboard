@@ -1347,8 +1347,8 @@ def api_pricing_bulk_apply():
         field = body.get('field', 'sale_price')
         commit = body.get('commit', False)
 
-        if operation not in ('pct', 'absolute'):
-            return jsonify({'error': "operation must be 'pct' or 'absolute'"}), 400
+        if operation not in ('pct', 'absolute', 'set'):
+            return jsonify({'error': "operation must be 'pct', 'set', or 'absolute'"}), 400
         if not isinstance(value, (int, float)):
             return jsonify({'error': 'value must be a number'}), 400
         if field not in ('sale_price', 'cost'):

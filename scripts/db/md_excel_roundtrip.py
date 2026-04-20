@@ -297,6 +297,8 @@ def bulk_price_preview(
 
         if operation == 'pct':
             new_val = round(old_val * (1 + value / 100), 2)
+        elif operation == 'set':
+            new_val = round(value, 2)
         elif operation == 'absolute':
             new_val = round(old_val + value, 2)
         else:
@@ -356,12 +358,18 @@ def apply_bulk_price(
 
 def _matches_filter(row: dict, f: dict) -> bool:
     """Check if a pricing row matches the filter specification."""
-    for key in ('distributor', 'customer', 'sku_key'):
+    for key in ('distributor', 'customer'):
         fval = f.get(key, '')
         if fval and row.get(key, '') != fval:
             return False
-    # Brand filter requires product lookup — skip if not provided
-    # (caller should pre-filter or the UI should resolve brand → SKUs)
+    # sku_keys list filter (multi-select)
+    sku_keys = f.get('sku_keys', [])
+    if sku_keys and row.get('sku_key', '') not in sku_keys:
+        return False
+    # Legacy single sku_key filter
+    sku_key = f.get('sku_key', '')
+    if sku_key and row.get('sku_key', '') != sku_key:
+        return False
     return True
 
 

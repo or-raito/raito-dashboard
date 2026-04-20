@@ -1128,9 +1128,11 @@ def _build_master_data_tab(master_data):
         <select id="bp-distributor" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"><option value="">All</option></select></div>
       <div><label style="font-size:12px;font-weight:600;color:#64748b;">Customer</label>
         <select id="bp-customer" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"><option value="">All</option></select></div>
+      <div style="grid-column:1/-1;"><label style="font-size:12px;font-weight:600;color:#64748b;">Products (hold Ctrl/⌘ for multiple)</label>
+        <select id="bp-skus" multiple style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;min-height:80px;"><option value="">All Products</option></select></div>
       <div><label style="font-size:12px;font-weight:600;color:#64748b;">Operation</label>
-        <select id="bp-operation" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
-          <option value="pct">Percentage (%)</option><option value="absolute">Absolute (₪)</option></select></div>
+        <select id="bp-operation" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;" onchange="document.getElementById('bp-value').placeholder=this.value==='pct'?'e.g. 5 for +5%':'New price in ₪'">
+          <option value="pct">Percentage (%)</option><option value="set">Set Price (₪)</option></select></div>
       <div><label style="font-size:12px;font-weight:600;color:#64748b;">Value</label>
         <input id="bp-value" type="number" step="any" placeholder="e.g. 5 for +5%" style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;"></div>
       <div><label style="font-size:12px;font-weight:600;color:#64748b;">Field</label>
@@ -2091,6 +2093,27 @@ def _build_master_data_tab(master_data):
 
   /* ── Bulk price (Phase 3) ── */
   var _bulkPriceChanges = null;
+  function _bpSelectedSkus() {
+    var sel = document.getElementById('bp-skus');
+    var vals = [];
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].selected && sel.options[i].value) vals.push(sel.options[i].value);
+    }
+    return vals;
+  }
+  function _bpBody(commit) {
+    return {
+      filter: {
+        distributor: document.getElementById('bp-distributor').value,
+        customer: document.getElementById('bp-customer').value,
+        sku_keys: _bpSelectedSkus()
+      },
+      operation: document.getElementById('bp-operation').value,
+      value: parseFloat(document.getElementById('bp-value').value)||0,
+      field: document.getElementById('bp-field').value,
+      commit: !!commit
+    };
+  }
   window.mdShowBulkPrice = function() {
     requireAuth(function(){
       _bulkPriceChanges = null;
@@ -2100,35 +2123,39 @@ def _build_master_data_tab(master_data):
       /* Populate dropdowns */
       var distSel = document.getElementById('bp-distributor');
       var custSel = document.getElementById('bp-customer');
+      var skuSel  = document.getElementById('bp-skus');
       distSel.innerHTML = '<option value="">All</option>';
       custSel.innerHTML = '<option value="">All</option>';
+      skuSel.innerHTML  = '';
       (S.distributors||[]).forEach(function(d){
         distSel.innerHTML += '<option value="'+esc(d.key||d.name||'')+'">'+esc(d.name||d.key||'')+'</option>';
       });
       (S.customers||[]).forEach(function(c){
         custSel.innerHTML += '<option value="'+esc(c.key||c.name_en||'')+'">'+esc(c.name_en||c.key||'')+'</option>';
       });
+      (S.products||[]).forEach(function(p){
+        skuSel.innerHTML += '<option value="'+esc(p.sku_key||'')+'">'+esc(p.sku_key)+' — '+esc(p.name_en||p.name_he||'')+'</option>';
+      });
       document.getElementById('md-bulkprice-overlay').style.display = 'flex';
     });
   };
   window.mdBulkPricePreview = function() {
-    var body = {
-      filter: {
-        distributor: document.getElementById('bp-distributor').value,
-        customer: document.getElementById('bp-customer').value
-      },
-      operation: document.getElementById('bp-operation').value,
-      value: parseFloat(document.getElementById('bp-value').value)||0,
-      field: document.getElementById('bp-field').value
-    };
-    apiCallAuth('POST', '/pricing/bulk-apply', body)
+    apiCallAuth('POST', '/pricing/bulk-apply', _bpBody(false))
       .then(function(d){
         _bulkPriceChanges = d.changes || d.preview || [];
         var html = '<h4 style="margin:0 0 8px;font-size:14px;">'+_bulkPriceChanges.length+' rows affected</h4>';
         html += '<div style="max-height:200px;overflow-y:auto;">';
         _bulkPriceChanges.slice(0,20).forEach(function(c){
           html += '<div style="font-size:12px;padding:4px 0;border-bottom:1px solid #f1f5f9;">';
-          html += '<b>'+esc(c.sku_key||c.barcode)+'</b> '+esc(c.customer||'')+': ';
+          /* Resolve product name */
+          var pName = c.sku_key || '';
+          var prod = S.products.find(function(p){return p.sku_key===c.sku_key;});
+          if(prod) pName = prod.name_en || prod.name_he || c.sku_key;
+          /* Resolve customer name */
+          var cName = c.customer || '';
+          var cust = S.customers.find(function(cu){return cu.key===c.customer;});
+          if(cust) cName = cust.name_en || cust.name_he || c.customer;
+          html += '<b>'+esc(pName)+'</b> '+esc(cName)+': ';
           html += '<span style="color:#ef4444;text-decoration:line-through;">₪'+c.old_value+'</span> → ';
           html += '<span style="color:#16a34a;font-weight:600;">₪'+c.new_value+'</span></div>';
         });
@@ -2140,17 +2167,7 @@ def _build_master_data_tab(master_data):
       }).catch(function(e){ alert('Preview error: '+e.message); });
   };
   window.mdBulkPriceApply = function() {
-    var body = {
-      filter: {
-        distributor: document.getElementById('bp-distributor').value,
-        customer: document.getElementById('bp-customer').value
-      },
-      operation: document.getElementById('bp-operation').value,
-      value: parseFloat(document.getElementById('bp-value').value)||0,
-      field: document.getElementById('bp-field').value,
-      commit: true
-    };
-    apiCallAuth('POST', '/pricing/bulk-apply', body)
+    apiCallAuth('POST', '/pricing/bulk-apply', _bpBody(true))
       .then(function(d){
         document.getElementById('md-bulkprice-overlay').style.display = 'none';
         showToast('Bulk price update applied ✓');
