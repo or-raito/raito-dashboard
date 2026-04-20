@@ -1282,7 +1282,7 @@ def _build_master_data_tab(master_data):
     ]},
     pricing: { label:'Pricing Entry', fields:[
       {key:'sku_key',       label:'Product',          type:'fk_select', lookup:'products', valKey:'sku_key', labelKey:'name_en', required:true},
-      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'key', labelKey:'name_he'},
+      {key:'customer',      label:'Customer',         type:'fk_select', lookup:'customers', valKey:'key', labelKey:'name_en'},
       {key:'distributor',   label:'Distributor',      type:'fk_select', lookup:'distributors', valKey:'key', labelKey:'name'},
       {key:'commission_pct',label:'Commission (0-1)', type:'number'},
       {key:'sale_price',    label:'Sale Price (₪)',    type:'number'},
@@ -1317,13 +1317,23 @@ def _build_master_data_tab(master_data):
     arr.forEach(function(r){ var v=r[key]; if(v&&!seen[v]){seen[v]=1;out.push(v);} });
     return out;
   }
-  function populateSel(id, opts, allLabel, cur) {
+  function populateSel(id, opts, allLabel, cur, labelFn) {
     var el=document.getElementById(id); if(!el) return;
     var prev = cur||el.value||'all';
     el.innerHTML = opts.map(function(o){
-      var l = o==='all' ? allLabel : o;
+      var l = o==='all' ? allLabel : (labelFn ? labelFn(o) : o);
       return '<option value="'+esc(o)+'"'+(o===prev?' selected':'')+'>'+esc(l)+'</option>';
     }).join('');
+  }
+  /* Resolve distributor key → display name */
+  function distLabel(key) {
+    var d = S.distributors.find(function(d){return d.key===key;});
+    return d ? d.name : key;
+  }
+  /* Resolve customer key → display name */
+  function custLabel(key) {
+    var c = S.customers.find(function(c){return c.key===key;});
+    return c ? (c.name_en || c.name_he || key) : key;
   }
   function showToast(msg) {
     var t=document.getElementById('md-toast');
@@ -1373,14 +1383,14 @@ def _build_master_data_tab(master_data):
     mdRender(sec);
   };
 
-  function mdRender(sec) {
+  window.mdRender = function mdRender(sec) {
     var fn = {
       brands: rBrands, products: rProducts, manufacturers: rManufacturers,
       distributors: rDistributors, customers: rCustomers,
       pricing: rPricing, logistics: rLogistics, portfolio: rPortfolio
     }[sec];
     if(fn) fn();
-  }
+  };
 
   /* ── BRANDS ── */
   // Per-brand accent colours (cycles if more brands added)
@@ -1517,7 +1527,7 @@ def _build_master_data_tab(master_data):
   /* ── CUSTOMERS ── */
   function rCustomers() {
     var tf=getVal('flt-cust-type'), sf=getVal('flt-cust-status'), df=getVal('flt-cust-dist');
-    populateSel('flt-cust-dist', uniqueVals(S.customers,'distributor'), 'All Distributors', df);
+    populateSel('flt-cust-dist', uniqueVals(S.customers,'distributor'), 'All Distributors', df, distLabel);
     var data=S.customers.filter(function(c){
       if(tf&&tf!=='all'&&c.type!==tf) return false;
       if(sf&&sf!=='all'&&c.status!==sf) return false;
@@ -1530,7 +1540,10 @@ def _build_master_data_tab(master_data):
       rows+='<tr><td><b>'+esc(c.name_he)+'</b></td>';
       rows+='<td style="font-size:12px;color:var(--text-muted)">'+esc(c.name_en)+'</td>';
       rows+='<td>'+esc(c.type)+'</td>';
-      rows+='<td>'+esc(c.distributor)+'</td>';
+      var cdist = c.distributor || '';
+      var cdistRec = S.distributors.find(function(d){return d.key===cdist;});
+      if(cdistRec) cdist = cdistRec.name || cdist;
+      rows+='<td>'+esc(cdist)+'</td>';
       rows+='<td>'+esc(c.chain)+'</td>';
       rows+='<td>'+chip(c.status)+'</td>';
       rows+='<td>'+esc(c.contact)+'</td>';
@@ -1545,7 +1558,7 @@ def _build_master_data_tab(master_data):
   function rPricing() {
     var sf=getVal('flt-pricing-sku'), stf=getVal('flt-pricing-status'), df=getVal('flt-pricing-dist');
     populateSel('flt-pricing-sku',  uniqueVals(S.pricing,'sku_key'),    'All SKUs',         sf);
-    populateSel('flt-pricing-dist', uniqueVals(S.pricing,'distributor'),'All Distributors', df);
+    populateSel('flt-pricing-dist', uniqueVals(S.pricing,'distributor'),'All Distributors', df, distLabel);
     var data=S.pricing.filter(function(p){
       if(sf&&sf!=='all'&&p.sku_key!==sf) return false;
       if(stf&&stf!=='all'&&p.status!==stf) return false;
@@ -1571,8 +1584,15 @@ def _build_master_data_tab(master_data):
       }
       rows+='<td><span class="md-brand-tag">'+esc(p.sku_key)+'</span></td>';
       rows+='<td style="font-size:12px">'+esc(pName)+'</td>';
-      rows+='<td>'+esc(p.customer)+'</td>';
-      rows+='<td>'+esc(p.distributor)+'</td>';
+      // Resolve customer and distributor display names from keys
+      var custDisplay = p.customer || '';
+      var custRec = S.customers.find(function(c){return c.key===p.customer;});
+      if(custRec) custDisplay = custRec.name_en || custRec.name_he || p.customer;
+      var distDisplay = p.distributor || '';
+      var distRec = S.distributors.find(function(d){return d.key===p.distributor;});
+      if(distRec) distDisplay = distRec.name || p.distributor;
+      rows+='<td>'+esc(custDisplay)+'</td>';
+      rows+='<td>'+esc(distDisplay)+'</td>';
       rows+='<td style="text-align:center">'+pct(p.commission_pct)+'</td>';
       rows+='<td style="text-align:right;font-weight:600">'+price(p.sale_price)+'</td>';
       rows+='<td style="text-align:right">'+price(p.cost)+'</td>';

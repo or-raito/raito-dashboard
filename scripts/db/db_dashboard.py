@@ -1440,6 +1440,109 @@ def api_lookup(entity):
         return jsonify({'error': str(e)}), 500
 
 
+# ── /api/normalize  (one-time data cleanup) ───────────────────────────────────
+
+@app.route('/api/normalize', methods=['POST'])
+@require_admin
+def api_normalize():
+    """Normalize FK references across all entities to use proper keys.
+
+    Fixes seed data that stored display names (e.g. 'Icedream') instead of
+    keys (e.g. 'icedreams') for distributor references. Also deduplicates
+    customer records and removes orphan test data.
+    """
+    try:
+        _md_ensure_table()
+        md = _md_read_all()
+        changes = []
+
+        # Build lookup maps
+        dists = md.get('distributors', [])
+        custs = md.get('customers', [])
+
+        # Distributor: display name → key
+        dist_name_to_key = {}
+        for d in dists:
+            k = d.get('key', '')
+            n = d.get('name', '')
+            dist_name_to_key[n] = k
+            # Also map common short forms
+            for short in [n.split('(')[0].strip(), n.split(' ')[0].strip()]:
+                if short:
+                    dist_name_to_key[short] = k
+        # Known aliases
+        dist_name_to_key['Icedream'] = 'icedreams'
+        dist_name_to_key["Ma'ayan"] = 'mayyan_froz'
+        dist_name_to_key['Biscotti'] = 'biscotti'
+        dist_name_to_key['Ma\'ayan'] = 'mayyan_froz'
+
+        # Customer: display name → key
+        cust_name_to_key = {}
+        cust_key_map = {}
+        for c in custs:
+            ck = c.get('key', '')
+            cust_key_map[ck] = c
+            for field in ('name_en', 'name_he', 'key'):
+                v = c.get(field, '')
+                if v:
+                    cust_name_to_key[v] = ck
+
+        # ── Normalize customers.distributor → key ──
+        for c in custs:
+            old_dist = c.get('distributor', '')
+            if old_dist and old_dist not in [d.get('key') for d in dists]:
+                new_dist = dist_name_to_key.get(old_dist)
+                if new_dist:
+                    c['distributor'] = new_dist
+                    changes.append(f"customer {c.get('name_en','?')}: distributor {old_dist} → {new_dist}")
+
+        # ── Deduplicate customers by key ──
+        seen_keys = {}
+        deduped_custs = []
+        for c in custs:
+            ck = c.get('key', '')
+            if ck in seen_keys:
+                changes.append(f"customer duplicate removed: {c.get('name_en','?')} (key={ck})")
+            else:
+                seen_keys[ck] = True
+                deduped_custs.append(c)
+        custs = deduped_custs
+
+        # ── Normalize pricing.distributor → key, pricing.customer → key ──
+        pricing = md.get('pricing', [])
+        for p in pricing:
+            old_dist = p.get('distributor', '')
+            if old_dist and old_dist not in [d.get('key') for d in dists]:
+                new_dist = dist_name_to_key.get(old_dist)
+                if new_dist:
+                    p['distributor'] = new_dist
+                    changes.append(f"pricing {p.get('sku_key','?')}/{p.get('customer','?')}: distributor {old_dist} → {new_dist}")
+
+            old_cust = p.get('customer', '')
+            if old_cust and old_cust not in [c.get('key') for c in custs]:
+                new_cust = cust_name_to_key.get(old_cust)
+                if new_cust:
+                    p['customer'] = new_cust
+                    changes.append(f"pricing {p.get('sku_key','?')}/{old_cust}: customer → {new_cust}")
+
+        # ── Write back ──
+        if changes:
+            _md_write('customers', custs)
+            _md_write('pricing', pricing)
+            _md_audit_log('*system*', '*normalize*', 'normalize',
+                          {'changes_count': len(changes)},
+                          {'changes': changes[:50]}, _actor())
+
+        return jsonify({
+            'status': 'ok',
+            'changes': changes,
+            'total_changes': len(changes),
+        })
+    except Exception as e:
+        log.error("api_normalize: %s", e, exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
 # ── /api/weekly-overrides  (dynamic chart data) ───────────────────────────────
 
 @app.route('/api/weekly-overrides', methods=['GET'])
