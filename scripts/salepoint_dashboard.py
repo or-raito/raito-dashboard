@@ -445,9 +445,32 @@ window.__SP_MON_LABELS__ = {sp_mon_labels_js};
 """
 
 
-def _load_canonical_merges():
-    """Query DB for canonical_sp_id mappings → {alias_branch_name: canonical_branch_name}.
+import re as _re
 
+def _normalize_sp_name(name):
+    """Strip delivery/logistics suffixes so DB names match Excel-parsed names.
+
+    Examples:
+        'וולט מרקט אשדוד - אספקה עד13:30'  → 'וולט מרקט אשדוד'
+        'וולט מרקט אשקלון*עד 13:30 חובה'    → 'וולט מרקט אשקלון'
+        'וולט מרקט אשדוד -'                  → 'וולט מרקט אשדוד'
+    """
+    s = name.strip()
+    # Strip from common suffix markers
+    s = _re.split(r'\s*[-*]\s*אספקה', s)[0]
+    s = _re.split(r'\s*\*\s*עד\b', s)[0]
+    s = _re.split(r'\s*\*\s*לא\b', s)[0]
+    # Strip trailing dash/asterisk and whitespace
+    s = s.rstrip(' \t-*')
+    # Collapse multiple spaces
+    s = _re.sub(r'\s+', ' ', s).strip()
+    return s
+
+
+def _load_canonical_merges():
+    """Query DB for canonical_sp_id mappings → {normalized_alias: canonical_branch_name}.
+
+    Uses normalized names to bridge differences between DB and Excel-parsed names.
     Returns empty dict if DB is unavailable (graceful no-op for local builds).
     """
     try:
@@ -458,17 +481,38 @@ def _load_canonical_merges():
             return {}
         conn = psycopg2.connect(url)
         cur = conn.cursor()
+        # Get all alias→canonical mappings (raw names)
         cur.execute("""
             SELECT alias.branch_name_he, canon.branch_name_he
             FROM sale_points alias
             JOIN sale_points canon ON alias.canonical_sp_id = canon.id
             WHERE alias.canonical_sp_id IS NOT NULL
         """)
-        merges = {row[0]: row[1] for row in cur.fetchall() if row[0] and row[1]}
+        raw_merges = cur.fetchall()
+
+        # Also get all branch names that ARE canonical targets (for name lookup)
+        cur.execute("""
+            SELECT DISTINCT canon.branch_name_he
+            FROM sale_points alias
+            JOIN sale_points canon ON alias.canonical_sp_id = canon.id
+            WHERE alias.canonical_sp_id IS NOT NULL
+        """)
+        canonical_names = {row[0] for row in cur.fetchall()}
         conn.close()
-        return merges
+
+        # Build normalized lookup: norm(alias_name) → canonical_name
+        # Also map norm(canonical_name) → canonical_name for target resolution
+        merges = {}
+        for alias_name, canon_name in raw_merges:
+            if alias_name and canon_name:
+                # Exact match first
+                merges[alias_name] = canon_name
+                # Normalized match as fallback
+                merges[_normalize_sp_name(alias_name)] = canon_name
+
+        return merges, canonical_names
     except Exception:
-        return {}
+        return {}, set()
 
 
 def _extract(data):
@@ -591,51 +635,71 @@ def _extract(data):
                     tgt_months[mo]['flav'][fl] = tgt_months[mo]['flav'].get(fl, 0) + fu
 
     # ── Canonical SP Merge: fold DB-defined aliases into their canonical branch ──
-    canonical_map = _load_canonical_merges()  # {alias_branch_name_he: canonical_branch_name_he}
+    # Uses normalized names to bridge DB ↔ Excel naming differences
+    canonical_result = _load_canonical_merges()
+    canonical_map, canonical_names = canonical_result  # map + set of canonical target names
     if canonical_map:
+        # Helper: look up canonical name for a branch (exact first, then normalized)
+        def _find_canon(bname):
+            c = canonical_map.get(bname)
+            if c:
+                return c
+            return canonical_map.get(_normalize_sp_name(bname))
+
+        # Helper: check if a branch name is itself a canonical target
+        _norm_canonical = {_normalize_sp_name(cn): cn for cn in canonical_names}
+
+        def _find_branch_in_group(branches, canon_name):
+            """Find a branch matching canon_name (exact or normalized)."""
+            if canon_name in branches:
+                return canon_name
+            norm_c = _normalize_sp_name(canon_name)
+            for bn in branches:
+                if _normalize_sp_name(bn) == norm_c:
+                    return bn
+            return None
+
+        def _merge_months(tgt, src, months):
+            for mo in months:
+                tgt[mo]['units'] += src[mo]['units']
+                tgt[mo]['rev'] += src[mo]['rev']
+                for fl, fu in src[mo]['flav'].items():
+                    tgt[mo]['flav'][fl] = tgt[mo]['flav'].get(fl, 0) + fu
+
         for (dist, norm), cinfo in customers.items():
             branches = cinfo['branches']
             aliases_to_remove = []
             for bname in list(branches.keys()):
-                canon_name = canonical_map.get(bname)
+                canon_name = _find_canon(bname)
                 if not canon_name or canon_name == bname:
+                    # Also skip if normalized names match (already the canonical)
+                    if not canon_name or _normalize_sp_name(canon_name) == _normalize_sp_name(bname):
+                        continue
+
+                # Find canonical branch in same customer group (by normalized match)
+                tgt_bname = _find_branch_in_group(branches, canon_name)
+                if tgt_bname and tgt_bname != bname:
+                    _merge_months(branches[tgt_bname], branches[bname], months)
+                    aliases_to_remove.append(bname)
                     continue
-                # Find or create the canonical branch in the same customer group
-                if canon_name not in branches:
-                    # Check if canonical lives in a different customer group — skip if so
-                    # (cross-group merges are handled by the earlier distributor dedup)
-                    found_elsewhere = False
-                    for (d2, n2), c2 in customers.items():
-                        if (d2, n2) != (dist, norm) and canon_name in c2['branches']:
-                            found_elsewhere = True
-                            break
-                    if found_elsewhere:
-                        # Merge into the other group's canonical branch
-                        tgt = customers[(d2, n2)]['branches'][canon_name]
-                        src = branches[bname]
-                        for mo in months:
-                            tgt[mo]['units'] += src[mo]['units']
-                            tgt[mo]['rev'] += src[mo]['rev']
-                            for fl, fu in src[mo]['flav'].items():
-                                tgt[mo]['flav'][fl] = tgt[mo]['flav'].get(fl, 0) + fu
-                        aliases_to_remove.append(bname)
-                        _sp_distributor_names.setdefault(canon_name,
-                            _sp_distributor_names.get(canon_name, dist))
+
+                # Check other customer groups
+                found_elsewhere = False
+                for (d2, n2), c2 in customers.items():
+                    if (d2, n2) == (dist, norm):
                         continue
-                    else:
-                        # Canonical not found anywhere — rename alias to canonical
-                        branches[canon_name] = branches[bname]
+                    tgt_b2 = _find_branch_in_group(c2['branches'], canon_name)
+                    if tgt_b2:
+                        _merge_months(c2['branches'][tgt_b2], branches[bname], months)
                         aliases_to_remove.append(bname)
-                        continue
-                # Canonical exists in same group — merge alias into it
-                tgt = branches[canon_name]
-                src = branches[bname]
-                for mo in months:
-                    tgt[mo]['units'] += src[mo]['units']
-                    tgt[mo]['rev'] += src[mo]['rev']
-                    for fl, fu in src[mo]['flav'].items():
-                        tgt[mo]['flav'][fl] = tgt[mo]['flav'].get(fl, 0) + fu
-                aliases_to_remove.append(bname)
+                        found_elsewhere = True
+                        break
+
+                if not found_elsewhere:
+                    # Canonical target not found anywhere — rename alias to canonical
+                    branches[canon_name] = branches[bname]
+                    aliases_to_remove.append(bname)
+
             for bname in aliases_to_remove:
                 branches.pop(bname, None)
 
