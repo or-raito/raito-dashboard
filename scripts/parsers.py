@@ -14,7 +14,7 @@ from config import (
     DATA_DIR, OUTPUT_DIR, classify_product, extract_units_per_carton,
     MONTH_ORDER, extract_customer_name, INTERNAL_ACCOUNTS,
 )
-from pricing_engine import get_b2b_price_safe, get_production_cost
+from pricing_engine import get_b2b_price_safe, get_production_cost, get_customer_price
 from registry import validate_sku, PRODUCTS
 
 _log = logging.getLogger(__name__)
@@ -647,13 +647,32 @@ def _load_mayyan_price_table():
 
 def _mayyan_chain_price(price_table, chain_raw, product):
     """Look up actual selling price for a Maayan chain + product.
-    Falls back to B2B list price via pricing_engine if not found.
+
+    Three-tier lookup:
+      1. master_data JSONB via get_customer_price (SSOT)
+      2. Ma'ayan price-DB Excel file (legacy fallback)
+      3. B2B list price via pricing_engine (last resort)
     """
-    pricedb_cust = _MAAYAN_CHAIN_TO_PRICEDB.get(str(chain_raw).strip())
+    chain_str = str(chain_raw).strip()
+
+    # 1. Try master_data JSONB — resolve Hebrew chain to English customer name
+    customer_en = extract_customer_name(chain_str)
+    if customer_en:
+        from pricing_engine import _md_sale_prices, _load_md_pricing
+        _load_md_pricing()
+        # Check if MD has a price for this (sku, customer, distributor) combo
+        for (s, c, d), price in _md_sale_prices.items():
+            if s == product and c == customer_en:
+                return price
+
+    # 2. Fallback: Ma'ayan price-DB Excel file
+    pricedb_cust = _MAAYAN_CHAIN_TO_PRICEDB.get(chain_str)
     if pricedb_cust and product in price_table:
         price = price_table[product].get(pricedb_cust)
         if price:
             return price
+
+    # 3. Last resort: B2B list price
     return get_b2b_price_safe(product)
 
 
@@ -1241,8 +1260,20 @@ def get_distributor_inventory():
 
 # ── Biscotti Parser ────────────────────────────────────────────────────
 
-# Biscotti Dream Cake price — sourced from pricing_engine (SSOT)
+# Biscotti Dream Cake fallback price — used only when MD has no per-customer price
 BISCOTTI_PRICE_DREAM_CAKE = get_b2b_price_safe('dream_cake_2')
+
+
+def _biscotti_customer_price(branch_he: str) -> float:
+    """Look up per-customer Biscotti price for dream_cake_2.
+
+    Resolves Hebrew branch name to English customer name, then checks
+    master_data JSONB via get_customer_price. Falls back to B2B list price.
+    """
+    customer_en = extract_customer_name(branch_he)
+    if customer_en:
+        return get_customer_price('dream_cake_2', customer_en, 'Biscotti')
+    return BISCOTTI_PRICE_DREAM_CAKE
 
 def _biscotti_week_to_month(week_num):
     """Map ISO week number to month key using central registry."""
@@ -1360,16 +1391,20 @@ def _parse_biscotti_file(filepath):
         return {}
 
     total_units = sum(branch_totals.values())
-    total_value = round(total_units * BISCOTTI_PRICE_DREAM_CAKE, 2)
 
     by_customer = {}
+    total_value = 0.0
     for branch, units in branch_totals.items():
+        price = _biscotti_customer_price(branch)
+        branch_value = round(units * price, 2)
+        total_value += branch_value
         by_customer[branch] = {
             'dream_cake_2': {
                 'units': units,
-                'value': round(units * BISCOTTI_PRICE_DREAM_CAKE, 2),
+                'value': branch_value,
             }
         }
+    total_value = round(total_value, 2)
 
     return {
         month_key: {
@@ -1434,15 +1469,16 @@ def parse_all_biscotti():
                                     'units': existing.get('units', 0) + pdata['units'],
                                     'value': existing.get('value', 0) + pdata['value'],
                                 }
-                    # Recalculate totals
+                    # Recalculate totals from per-branch values (already per-customer priced)
                     for p in results[month]['totals']:
                         results[month]['totals'][p]['units'] = sum(
                             results[month]['by_customer'][b].get(p, {}).get('units', 0)
                             for b in results[month]['by_customer']
                         )
-                        results[month]['totals'][p]['value'] = round(
-                            results[month]['totals'][p]['units'] * BISCOTTI_PRICE_DREAM_CAKE, 2
-                        )
+                        results[month]['totals'][p]['value'] = round(sum(
+                            results[month]['by_customer'][b].get(p, {}).get('value', 0)
+                            for b in results[month]['by_customer']
+                        ), 2)
         except Exception as e:
             print(f"  [Biscotti] Error parsing {f.name}: {e}")
 

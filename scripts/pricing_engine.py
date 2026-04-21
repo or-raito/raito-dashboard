@@ -5,16 +5,24 @@ Raito Pricing Engine — Single Source of Truth for all price lookups.
 Every module that needs a price MUST call into this engine.
 No hardcoded price literals anywhere else in the codebase.
 
-Two-tier API:
+Three-tier lookup (highest priority first):
+  1. master_data JSONB pricing table (DB — editable via MD tab)
+  2. Ma'ayan price DB Excel file (for chain-specific Ma'ayan prices)
+  3. Hardcoded fallback dicts below (legacy, used when DB unavailable)
+
+Two-tier public API:
   get_b2b_price(sku)                → flat list price (SP, BO views)
-  get_customer_price(sku, customer)  → negotiated per-customer price (CC view)
+  get_customer_price(sku, customer, distributor)  → negotiated per-customer price (CC view)
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
 import pandas as pd
+
+log = logging.getLogger(__name__)
 
 # ── Canonical B2B List Prices ─────────────────────────────────────────────────
 # These are the standard wholesale (B2B, ex-VAT) selling prices.
@@ -85,6 +93,94 @@ _PRICEDB_PRODUCT_MAP: dict[str, str] = {
 # Module-level cache for the loaded price table
 _price_table_cache: Optional[dict] = None
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Master Data JSONB Integration
+# ═══════════════════════════════════════════════════════════════════════════════
+# On first access, loads pricing records from the master_data JSONB table.
+# Builds three lookup structures:
+#   _md_sale_prices: {(sku, customer, distributor): sale_price}
+#   _md_costs:       {sku: cost}  (from any pricing row for that SKU)
+#   _md_loaded:      True once loaded (even if DB unavailable)
+
+_md_sale_prices: dict[tuple[str, str, str], float] = {}
+_md_costs: dict[str, float] = {}
+_md_loaded: bool = False
+
+
+def _load_md_pricing() -> None:
+    """Load pricing from master_data JSONB and populate lookup dicts.
+
+    Overrides hardcoded _B2B_PRICES, PRODUCTION_COST, and _CUSTOMER_PRICES
+    with values from the MD tab. Falls back silently if DB is unavailable.
+    """
+    global _md_sale_prices, _md_costs, _md_loaded
+    if _md_loaded:
+        return
+    _md_loaded = True
+
+    try:
+        import os
+        import psycopg2
+        url = os.environ.get('DATABASE_URL', '')
+        if not url:
+            log.debug("pricing_engine: no DATABASE_URL, using hardcoded fallbacks")
+            return
+        conn = psycopg2.connect(url)
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM master_data WHERE entity = 'pricing'")
+        row = cur.fetchone()
+        conn.close()
+        if not row or not row[0]:
+            return
+
+        records = row[0]  # psycopg2 auto-decodes JSONB → Python list
+        if isinstance(records, str):
+            import json
+            records = json.loads(records)
+
+        for r in records:
+            sku = r.get('sku_key', '')
+            customer = r.get('customer', '')
+            distributor = r.get('distributor', '')
+            sale_price = r.get('sale_price')
+            cost = r.get('cost')
+
+            if not sku:
+                continue
+
+            # Build (sku, customer, distributor) → sale_price lookup
+            if sale_price is not None:
+                try:
+                    sp = float(sale_price)
+                    if sp > 0:
+                        _md_sale_prices[(sku, customer, distributor)] = sp
+                except (ValueError, TypeError):
+                    pass
+
+            # Build sku → cost lookup (take first non-null cost per SKU)
+            if cost is not None and sku not in _md_costs:
+                try:
+                    c = float(cost)
+                    if c > 0:
+                        _md_costs[sku] = c
+                except (ValueError, TypeError):
+                    pass
+
+        log.info("pricing_engine: loaded %d sale prices, %d costs from master_data",
+                 len(_md_sale_prices), len(_md_costs))
+
+    except Exception as e:
+        log.warning("pricing_engine: could not load from master_data: %s", e)
+
+
+def reload_md_pricing() -> None:
+    """Force reload of MD pricing (called after MD tab edits)."""
+    global _md_loaded
+    _md_loaded = False
+    _md_sale_prices.clear()
+    _md_costs.clear()
+    _load_md_pricing()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Public API
@@ -96,8 +192,17 @@ def get_b2b_price(sku: str) -> float:
     Used by SP tab, BO tab, and any module that doesn't need customer-level
     price differentiation.
 
-    Raises KeyError if sku is unknown (to surface new-product omissions).
+    Lookup order:
+      1. MD pricing (any row for this SKU — picks the first match)
+      2. Hardcoded _B2B_PRICES fallback
+
+    Raises KeyError if sku is unknown in both sources.
     """
+    _load_md_pricing()
+    # Check MD: find any sale_price for this SKU (first match)
+    for (s, c, d), price in _md_sale_prices.items():
+        if s == sku:
+            return price
     if sku not in _B2B_PRICES:
         raise KeyError(
             f"Unknown SKU '{sku}' — add it to pricing_engine._B2B_PRICES"
@@ -110,30 +215,55 @@ def get_b2b_price_safe(sku: str, fallback: Optional[float] = None) -> float:
 
     If fallback is None and sku is unknown, returns 0.0.
     """
+    _load_md_pricing()
+    for (s, c, d), price in _md_sale_prices.items():
+        if s == sku:
+            return price
     return _B2B_PRICES.get(sku, fallback if fallback is not None else 0.0)
 
 
-def get_customer_price(sku: str, customer_en: str) -> float:
+def get_customer_price(sku: str, customer_en: str, distributor: str = '') -> float:
     """Return the negotiated per-customer price for a SKU.
 
     Lookup order:
-      1. Customer-specific negotiated price (_CUSTOMER_PRICES)
-      2. Fall back to B2B list price
+      1. MD pricing — exact match (sku, customer, distributor)
+      2. MD pricing — (sku, customer, any distributor)
+      3. Legacy _CUSTOMER_PRICES dict (Turbo SKUs only)
+      4. Fall back to B2B list price
 
     Args:
         sku: Internal product key (e.g. 'chocolate', 'dream_cake_2').
         customer_en: English customer name (as returned by extract_customer_name).
+        distributor: Distributor key or name (optional, for exact match).
     """
-    # Customer-specific prices currently apply uniformly to all Turbo SKUs
-    # for a given customer. If the customer has a negotiated price, use it
-    # for all Turbo products. Dani's products always use B2B list.
+    _load_md_pricing()
+
+    # 1. Exact match: (sku, customer, distributor)
+    if distributor:
+        key = (sku, customer_en, distributor)
+        if key in _md_sale_prices:
+            return _md_sale_prices[key]
+
+    # 2. Partial match: (sku, customer, any distributor)
+    for (s, c, d), price in _md_sale_prices.items():
+        if s == sku and c == customer_en:
+            return price
+
+    # 3. Legacy customer prices (Turbo SKUs only)
     if customer_en in _CUSTOMER_PRICES and sku not in ('dream_cake', 'dream_cake_2'):
         return _CUSTOMER_PRICES[customer_en]
+
     return get_b2b_price(sku)
 
 
 def get_production_cost(sku: str) -> float:
-    """Return production cost for a SKU. Returns 0.0 if unknown."""
+    """Return production cost for a SKU. Returns 0.0 if unknown.
+
+    Checks MD pricing first, falls back to hardcoded PRODUCTION_COST.
+    """
+    _load_md_pricing()
+    if sku in _md_costs:
+        return _md_costs[sku]
     return PRODUCTION_COST.get(sku, 0.0)
 
 
@@ -229,13 +359,33 @@ def load_mayyan_price_table(data_dir: Optional[Path] = None) -> dict:
 def get_mayyan_chain_price(price_table: dict, chain_raw: str, sku: str) -> float:
     """Look up actual invoiced price for a Ma'ayan chain + product.
 
-    Falls back to B2B list price if no price-DB entry found.
+    Three-tier lookup:
+      1. master_data JSONB via get_customer_price (SSOT)
+      2. Ma'ayan price-DB Excel file (legacy fallback)
+      3. B2B list price (last resort)
     """
-    pricedb_cust = _MAAYAN_CHAIN_TO_PRICEDB.get(str(chain_raw).strip())
+    _load_md_pricing()
+    chain_str = str(chain_raw).strip()
+
+    # 1. Try master_data JSONB — resolve Hebrew chain to English customer name
+    try:
+        from config import extract_customer_name
+        customer_en = extract_customer_name(chain_str)
+        if customer_en:
+            for (s, c, d), price in _md_sale_prices.items():
+                if s == sku and c == customer_en:
+                    return price
+    except ImportError:
+        pass
+
+    # 2. Fallback: Ma'ayan price-DB Excel file
+    pricedb_cust = _MAAYAN_CHAIN_TO_PRICEDB.get(chain_str)
     if pricedb_cust and sku in price_table:
         price = price_table[sku].get(pricedb_cust)
         if price:
             return price
+
+    # 3. Last resort: B2B list price
     return get_b2b_price_safe(sku)
 
 

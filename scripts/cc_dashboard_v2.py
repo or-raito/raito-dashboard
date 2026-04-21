@@ -413,14 +413,28 @@ def _build_product_pricing_js():
     vat = 1.18
 
     def _get_price(sku, cid):
-        """Best-available price for a CC customer + SKU."""
+        """Best-available price for a CC customer + SKU.
+
+        Three-tier lookup:
+          1. master_data JSONB via get_customer_price (SSOT)
+          2. Ma'ayan price-DB Excel file (legacy fallback)
+          3. B2B list price (last resort)
+        """
+        cust_en = _CC_ID_TO_PRICING_EN.get(cid, '')
+        # 1. Try master_data JSONB first (SSOT)
+        if cust_en:
+            from pricing_engine import _md_sale_prices, _load_md_pricing
+            _load_md_pricing()
+            for (s, c, d), price in _md_sale_prices.items():
+                if s == sku and c == cust_en:
+                    return price
+        # 2. Fallback: Ma'ayan price-DB Excel
         pricedb_cust = _CC_ID_TO_PRICEDB_CUST.get(cid)
         if pricedb_cust and sku in price_table:
             p = price_table[sku].get(pricedb_cust)
             if p:
                 return p
-        # Fallback: pricing_engine per-customer price (or B2B list)
-        cust_en = _CC_ID_TO_PRICING_EN.get(cid, '')
+        # 3. Last resort: B2B list price (or legacy customer price)
         return get_customer_price(sku, cust_en) if cust_en else get_b2b_price_safe(sku)
 
     lines = ['const productPricing = {']

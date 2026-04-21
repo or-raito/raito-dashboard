@@ -144,6 +144,12 @@ def _invalidate_cache():
         global _cached_html, _cache_rebuilding
         try:
             log.info("Background rebuild starting...")
+            # Reload pricing from MD so the rebuild uses fresh prices
+            try:
+                from pricing_engine import reload_md_pricing
+                reload_md_pricing()
+            except Exception:
+                pass
             html = _generate_dashboard_html()
             with _cache_lock:
                 _cached_html = html
