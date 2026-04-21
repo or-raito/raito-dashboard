@@ -1171,9 +1171,11 @@ def _build_master_data_tab(master_data):
     distributors:  MD.distributors  || [],
     customers:     MD.customers     || [],
     logistics:     MD.logistics     || [],
-    pricing:       MD.pricing       || [],
+    pricing:       (MD.pricing||[]).map(function(p){p._pk=p.sku_key+'::'+p.customer+'::'+p.distributor;return p;}),
     portfolio:     MD.portfolio     || {headers:[], rows:[]}
   };
+
+  function _computePricingPK(arr){return arr.map(function(p){p._pk=p.sku_key+'::'+p.customer+'::'+p.distributor;return p;});}
 
   /* ── API entity → table field mapping ── */
   var ENTITY_MAP = {
@@ -1670,7 +1672,7 @@ def _build_master_data_tab(master_data):
   function reloadEntity(sheet) {
     if(!API_OK) return;
     apiCall('GET', '/'+sheet).then(function(data){
-      S[sheet] = data;
+      S[sheet] = sheet==='pricing'?_computePricingPK(data):data;
       mdRender(sheet);
     }).catch(function(){});
     /* Also reload portfolio if pricing/customers/products changed */
