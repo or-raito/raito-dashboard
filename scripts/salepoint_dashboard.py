@@ -493,10 +493,21 @@ def _load_canonical_merges():
         raw_merges = [(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]]
         conn.close()
 
-        exact = {alias: canon for alias, canon in raw_merges}
+        # Resolve chains: if A→B and B→C, flatten to A→C and B→C
+        alias_to_canon = {a: c for a, c in raw_merges}
+        resolved = {}
+        for alias in alias_to_canon:
+            seen = {alias}
+            current = alias_to_canon[alias]
+            while current in alias_to_canon and current not in seen:
+                seen.add(current)
+                current = alias_to_canon[current]
+            resolved[alias] = current
+
         logging.getLogger(__name__).info(
-            "SP canonical merges: %d DB alias→canonical pairs loaded", len(exact))
-        return exact, raw_merges
+            "SP canonical merges: %d DB rows → %d resolved (chains flattened)",
+            len(raw_merges), len(resolved))
+        return resolved, list(resolved.items())
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("SP canonical merge load failed: %s", e)
@@ -561,8 +572,6 @@ def _extract(data):
             ('חוות נעמי',   "Naomi's Farm"),
             ('חן כרמלה',    'Carmella'),
             ('כרמלה',       'Carmella'),
-            ('מתילדה יהוד', 'Matilda Yehud'),
-            ('דלישס',       'Delicious RL'),
         ]
 
         def _resolve_biscotti_sp_customer(branch_name):

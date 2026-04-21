@@ -291,6 +291,9 @@ def extract_customer_name(customer_name, source_customer=None):
     # Normalize all Wolt variants
     if 'וולט' in s or 'וואלט' in s:
         return _to_en('וולט מרקט')
+    # Holmes Place / Caffein branches (e.g. "(קפאין הרצליה(הולמס פלייס")
+    if 'הולמס' in s:
+        return 'Holmes Place'
     # Normalize Paz Yellow variants
     if 'פז יילו' in s or 'פז ילו' in s:
         return _to_en('פז ילו')

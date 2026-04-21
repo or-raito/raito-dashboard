@@ -137,6 +137,8 @@ CUSTOMER_NAMES_EN: dict[str, str] = {
     'דור אלון':          'Alonit',
     'דלק מנטה':          'Delek Menta',
     'וולט מרקט':         'Wolt Market',
+    'הולמס פלייס':       'Holmes Place',
+    'קפאין':             'Holmes Place',       # קפאין branches inside Holmes Place
     'חוות נעמי':         "Naomi's Farm",
     'טיב טעם':           'Tiv Taam',
     'ינגו':              'Yango Deli',
