@@ -72,6 +72,30 @@ The relational `customers` table (id-based) is the FK target for `sale_points.cu
 
 ## Implementation Phases
 
+### Phase 6.0 — Price History Tracking
+
+**Problem:** When a price is edited in the MD tab, the old value is overwritten. The audit log captures raw before/after JSON, but there's no structured price history or UI to view it.
+
+**Solution:** Wire the MD tab pricing CRUD to the existing `price_history` relational table (SCD Type 2). Every price change auto-inserts a history record.
+
+**Backend changes (`db_dashboard.py`):**
+- On pricing **create**: insert row into `price_history` with `effective_from = today`, `effective_to = NULL`
+- On pricing **update** (if `sale_price` or `cost` changed): close the old history row (`effective_to = today`), insert new row (`effective_from = today`)
+- On pricing **delete**: close the history row (`effective_to = today`)
+- New route: `GET /api/pricing/history?sku_key=X&customer=Y&distributor=Z` — returns price timeline for a specific pricing entry
+
+**Frontend changes (`unified_dashboard.py`):**
+- Small 📊 history icon on each pricing row in the MD tab
+- Clicking it opens a popover/modal showing the price timeline: date range → sale price → cost → who changed it
+- Timeline sorted newest-first
+
+**Resolving product_id / customer_id / distributor_id:**
+The `price_history` table uses integer FKs (`product_id`, `customer_id`, `distributor_id`). The MD tab pricing uses text keys (`sku_key`, `customer`, `distributor`). The backend must resolve text keys → integer IDs when writing to `price_history`. A helper function queries the relational `products`, `customers`, `distributors` tables to resolve.
+
+**Files:** `scripts/db/db_dashboard.py`(API + history write hooks), `scripts/unified_dashboard.py` (history icon + popover)
+
+---
+
 ### Phase 6.1 — DB Migration + Backend API
 
 **DB migration script** (`scripts/db/migrate_sp_canonical.sql`):
@@ -210,13 +234,14 @@ The ingestion pipeline (`ingest_to_db.py`) creates new SP records on `ON CONFLIC
 ## Resume Checklist
 
 1. ☐ Read this plan
-2. ☐ Run DB migration on dev
-3. ☐ Implement Phase 6.1 (backend API)
-4. ☐ Implement Phase 6.2 (MD tab UI)
-5. ☐ Implement Phase 6.3 (SP dashboard integration)
-6. ☐ Implement Phase 6.4 (Excel export/import)
-7. ☐ QA on dev
-8. ☐ Deploy to prod
+2. ☐ Implement Phase 6.0 (price history tracking)
+3. ☐ Run DB migration on dev (canonical_sp_id)
+4. ☐ Implement Phase 6.1 (SP backend API)
+5. ☐ Implement Phase 6.2 (MD tab SP UI)
+6. ☐ Implement Phase 6.3 (SP dashboard integration)
+7. ☐ Implement Phase 6.4 (Excel export/import)
+8. ☐ QA on dev
+9. ☐ Deploy to prod
 
 ---
 

@@ -445,6 +445,32 @@ window.__SP_MON_LABELS__ = {sp_mon_labels_js};
 """
 
 
+def _load_canonical_merges():
+    """Query DB for canonical_sp_id mappings → {alias_branch_name: canonical_branch_name}.
+
+    Returns empty dict if DB is unavailable (graceful no-op for local builds).
+    """
+    try:
+        import os
+        import psycopg2
+        url = os.environ.get('DATABASE_URL', '')
+        if not url:
+            return {}
+        conn = psycopg2.connect(url)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT alias.branch_name_he, canon.branch_name_he
+            FROM sale_points alias
+            JOIN sale_points canon ON alias.canonical_sp_id = canon.id
+            WHERE alias.canonical_sp_id IS NOT NULL
+        """)
+        merges = {row[0]: row[1] for row in cur.fetchall() if row[0] and row[1]}
+        conn.close()
+        return merges
+    except Exception:
+        return {}
+
+
 def _extract(data):
     """Extract branch-level data, mirroring the Excel structure.
 
@@ -563,6 +589,55 @@ def _extract(data):
                 tgt_months[mo]['rev'] += src_months[mo]['rev']
                 for fl, fu in src_months[mo]['flav'].items():
                     tgt_months[mo]['flav'][fl] = tgt_months[mo]['flav'].get(fl, 0) + fu
+
+    # ── Canonical SP Merge: fold DB-defined aliases into their canonical branch ──
+    canonical_map = _load_canonical_merges()  # {alias_branch_name_he: canonical_branch_name_he}
+    if canonical_map:
+        for (dist, norm), cinfo in customers.items():
+            branches = cinfo['branches']
+            aliases_to_remove = []
+            for bname in list(branches.keys()):
+                canon_name = canonical_map.get(bname)
+                if not canon_name or canon_name == bname:
+                    continue
+                # Find or create the canonical branch in the same customer group
+                if canon_name not in branches:
+                    # Check if canonical lives in a different customer group — skip if so
+                    # (cross-group merges are handled by the earlier distributor dedup)
+                    found_elsewhere = False
+                    for (d2, n2), c2 in customers.items():
+                        if (d2, n2) != (dist, norm) and canon_name in c2['branches']:
+                            found_elsewhere = True
+                            break
+                    if found_elsewhere:
+                        # Merge into the other group's canonical branch
+                        tgt = customers[(d2, n2)]['branches'][canon_name]
+                        src = branches[bname]
+                        for mo in months:
+                            tgt[mo]['units'] += src[mo]['units']
+                            tgt[mo]['rev'] += src[mo]['rev']
+                            for fl, fu in src[mo]['flav'].items():
+                                tgt[mo]['flav'][fl] = tgt[mo]['flav'].get(fl, 0) + fu
+                        aliases_to_remove.append(bname)
+                        _sp_distributor_names.setdefault(canon_name,
+                            _sp_distributor_names.get(canon_name, dist))
+                        continue
+                    else:
+                        # Canonical not found anywhere — rename alias to canonical
+                        branches[canon_name] = branches[bname]
+                        aliases_to_remove.append(bname)
+                        continue
+                # Canonical exists in same group — merge alias into it
+                tgt = branches[canon_name]
+                src = branches[bname]
+                for mo in months:
+                    tgt[mo]['units'] += src[mo]['units']
+                    tgt[mo]['rev'] += src[mo]['rev']
+                    for fl, fu in src[mo]['flav'].items():
+                        tgt[mo]['flav'][fl] = tgt[mo]['flav'].get(fl, 0) + fu
+                aliases_to_remove.append(bname)
+            for bname in aliases_to_remove:
+                branches.pop(bname, None)
 
     # Build output matching Excel columns — fully dynamic from MONTH_REGISTRY
     from config import MONTH_KEYS, ALL_MONTH_KEYS, get_active_month_keys

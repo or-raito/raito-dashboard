@@ -1,0 +1,62 @@
+# Cloud Build configuration for DEV environment
+# Triggers on every push to the `dev` branch.
+# Builds the container, pushes to Artifact Registry, and deploys to Cloud Run.
+#
+# Associated Cloud Run service: raito-dashboard-dev
+# Associated database:          raito_dev (same instance as prod: raito-db)
+#
+# Manual build equivalent:
+#   gcloud builds submit --config=cloudbuild-dev.yaml .
+#
+# Trigger setup (one-time):
+#   gcloud builds triggers create github \
+#     --name=raito-dashboard-dev-autodeploy \
+#     --repo-owner=or-raito \
+#     --repo-name=raito-dashboard \
+#     --branch-pattern='^dev$' \
+#     --build-config=cloudbuild-dev.yaml \
+#     --project=raito-house-of-brands
+
+steps:
+  # 1. Build the image, tagged with both :latest and the commit SHA
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - --tag=me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard-dev:$COMMIT_SHA
+      - --tag=me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard-dev:latest
+      - .
+
+  # 2. Push both tags to Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - --all-tags
+      - me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard-dev
+    waitFor: ['build']
+
+  # 3. Deploy to Cloud Run (dev service)
+  #    Note: env vars are NOT set here — they live on the service and persist across deploys.
+  #    To update env vars, use `gcloud run services update raito-dashboard-dev --update-env-vars ...`
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - raito-dashboard-dev
+      - --image=me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard-dev:$COMMIT_SHA
+      - --region=me-west1
+      - --project=raito-house-of-brands
+    waitFor: ['push']
+
+images:
+  - me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard-dev:$COMMIT_SHA
+  - me-west1-docker.pkg.dev/raito-house-of-brands/raito-repo/raito-dashboard-dev:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s  # 20 min ceiling; typical build is ~5 min
