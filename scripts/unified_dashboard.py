@@ -1597,7 +1597,9 @@ def _build_master_data_tab(master_data):
       rows+='<td style="text-align:center">'+gm+'</td>';
       rows+='<td style="text-align:center;'+omStyle+'">'+om+'</td>';
       rows+='<td>'+chip(p.status)+'</td>';
-      rows+='<td class="td-actions"><button class="md-act-btn" data-s="pricing" data-i="'+i+'" onclick="mdEdit(this.dataset.s,+this.dataset.i)">✏️</button>'
+      rows+='<td class="td-actions">'
+           +'<button class="md-act-btn" title="Price History" data-sku="'+esc(p.sku_key)+'" data-cust="'+esc(p.customer||'')+'" data-dist="'+esc(p.distributor||'')+'" onclick="mdPriceHistory(this)" style="opacity:0.7">📊</button>'
+           +'<button class="md-act-btn" data-s="pricing" data-i="'+i+'" onclick="mdEdit(this.dataset.s,+this.dataset.i)">✏️</button>'
            +'<button class="md-act-btn danger" data-s="pricing" data-i="'+i+'" onclick="mdDel(this.dataset.s,+this.dataset.i)">🗑</button></td></tr>';
     });
     setHTML('md-tbl-pricing', rows);
@@ -1705,6 +1707,64 @@ def _build_master_data_tab(master_data):
       markDirty();
       showToast('Entry deleted (export to Excel to persist)');
     }
+  };
+
+  /* ── Price History popover ── */
+  window.mdPriceHistory = function(btn) {
+    var sku = btn.getAttribute('data-sku');
+    var cust = btn.getAttribute('data-cust');
+    var dist = btn.getAttribute('data-dist');
+    if(!sku) return;
+    // Remove any existing popover
+    var old = document.getElementById('ph-popover');
+    if(old) old.remove();
+    // Build popover
+    var pop = document.createElement('div');
+    pop.id='ph-popover';
+    pop.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:24px;z-index:10001;min-width:420px;max-width:600px;max-height:70vh;overflow-y:auto;';
+    pop.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+      +'<h3 style="margin:0;font-size:16px;">Price History: '+esc(sku)+'</h3>'
+      +'<button onclick="document.getElementById(\'ph-popover\').remove();document.getElementById(\'ph-overlay\').remove()" style="border:none;background:none;font-size:20px;cursor:pointer;">&times;</button></div>'
+      +'<p style="font-size:12px;color:#64748b;margin:0 0 12px;">'+esc(cust||'—')+' / '+esc(dist||'—')+'</p>'
+      +'<div id="ph-body" style="font-size:13px;">Loading...</div>';
+    // Overlay
+    var overlay = document.createElement('div');
+    overlay.id='ph-overlay';
+    overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:10000;';
+    overlay.onclick=function(){pop.remove();overlay.remove();};
+    document.body.appendChild(overlay);
+    document.body.appendChild(pop);
+    // Fetch history
+    var url='/pricing/history?sku_key='+encodeURIComponent(sku);
+    if(cust) url+='&customer='+encodeURIComponent(cust);
+    if(dist) url+='&distributor='+encodeURIComponent(dist);
+    apiCallAuth('GET',url).then(function(data){
+      var h=data.history||[];
+      if(!h.length){
+        document.getElementById('ph-body').innerHTML='<p style="color:#94a3b8;">No price history recorded yet.</p>';
+        return;
+      }
+      var tbl='<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+        +'<thead><tr style="background:#f1f5f9;"><th style="padding:6px 8px;text-align:left;">Date Range</th>'
+        +'<th style="padding:6px 8px;text-align:left;">Type</th>'
+        +'<th style="padding:6px 8px;text-align:right;">Price</th>'
+        +'<th style="padding:6px 8px;text-align:left;">Source</th></tr></thead><tbody>';
+      h.forEach(function(r){
+        var from = r.effective_from||'?';
+        var to = r.effective_to||'current';
+        var ptype = r.price_type==='negotiated'?'Sale Price':'Cost';
+        var color = r.effective_to?'#94a3b8':'#10b981';
+        tbl+='<tr style="border-bottom:1px solid #e2e8f0;">'
+          +'<td style="padding:6px 8px;"><span style="color:'+color+';font-weight:'+(r.effective_to?'400':'600')+'">'+from+' → '+to+'</span></td>'
+          +'<td style="padding:6px 8px;">'+ptype+'</td>'
+          +'<td style="padding:6px 8px;text-align:right;font-weight:600;">'+(r.price_ils!=null?'₪'+r.price_ils.toFixed(2):'—')+'</td>'
+          +'<td style="padding:6px 8px;font-size:11px;color:#64748b;">'+(r.source_reference||'')+'</td></tr>';
+      });
+      tbl+='</tbody></table>';
+      document.getElementById('ph-body').innerHTML=tbl;
+    }).catch(function(e){
+      document.getElementById('ph-body').innerHTML='<p style="color:#ef4444;">Error: '+e.message+'</p>';
+    });
   };
 
   function openModal(sheet, rec) {

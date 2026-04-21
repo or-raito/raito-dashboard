@@ -818,6 +818,116 @@ def _pricing_pk(rec: dict) -> str:
 _MD_ENTITIES = list(_MD_PK.keys())
 
 
+# ── Price History helpers ────────────────────────────────────────────────────
+
+def _resolve_id(conn, table, key_col, key_val):
+    """Resolve a text key to an integer id from a relational table."""
+    if not key_val:
+        return None
+    cur = conn.cursor()
+    cur.execute(f"SELECT id FROM {table} WHERE {key_col} = %s LIMIT 1", (key_val,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _price_history_write(record, action='create', old_record=None):
+    """Write to price_history when a pricing record is created/updated/deleted.
+
+    Maps MD-tab text keys (sku_key, customer, distributor) to relational integer IDs.
+    For 'create': inserts new active price rows.
+    For 'update': closes old rows (effective_to=today), inserts new if price changed.
+    For 'delete': closes active rows (effective_to=today).
+    """
+    try:
+        conn = _md_conn()
+        cur = conn.cursor()
+        today = __import__('datetime').date.today()
+
+        # Resolve text keys → integer IDs
+        product_id = _resolve_id(conn, 'products', 'sku_key', record.get('sku_key'))
+        customer_id = _resolve_id(conn, 'customers', 'name_en', record.get('customer'))
+        distributor_id = _resolve_id(conn, 'distributors', 'key', record.get('distributor'))
+
+        if not product_id:
+            log.warning("price_history: could not resolve product_id for %s", record.get('sku_key'))
+            conn.close()
+            return
+
+        if action == 'delete':
+            # Close all active rows for this combination
+            cur.execute("""
+                UPDATE price_history SET effective_to = %s
+                WHERE product_id = %s
+                  AND (customer_id = %s OR (customer_id IS NULL AND %s IS NULL))
+                  AND (distributor_id = %s OR (distributor_id IS NULL AND %s IS NULL))
+                  AND effective_to IS NULL
+            """, (today, product_id, customer_id, customer_id,
+                  distributor_id, distributor_id))
+
+        elif action == 'create':
+            # Insert new active rows for sale_price and cost
+            for field, ptype in [('sale_price', 'negotiated'), ('cost', 'production_cost')]:
+                val = record.get(field)
+                if val is not None:
+                    try:
+                        val = float(val)
+                        if val > 0:
+                            cur.execute("""
+                                INSERT INTO price_history
+                                    (product_id, customer_id, distributor_id,
+                                     price_ils, effective_from, price_type, source_reference)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (product_id, customer_id, distributor_id,
+                                  val, today, ptype, 'md_tab'))
+                    except (ValueError, TypeError):
+                        pass
+
+        elif action == 'update' and old_record:
+            # Check if sale_price or cost actually changed
+            for field, ptype in [('sale_price', 'negotiated'), ('cost', 'production_cost')]:
+                old_val = old_record.get(field)
+                new_val = record.get(field)
+                # Normalize for comparison
+                try:
+                    old_f = float(old_val) if old_val is not None else None
+                except (ValueError, TypeError):
+                    old_f = None
+                try:
+                    new_f = float(new_val) if new_val is not None else None
+                except (ValueError, TypeError):
+                    new_f = None
+
+                if old_f != new_f:
+                    # Close old row
+                    cur.execute("""
+                        UPDATE price_history SET effective_to = %s
+                        WHERE product_id = %s
+                          AND (customer_id = %s OR (customer_id IS NULL AND %s IS NULL))
+                          AND (distributor_id = %s OR (distributor_id IS NULL AND %s IS NULL))
+                          AND price_type = %s
+                          AND effective_to IS NULL
+                    """, (today, product_id, customer_id, customer_id,
+                          distributor_id, distributor_id, ptype))
+                    # Insert new row
+                    if new_f is not None and new_f > 0:
+                        cur.execute("""
+                            INSERT INTO price_history
+                                (product_id, customer_id, distributor_id,
+                                 price_ils, effective_from, price_type, source_reference)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        """, (product_id, customer_id, distributor_id,
+                              new_f, today, ptype, 'md_tab'))
+
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.error("price_history write failed: %s", e)
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _md_conn():
     """Open a psycopg2 connection using the same DATABASE_URL the rest of the app uses."""
     import psycopg2
@@ -1133,6 +1243,9 @@ def api_create(entity):
         _md_write(entity, items)
         _md_audit_log(entity, str(pk_val or ''), 'create', None, record, _actor())
 
+        if entity == 'pricing':
+            _price_history_write(record, action='create')
+
         if entity in ('products', 'customers', 'pricing'):
             md = _md_read_all()
             _md_rebuild_portfolio(md)
@@ -1184,6 +1297,8 @@ def api_update(entity, pk):
                 items[i] = merged
                 _md_write(entity, items)
                 _md_audit_log(entity, pk, 'update', old_record, record, _actor())
+                if entity == 'pricing':
+                    _price_history_write(merged, action='update', old_record=old_record)
 
                 if entity in ('products', 'customers', 'pricing'):
                     md = _md_read_all()
@@ -1235,6 +1350,8 @@ def api_delete(entity, pk):
 
         _md_write(entity, new_items)
         _md_audit_log(entity, pk, 'delete', deleted_record, None, _actor())
+        if entity == 'pricing':
+            _price_history_write(deleted_record, action='delete')
 
         if entity in ('products', 'customers', 'pricing'):
             md = _md_read_all()
@@ -1244,6 +1361,85 @@ def api_delete(entity, pk):
         return jsonify({'deleted': pk})
     except Exception as e:
         log.error("api_delete %s/%s: %s", entity, pk, e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ── /api/pricing/history  GET ─────────────────────────────────────────────────
+
+@app.route('/api/pricing/history', methods=['GET'])
+@require_admin
+def api_pricing_history():
+    """Return price history timeline for a specific pricing entry.
+
+    Query params:
+        sku_key     — product SKU key (required)
+        customer    — customer name_en (optional)
+        distributor — distributor key (optional)
+    """
+    sku_key = request.args.get('sku_key', '')
+    customer = request.args.get('customer', '')
+    distributor = request.args.get('distributor', '')
+
+    if not sku_key:
+        return jsonify({'error': 'sku_key is required'}), 400
+
+    try:
+        conn = _md_conn()
+        product_id = _resolve_id(conn, 'products', 'sku_key', sku_key)
+        customer_id = _resolve_id(conn, 'customers', 'name_en', customer) if customer else None
+        distributor_id = _resolve_id(conn, 'distributors', 'key', distributor) if distributor else None
+
+        if not product_id:
+            conn.close()
+            return jsonify({'history': [], 'message': f'Product {sku_key} not found in relational table'})
+
+        cur = conn.cursor()
+        # Build dynamic WHERE clause
+        conditions = ["product_id = %s"]
+        params = [product_id]
+
+        if customer_id is not None:
+            conditions.append("customer_id = %s")
+            params.append(customer_id)
+        elif customer:
+            # Customer name given but not resolved — return empty
+            conn.close()
+            return jsonify({'history': [], 'message': f'Customer {customer} not found in relational table'})
+
+        if distributor_id is not None:
+            conditions.append("distributor_id = %s")
+            params.append(distributor_id)
+        elif distributor:
+            conn.close()
+            return jsonify({'history': [], 'message': f'Distributor {distributor} not found in relational table'})
+
+        where = " AND ".join(conditions)
+        cur.execute(f"""
+            SELECT ph.id, ph.price_ils, ph.effective_from, ph.effective_to,
+                   ph.price_type, ph.source_reference, ph.created_at
+            FROM price_history ph
+            WHERE {where}
+            ORDER BY ph.effective_from DESC, ph.created_at DESC
+            LIMIT 100
+        """, params)
+
+        rows = cur.fetchall()
+        history = []
+        for r in rows:
+            history.append({
+                'id':               r[0],
+                'price_ils':        float(r[1]) if r[1] is not None else None,
+                'effective_from':   r[2].isoformat() if r[2] else None,
+                'effective_to':     r[3].isoformat() if r[3] else None,
+                'price_type':       r[4],
+                'source_reference': r[5],
+                'created_at':       r[6].isoformat() if r[6] else None,
+            })
+
+        conn.close()
+        return jsonify({'history': history})
+    except Exception as e:
+        log.error("api_pricing_history: %s", e)
         return jsonify({'error': str(e)}), 500
 
 
