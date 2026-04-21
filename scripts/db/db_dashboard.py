@@ -1280,10 +1280,14 @@ def api_update(entity, pk):
 
         for i, item in enumerate(items):
             if _item_pk(item) == pk:
+                old_record = dict(item)
+                merged = dict(item)   # start with all old fields
+                merged.update(record) # overwrite with submitted fields
+
                 all_data = _md_read_all()
                 all_data[entity] = items
                 errors, warnings = _validate(
-                    entity, record, all_data,
+                    entity, merged, all_data,
                     action='update', old_record=item,
                 )
                 if errors:
@@ -1291,9 +1295,6 @@ def api_update(entity, pk):
                 if warnings and not request.args.get('confirmed'):
                     return jsonify({'warnings': warnings, 'confirm_required': True}), 409
 
-                old_record = dict(item)
-                merged = dict(item)   # start with all old fields
-                merged.update(record) # overwrite with submitted fields
                 items[i] = merged
                 _md_write(entity, items)
                 _md_audit_log(entity, pk, 'update', old_record, record, _actor())
