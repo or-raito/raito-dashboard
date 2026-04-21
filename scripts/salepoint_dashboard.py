@@ -469,55 +469,38 @@ def _normalize_sp_name(name):
 
 
 def _load_canonical_merges():
-    """Query DB for canonical_sp_id mappings → {normalized_alias: canonical_branch_name}.
+    """Query DB for canonical_sp_id mappings.
 
-    Uses normalized names to bridge differences between DB and Excel-parsed names.
-    Returns empty dict if DB is unavailable (graceful no-op for local builds).
+    Returns:
+        exact_aliases: {exact_alias_name: canonical_name} — ONLY exact DB alias names
+        alias_list: [(alias_name, canonical_name), ...] — for normalized fallback
+    Graceful no-op when DB is unavailable (returns empty structures).
     """
     try:
-        import os
+        import os, logging
         import psycopg2
         url = os.environ.get('DATABASE_URL', '')
         if not url:
-            return {}, set()
+            return {}, []
         conn = psycopg2.connect(url)
         cur = conn.cursor()
-        # Get all alias→canonical mappings (raw names)
         cur.execute("""
             SELECT alias.branch_name_he, canon.branch_name_he
             FROM sale_points alias
             JOIN sale_points canon ON alias.canonical_sp_id = canon.id
             WHERE alias.canonical_sp_id IS NOT NULL
         """)
-        raw_merges = cur.fetchall()
-
-        # Also get all branch names that ARE canonical targets (for name lookup)
-        cur.execute("""
-            SELECT DISTINCT canon.branch_name_he
-            FROM sale_points alias
-            JOIN sale_points canon ON alias.canonical_sp_id = canon.id
-            WHERE alias.canonical_sp_id IS NOT NULL
-        """)
-        canonical_names = {row[0] for row in cur.fetchall()}
+        raw_merges = [(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]]
         conn.close()
 
-        # Build normalized lookup: norm(alias_name) → canonical_name
-        # Also map norm(canonical_name) → canonical_name for target resolution
-        merges = {}
-        for alias_name, canon_name in raw_merges:
-            if alias_name and canon_name:
-                # Exact match first
-                merges[alias_name] = canon_name
-                # Normalized match as fallback
-                merges[_normalize_sp_name(alias_name)] = canon_name
-
-        import logging
+        exact = {alias: canon for alias, canon in raw_merges}
         logging.getLogger(__name__).info(
-            "SP canonical merges: %d DB rows → %d map entries, %d canonical targets",
-            len(raw_merges), len(merges), len(canonical_names))
-        return merges, canonical_names
-    except Exception:
-        return {}, set()
+            "SP canonical merges: %d DB alias→canonical pairs loaded", len(exact))
+        return exact, raw_merges
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("SP canonical merge load failed: %s", e)
+        return {}, []
 
 
 def _extract(data):
@@ -640,25 +623,41 @@ def _extract(data):
                     tgt_months[mo]['flav'][fl] = tgt_months[mo]['flav'].get(fl, 0) + fu
 
     # ── Canonical SP Merge: fold DB-defined aliases into their canonical branch ──
-    # Uses normalized names to bridge DB ↔ Excel naming differences
-    _canon_debug = {'map_size': 0, 'matched': 0, 'skipped': 0, 'renamed': 0, 'err': ''}
+    # Strategy: exact match first (safe), then careful normalized match (only when
+    # the Excel name is provably an alias, not the canonical target itself).
+    _canon_debug = {'db_pairs': 0, 'exact': 0, 'norm': 0, 'renamed': 0, 'err': ''}
     try:
-        canonical_result = _load_canonical_merges()
-        canonical_map, canonical_names = canonical_result
-        _canon_debug['map_size'] = len(canonical_map)
+        exact_aliases, alias_list = _load_canonical_merges()
+        _canon_debug['db_pairs'] = len(alias_list)
     except Exception as e:
-        canonical_map, canonical_names = {}, set()
+        exact_aliases, alias_list = {}, []
         _canon_debug['err'] = str(e)
-    if canonical_map:
-        # Helper: look up canonical name for a branch (exact first, then normalized)
+
+    if exact_aliases:
+        # Set of canonical target names (these should NOT be merged away)
+        canonical_target_names = set(exact_aliases.values())
+        # Build normalized alias → (alias_name, canonical_name) for fallback
+        # ONLY include entries where the normalized form is unambiguous
+        _norm_alias_map = {}  # norm(alias) → canonical_name
+        _norm_canonical_set = {_normalize_sp_name(cn) for cn in canonical_target_names}
+        for alias_name, canon_name in alias_list:
+            norm_a = _normalize_sp_name(alias_name)
+            # Skip if this normalized form also matches a canonical target
+            # (ambiguous — can't tell if Excel branch is alias or canonical)
+            if norm_a not in _norm_canonical_set:
+                _norm_alias_map[norm_a] = canon_name
+
         def _find_canon(bname):
-            c = canonical_map.get(bname)
+            """Find canonical name for an Excel branch. Returns None if not an alias."""
+            # 1. Exact match against DB alias names (always safe)
+            c = exact_aliases.get(bname)
             if c:
                 return c
-            return canonical_map.get(_normalize_sp_name(bname))
-
-        # Helper: check if a branch name is itself a canonical target
-        _norm_canonical = {_normalize_sp_name(cn): cn for cn in canonical_names}
+            # 2. Skip if this branch IS a canonical target
+            if bname in canonical_target_names:
+                return None
+            # 3. Normalized match — only if unambiguous (not in canonical set)
+            return _norm_alias_map.get(_normalize_sp_name(bname))
 
         def _find_branch_in_group(branches, canon_name):
             """Find a branch matching canon_name (exact or normalized)."""
@@ -682,18 +681,15 @@ def _extract(data):
             aliases_to_remove = []
             for bname in list(branches.keys()):
                 canon_name = _find_canon(bname)
-                if not canon_name or canon_name == bname:
-                    # Also skip if normalized names match (already the canonical)
-                    if not canon_name or _normalize_sp_name(canon_name) == _normalize_sp_name(bname):
-                        _canon_debug['skipped'] += 1
-                        continue
+                if not canon_name:
+                    continue
 
-                # Find canonical branch in same customer group (by normalized match)
+                # Find canonical branch in same customer group
                 tgt_bname = _find_branch_in_group(branches, canon_name)
                 if tgt_bname and tgt_bname != bname:
                     _merge_months(branches[tgt_bname], branches[bname], months)
                     aliases_to_remove.append(bname)
-                    _canon_debug['matched'] += 1
+                    _canon_debug['exact' if bname in exact_aliases else 'norm'] += 1
                     continue
 
                 # Check other customer groups
@@ -706,11 +702,11 @@ def _extract(data):
                         _merge_months(c2['branches'][tgt_b2], branches[bname], months)
                         aliases_to_remove.append(bname)
                         found_elsewhere = True
-                        _canon_debug['matched'] += 1
+                        _canon_debug['exact' if bname in exact_aliases else 'norm'] += 1
                         break
 
                 if not found_elsewhere:
-                    # Canonical target not found anywhere — rename alias to canonical
+                    # Canonical target not found in any group — rename alias
                     branches[canon_name] = branches[bname]
                     aliases_to_remove.append(bname)
                     _canon_debug['renamed'] += 1
