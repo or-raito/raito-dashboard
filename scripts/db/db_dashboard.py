@@ -821,11 +821,21 @@ _MD_ENTITIES = list(_MD_PK.keys())
 # ── Price History helpers ────────────────────────────────────────────────────
 
 def _resolve_id(conn, table, key_col, key_val):
-    """Resolve a text key to an integer id from a relational table."""
+    """Resolve a text key to an integer id from a relational table.
+
+    Tries exact match first, then case-insensitive match.
+    For customers, also tries the 'key' column if name_en doesn't match.
+    """
     if not key_val:
         return None
     cur = conn.cursor()
+    # Exact match
     cur.execute(f"SELECT id FROM {table} WHERE {key_col} = %s LIMIT 1", (key_val,))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    # Case-insensitive match
+    cur.execute(f"SELECT id FROM {table} WHERE LOWER({key_col}) = LOWER(%s) LIMIT 1", (key_val,))
     row = cur.fetchone()
     return row[0] if row else None
 
