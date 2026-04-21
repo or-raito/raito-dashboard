@@ -494,6 +494,7 @@ def _load_canonical_merges():
         conn.close()
 
         # Resolve chains: if A→B and B→C, flatten to A→C and B→C
+        # Also filter out self-references (canonical_sp_id = own id)
         alias_to_canon = {a: c for a, c in raw_merges}
         resolved = {}
         for alias in alias_to_canon:
@@ -502,7 +503,9 @@ def _load_canonical_merges():
             while current in alias_to_canon and current not in seen:
                 seen.add(current)
                 current = alias_to_canon[current]
-            resolved[alias] = current
+            # Skip self-references (alias == canonical after resolution)
+            if current != alias:
+                resolved[alias] = current
 
         logging.getLogger(__name__).info(
             "SP canonical merges: %d DB rows → %d resolved (chains flattened)",
@@ -631,18 +634,20 @@ def _extract(data):
                 for fl, fu in src_months[mo]['flav'].items():
                     tgt_months[mo]['flav'][fl] = tgt_months[mo]['flav'].get(fl, 0) + fu
 
-    # ── Canonical SP Merge: fold DB-defined aliases into their canonical branch ──
-    # Strategy: exact match first (safe), then careful normalized match (only when
-    # the Excel name is provably an alias, not the canonical target itself).
-    _canon_debug = {'db_pairs': 0, 'exact': 0, 'norm': 0, 'renamed': 0, 'err': ''}
-    try:
+    # ── Canonical SP Merge: DISABLED — waiting for DB canonical_sp_id cleanup ──
+    # Re-enable by changing _CANONICAL_MERGE_ENABLED to True once DB data is reviewed.
+    _CANONICAL_MERGE_ENABLED = False
+    _canon_debug = {'db_pairs': 0, 'exact': 0, 'norm': 0, 'renamed': 0, 'err': 'disabled'}
+    if _CANONICAL_MERGE_ENABLED:
+      try:
         exact_aliases, alias_list = _load_canonical_merges()
         _canon_debug['db_pairs'] = len(alias_list)
-    except Exception as e:
+        _canon_debug['err'] = ''
+      except Exception as e:
         exact_aliases, alias_list = {}, []
         _canon_debug['err'] = str(e)
 
-    if exact_aliases:
+    if _CANONICAL_MERGE_ENABLED and exact_aliases:
         # Set of canonical target names (these should NOT be merged away)
         canonical_target_names = set(exact_aliases.values())
         # Build normalized alias → (alias_name, canonical_name) for fallback
@@ -690,7 +695,7 @@ def _extract(data):
             aliases_to_remove = []
             for bname in list(branches.keys()):
                 canon_name = _find_canon(bname)
-                if not canon_name:
+                if not canon_name or canon_name == bname:
                     continue
 
                 # Find canonical branch in same customer group
