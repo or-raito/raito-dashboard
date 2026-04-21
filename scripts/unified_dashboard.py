@@ -1726,7 +1726,7 @@ def _build_master_data_tab(master_data):
     pop.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.25);padding:24px;z-index:10001;min-width:420px;max-width:600px;max-height:70vh;overflow-y:auto;';
     pop.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
       +'<h3 style="margin:0;font-size:16px;">Price History: '+esc(sku)+'</h3>'
-      +'<button onclick="document.getElementById(\'ph-popover\').remove();document.getElementById(\'ph-overlay\').remove()" style="border:none;background:none;font-size:20px;cursor:pointer;">&times;</button></div>'
+      +'<button onclick="var a=document.getElementById(&quot;ph-popover&quot;);if(a)a.remove();var b=document.getElementById(&quot;ph-overlay&quot;);if(b)b.remove();" style="border:none;background:none;font-size:20px;cursor:pointer;">&times;</button></div>'
       +'<p style="font-size:12px;color:#64748b;margin:0 0 12px;">'+esc(cust||'—')+' / '+esc(dist||'—')+'</p>'
       +'<div id="ph-body" style="font-size:13px;">Loading...</div>';
     // Overlay
