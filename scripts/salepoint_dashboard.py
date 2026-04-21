@@ -448,12 +448,11 @@ window.__SP_MON_LABELS__ = {sp_mon_labels_js};
 import re as _re
 
 def _normalize_sp_name(name):
-    """Strip delivery/logistics suffixes so DB names match Excel-parsed names.
+    """Normalize SP name for fuzzy matching between DB and Excel-parsed names.
 
-    Examples:
-        'וולט מרקט אשדוד - אספקה עד13:30'  → 'וולט מרקט אשדוד'
-        'וולט מרקט אשקלון*עד 13:30 חובה'    → 'וולט מרקט אשקלון'
-        'וולט מרקט אשדוד -'                  → 'וולט מרקט אשדוד'
+    Strips delivery/logistics suffixes and unifies punctuation so that
+    'וולט מרקט-אשדוד', 'וולט מרקט אשדוד -', and
+    'וולט מרקט אשדוד - אספקה עד13:30' all resolve to 'וולט מרקט אשדוד'.
     """
     s = name.strip()
     # Strip from common suffix markers
@@ -462,6 +461,8 @@ def _normalize_sp_name(name):
     s = _re.split(r'\s*\*\s*לא\b', s)[0]
     # Strip trailing dash/asterisk and whitespace
     s = s.rstrip(' \t-*')
+    # Replace dashes with spaces (unify 'מרקט-אשדוד' ↔ 'מרקט אשדוד')
+    s = s.replace('-', ' ')
     # Collapse multiple spaces
     s = _re.sub(r'\s+', ' ', s).strip()
     return s
@@ -510,6 +511,10 @@ def _load_canonical_merges():
                 # Normalized match as fallback
                 merges[_normalize_sp_name(alias_name)] = canon_name
 
+        import logging
+        logging.getLogger(__name__).info(
+            "SP canonical merges: %d DB rows → %d map entries, %d canonical targets",
+            len(raw_merges), len(merges), len(canonical_names))
         return merges, canonical_names
     except Exception:
         return {}, set()
