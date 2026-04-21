@@ -479,7 +479,7 @@ def _load_canonical_merges():
         import psycopg2
         url = os.environ.get('DATABASE_URL', '')
         if not url:
-            return {}
+            return {}, set()
         conn = psycopg2.connect(url)
         cur = conn.cursor()
         # Get all alias→canonical mappings (raw names)
@@ -641,8 +641,14 @@ def _extract(data):
 
     # ── Canonical SP Merge: fold DB-defined aliases into their canonical branch ──
     # Uses normalized names to bridge DB ↔ Excel naming differences
-    canonical_result = _load_canonical_merges()
-    canonical_map, canonical_names = canonical_result  # map + set of canonical target names
+    _canon_debug = {'map_size': 0, 'matched': 0, 'skipped': 0, 'renamed': 0, 'err': ''}
+    try:
+        canonical_result = _load_canonical_merges()
+        canonical_map, canonical_names = canonical_result
+        _canon_debug['map_size'] = len(canonical_map)
+    except Exception as e:
+        canonical_map, canonical_names = {}, set()
+        _canon_debug['err'] = str(e)
     if canonical_map:
         # Helper: look up canonical name for a branch (exact first, then normalized)
         def _find_canon(bname):
@@ -679,6 +685,7 @@ def _extract(data):
                 if not canon_name or canon_name == bname:
                     # Also skip if normalized names match (already the canonical)
                     if not canon_name or _normalize_sp_name(canon_name) == _normalize_sp_name(bname):
+                        _canon_debug['skipped'] += 1
                         continue
 
                 # Find canonical branch in same customer group (by normalized match)
@@ -686,6 +693,7 @@ def _extract(data):
                 if tgt_bname and tgt_bname != bname:
                     _merge_months(branches[tgt_bname], branches[bname], months)
                     aliases_to_remove.append(bname)
+                    _canon_debug['matched'] += 1
                     continue
 
                 # Check other customer groups
@@ -698,12 +706,14 @@ def _extract(data):
                         _merge_months(c2['branches'][tgt_b2], branches[bname], months)
                         aliases_to_remove.append(bname)
                         found_elsewhere = True
+                        _canon_debug['matched'] += 1
                         break
 
                 if not found_elsewhere:
                     # Canonical target not found anywhere — rename alias to canonical
                     branches[canon_name] = branches[bname]
                     aliases_to_remove.append(bname)
+                    _canon_debug['renamed'] += 1
 
             for bname in aliases_to_remove:
                 branches.pop(bname, None)
@@ -795,6 +805,7 @@ def _extract(data):
         'total_salepoints': total_sp,
         'total_units': total_units,
         'total_revenue': round(total_rev),
+        '_canon_debug': _canon_debug,
     }
 
 
