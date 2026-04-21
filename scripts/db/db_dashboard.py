@@ -1062,17 +1062,17 @@ def _md_ensure_audit_table() -> None:
             CREATE TABLE IF NOT EXISTS master_data_audit (
                 id          SERIAL PRIMARY KEY,
                 entity      TEXT NOT NULL,
-                pk_value    TEXT NOT NULL,
+                record_pk   TEXT,
                 action      TEXT NOT NULL,
-                old_value   JSONB,
-                new_value   JSONB,
-                actor       TEXT NOT NULL DEFAULT 'anonymous',
-                occurred_at TIMESTAMPTZ DEFAULT NOW()
+                old_data    JSONB,
+                new_data    JSONB,
+                actor       TEXT,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_audit_entity
-            ON master_data_audit (entity, occurred_at DESC)
+            ON master_data_audit (entity, created_at DESC)
         """)
         conn.commit()
     finally:
@@ -1088,7 +1088,7 @@ def _md_audit_log(entity: str, pk_value: str, action: str,
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO master_data_audit
-                (entity, pk_value, action, old_value, new_value, actor, occurred_at)
+                (entity, record_pk, action, old_data, new_data, actor, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, NOW())
         """, (
             entity, pk_value, action,
@@ -1603,15 +1603,15 @@ def api_audit_log():
             cur = conn.cursor()
             if entity:
                 cur.execute("""
-                    SELECT id, entity, pk_value, action, old_value, new_value, actor, occurred_at
+                    SELECT id, entity, record_pk, action, old_data, new_data, actor, created_at
                     FROM master_data_audit WHERE entity = %s
-                    ORDER BY occurred_at DESC LIMIT %s
+                    ORDER BY created_at DESC LIMIT %s
                 """, (entity, limit))
             else:
                 cur.execute("""
-                    SELECT id, entity, pk_value, action, old_value, new_value, actor, occurred_at
+                    SELECT id, entity, record_pk, action, old_data, new_data, actor, created_at
                     FROM master_data_audit
-                    ORDER BY occurred_at DESC LIMIT %s
+                    ORDER BY created_at DESC LIMIT %s
                 """, (limit,))
             rows = []
             for r in cur.fetchall():
@@ -1856,6 +1856,473 @@ def api_rebuild():
                         'message': 'Dashboard rebuilding in background'})
     except Exception as e:
         log.error("api_rebuild: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Phase 6.1 — Sale Point Management API
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@app.route('/api/salepoints', methods=['GET'])
+def api_salepoints_list():
+    """List sale points with customer/distributor names and canonical info.
+
+    Query params:
+      ?customer_id=5       — filter by customer
+      ?distributor_id=2    — filter by distributor
+      ?canonical_only=1    — only canonical SPs (canonical_sp_id IS NULL)
+      ?limit=100&offset=0  — pagination (default 200)
+    """
+    try:
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        where_clauses = ["1=1"]
+        params = []
+
+        cust_id = request.args.get('customer_id', type=int)
+        if cust_id:
+            where_clauses.append("sp.customer_id = %s")
+            params.append(cust_id)
+
+        dist_id = request.args.get('distributor_id', type=int)
+        if dist_id:
+            where_clauses.append("sp.distributor_id = %s")
+            params.append(dist_id)
+
+        if request.args.get('canonical_only') == '1':
+            where_clauses.append("sp.canonical_sp_id IS NULL")
+
+        limit = request.args.get('limit', 200, type=int)
+        offset = request.args.get('offset', 0, type=int)
+
+        where_sql = " AND ".join(where_clauses)
+        sql = f"""
+            SELECT sp.id, sp.branch_name_he, sp.branch_name_clean,
+                   sp.city, sp.region, sp.is_active,
+                   sp.customer_id, c.name_en AS customer_name,
+                   sp.distributor_id, d.name_en AS distributor_name,
+                   sp.canonical_sp_id,
+                   canon.branch_name_he AS canonical_name,
+                   sp.last_order_date,
+                   (SELECT COUNT(*) FROM sales_transactions st WHERE st.sale_point_id = sp.id) AS txn_count
+            FROM sale_points sp
+            LEFT JOIN customers c ON c.id = sp.customer_id
+            LEFT JOIN distributors d ON d.id = sp.distributor_id
+            LEFT JOIN sale_points canon ON canon.id = sp.canonical_sp_id
+            WHERE {where_sql}
+            ORDER BY sp.branch_name_he
+            LIMIT %s OFFSET %s
+        """
+        params.extend([limit, offset])
+        cur.execute(sql, params)
+        cols = [desc[0] for desc in cur.description]
+        rows = [dict(zip(cols, row)) for row in cur.fetchall()]
+
+        # Total count for pagination
+        count_sql = f"SELECT COUNT(*) FROM sale_points sp WHERE {where_sql}"
+        cur.execute(count_sql, params[:-2])  # without limit/offset
+        total = cur.fetchone()[0]
+
+        conn.close()
+        return jsonify({'data': rows, 'total': total, 'limit': limit, 'offset': offset})
+    except Exception as e:
+        log.error("api_salepoints_list: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/salepoints/search', methods=['GET'])
+def api_salepoints_search():
+    """Search sale points by name pattern.
+
+    Query params:
+      ?q=הולמס           — search pattern (Hebrew or English, case-insensitive)
+      ?unlinked=1         — only SPs with no customer assignment
+      ?limit=50           — max results (default 50)
+    """
+    try:
+        q = request.args.get('q', '').strip()
+        if not q or len(q) < 2:
+            return jsonify({'error': 'Query must be at least 2 characters'}), 400
+
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        where_parts = ["(sp.branch_name_he ILIKE %s OR sp.branch_name_clean ILIKE %s)"]
+        params = [f'%{q}%', f'%{q}%']
+
+        if request.args.get('unlinked') == '1':
+            where_parts.append("sp.customer_id IS NULL")
+
+        limit = request.args.get('limit', 50, type=int)
+        where_sql = " AND ".join(where_parts)
+
+        sql = f"""
+            SELECT sp.id, sp.branch_name_he, sp.branch_name_clean,
+                   sp.city, sp.is_active,
+                   sp.customer_id, c.name_en AS customer_name,
+                   sp.distributor_id, d.name_en AS distributor_name,
+                   sp.canonical_sp_id
+            FROM sale_points sp
+            LEFT JOIN customers c ON c.id = sp.customer_id
+            LEFT JOIN distributors d ON d.id = sp.distributor_id
+            WHERE {where_sql}
+            ORDER BY sp.branch_name_he
+            LIMIT %s
+        """
+        params.append(limit)
+        cur.execute(sql, params)
+        cols = [desc[0] for desc in cur.description]
+        rows = [dict(zip(cols, row)) for row in cur.fetchall()]
+
+        conn.close()
+        return jsonify({'data': rows, 'count': len(rows)})
+    except Exception as e:
+        log.error("api_salepoints_search: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/salepoints/assign', methods=['POST'])
+@require_admin
+def api_salepoints_assign():
+    """Bulk assign sale points to a customer.
+
+    Body: {"sp_ids": [1, 2, 3], "customer_id": 5}
+    """
+    try:
+        body = request.get_json(force=True)
+        sp_ids = body.get('sp_ids', [])
+        customer_id = body.get('customer_id')
+
+        if not sp_ids:
+            return jsonify({'error': 'sp_ids required'}), 400
+        if customer_id is None:
+            return jsonify({'error': 'customer_id required'}), 400
+
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        # Verify customer exists
+        cur.execute("SELECT id, name_en FROM customers WHERE id = %s", (customer_id,))
+        cust = cur.fetchone()
+        if not cust:
+            conn.close()
+            return jsonify({'error': f'Customer {customer_id} not found'}), 404
+
+        # Update in bulk
+        cur.execute(
+            "UPDATE sale_points SET customer_id = %s WHERE id = ANY(%s) RETURNING id",
+            (customer_id, sp_ids)
+        )
+        updated_ids = [r[0] for r in cur.fetchall()]
+        conn.commit()
+
+        # Audit log
+        _md_audit_log('salepoints', str(updated_ids), 'assign',
+                      None, {'sp_ids': updated_ids, 'customer_id': customer_id,
+                             'customer_name': cust[1]}, _actor())
+        conn.close()
+
+        return jsonify({'updated': len(updated_ids), 'sp_ids': updated_ids,
+                        'customer': cust[1]})
+    except Exception as e:
+        log.error("api_salepoints_assign: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/salepoints/merge', methods=['POST'])
+@require_admin
+def api_salepoints_merge():
+    """Merge alias SPs under a canonical SP.
+
+    Body: {"canonical_id": 101, "alias_ids": [450, 451]}
+
+    Sets canonical_sp_id on all alias SPs. Also copies customer_id from
+    canonical to aliases (ensures consistent assignment).
+    """
+    try:
+        body = request.get_json(force=True)
+        canonical_id = body.get('canonical_id')
+        alias_ids = body.get('alias_ids', [])
+
+        if not canonical_id:
+            return jsonify({'error': 'canonical_id required'}), 400
+        if not alias_ids:
+            return jsonify({'error': 'alias_ids required'}), 400
+        if canonical_id in alias_ids:
+            return jsonify({'error': 'canonical_id cannot be in alias_ids'}), 400
+
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        # Verify canonical SP exists and is itself canonical (not an alias)
+        cur.execute(
+            "SELECT id, branch_name_he, customer_id, canonical_sp_id FROM sale_points WHERE id = %s",
+            (canonical_id,)
+        )
+        canon = cur.fetchone()
+        if not canon:
+            conn.close()
+            return jsonify({'error': f'Canonical SP {canonical_id} not found'}), 404
+        if canon[3] is not None:
+            conn.close()
+            return jsonify({'error': f'SP {canonical_id} is itself an alias of SP {canon[3]}. '
+                            'Choose a canonical SP that is not already an alias.'}), 400
+
+        # Set canonical_sp_id and copy customer_id
+        cur.execute(
+            """UPDATE sale_points
+               SET canonical_sp_id = %s, customer_id = %s
+               WHERE id = ANY(%s)
+               RETURNING id""",
+            (canonical_id, canon[2], alias_ids)
+        )
+        updated_ids = [r[0] for r in cur.fetchall()]
+        conn.commit()
+
+        _md_audit_log('salepoints', str(canonical_id), 'merge',
+                      None, {'canonical_id': canonical_id,
+                             'canonical_name': canon[1],
+                             'alias_ids': updated_ids}, _actor())
+        conn.close()
+
+        return jsonify({'canonical_id': canonical_id, 'canonical_name': canon[1],
+                        'aliases_merged': len(updated_ids), 'alias_ids': updated_ids})
+    except Exception as e:
+        log.error("api_salepoints_merge: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/salepoints/unmerge', methods=['POST'])
+@require_admin
+def api_salepoints_unmerge():
+    """Unlink an alias SP (set canonical_sp_id = NULL).
+
+    Body: {"sp_id": 450}
+    """
+    try:
+        body = request.get_json(force=True)
+        sp_id = body.get('sp_id')
+        if not sp_id:
+            return jsonify({'error': 'sp_id required'}), 400
+
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        cur.execute(
+            "UPDATE sale_points SET canonical_sp_id = NULL WHERE id = %s RETURNING id, branch_name_he",
+            (sp_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'error': f'SP {sp_id} not found'}), 404
+
+        conn.commit()
+
+        _md_audit_log('salepoints', str(row[0]), 'unmerge',
+                      None, {'sp_id': row[0], 'branch_name': row[1]}, _actor())
+        conn.close()
+
+        return jsonify({'unmerged': True, 'sp_id': row[0], 'branch_name': row[1]})
+    except Exception as e:
+        log.error("api_salepoints_unmerge: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/salepoints/stats', methods=['GET'])
+def api_salepoints_stats():
+    """Summary stats: per-customer SP counts, unlinked count, alias count."""
+    try:
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        # Per-customer counts
+        cur.execute("""
+            SELECT c.id, c.name_en,
+                   COUNT(*) AS total_sps,
+                   COUNT(*) FILTER (WHERE sp.canonical_sp_id IS NULL) AS canonical_sps,
+                   COUNT(*) FILTER (WHERE sp.canonical_sp_id IS NOT NULL) AS alias_sps,
+                   COUNT(*) FILTER (WHERE sp.is_active = true) AS active_sps
+            FROM sale_points sp
+            JOIN customers c ON c.id = sp.customer_id
+            GROUP BY c.id, c.name_en
+            ORDER BY total_sps DESC
+        """)
+        cols = [desc[0] for desc in cur.description]
+        by_customer = [dict(zip(cols, row)) for row in cur.fetchall()]
+
+        # Totals
+        cur.execute("""
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE customer_id IS NULL) AS unlinked,
+                   COUNT(*) FILTER (WHERE canonical_sp_id IS NOT NULL) AS aliases,
+                   COUNT(*) FILTER (WHERE canonical_sp_id IS NULL) AS canonical,
+                   COUNT(*) FILTER (WHERE is_active = true) AS active
+            FROM sale_points
+        """)
+        totals = dict(zip([d[0] for d in cur.description], cur.fetchone()))
+
+        conn.close()
+        return jsonify({'totals': totals, 'by_customer': by_customer})
+    except Exception as e:
+        log.error("api_salepoints_stats: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/salepoints/export', methods=['GET'])
+def api_salepoints_export():
+    """Download Excel of SP assignments. Optional ?customer_id=X filter."""
+    try:
+        import pandas as pd
+        from io import BytesIO
+
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        where = ""
+        params = []
+        cust_id = request.args.get('customer_id', type=int)
+        if cust_id:
+            where = "WHERE sp.customer_id = %s"
+            params = [cust_id]
+
+        sql = f"""
+            SELECT sp.id AS "SP ID",
+                   sp.branch_name_he AS "Branch Name (HE)",
+                   sp.branch_name_clean AS "Branch Name (Clean)",
+                   sp.city AS "City",
+                   d.name_en AS "Distributor",
+                   c.name_en AS "Customer",
+                   sp.customer_id AS "Customer ID",
+                   sp.canonical_sp_id AS "Canonical SP ID",
+                   canon.branch_name_he AS "Canonical Branch Name",
+                   sp.is_active AS "Is Active",
+                   sp.last_order_date AS "Last Order",
+                   COALESCE(txn.total_units, 0) AS "Total Units"
+            FROM sale_points sp
+            LEFT JOIN customers c ON c.id = sp.customer_id
+            LEFT JOIN distributors d ON d.id = sp.distributor_id
+            LEFT JOIN sale_points canon ON canon.id = sp.canonical_sp_id
+            LEFT JOIN (
+                SELECT sale_point_id, SUM(quantity) AS total_units
+                FROM sales_transactions
+                GROUP BY sale_point_id
+            ) txn ON txn.sale_point_id = sp.id
+            {where}
+            ORDER BY c.name_en, sp.branch_name_he
+        """
+        cur.execute(sql, params)
+        cols = [desc[0] for desc in cur.description]
+        rows = cur.fetchall()
+        conn.close()
+
+        df = pd.DataFrame(rows, columns=cols)
+        buf = BytesIO()
+        with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Sale Point Assignments', index=False)
+        buf.seek(0)
+
+        fname = f"salepoints_export{'_cust' + str(cust_id) if cust_id else ''}.xlsx"
+        return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                         as_attachment=True, download_name=fname)
+    except Exception as e:
+        log.error("api_salepoints_export: %s", e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/salepoints/upload', methods=['POST'])
+@require_admin
+def api_salepoints_upload():
+    """Upload edited Excel to update SP assignments (customer_id + canonical_sp_id).
+
+    Expects an Excel file with columns: SP ID, Customer (name), Canonical SP ID.
+    Resolves customer name → customer_id. Returns diff preview if ?preview=1,
+    otherwise applies changes.
+    """
+    try:
+        import pandas as pd
+
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+
+        f = request.files['file']
+        df = pd.read_excel(f, engine='openpyxl')
+
+        # Require SP ID column
+        id_col = next((c for c in df.columns if 'SP ID' in str(c)), None)
+        if not id_col:
+            return jsonify({'error': 'Missing "SP ID" column'}), 400
+
+        cust_col = next((c for c in df.columns if 'Customer' in str(c) and 'ID' not in str(c)), None)
+        canon_col = next((c for c in df.columns if 'Canonical SP ID' in str(c)), None)
+
+        conn = _md_conn()
+        cur = conn.cursor()
+
+        # Build customer name → id lookup
+        cur.execute("SELECT id, name_en FROM customers")
+        cust_lookup = {}
+        for row in cur.fetchall():
+            cust_lookup[row[1].lower()] = row[0]
+            cust_lookup[str(row[0])] = row[0]  # also accept numeric ID
+
+        changes = []
+        errors = []
+
+        for idx, row in df.iterrows():
+            sp_id = row.get(id_col)
+            if pd.isna(sp_id):
+                continue
+            sp_id = int(sp_id)
+
+            update_fields = {}
+
+            # Resolve customer
+            if cust_col and not pd.isna(row.get(cust_col, '')):
+                cust_val = str(row[cust_col]).strip()
+                resolved = cust_lookup.get(cust_val.lower())
+                if not resolved:
+                    errors.append(f"Row {idx + 2}: unknown customer '{cust_val}'")
+                    continue
+                update_fields['customer_id'] = resolved
+
+            # Canonical SP ID
+            if canon_col and not pd.isna(row.get(canon_col, '')):
+                canon_val = row[canon_col]
+                if str(canon_val).strip() == '' or canon_val == 0:
+                    update_fields['canonical_sp_id'] = None
+                else:
+                    update_fields['canonical_sp_id'] = int(canon_val)
+
+            if update_fields:
+                changes.append({'sp_id': sp_id, **update_fields})
+
+        # Preview mode
+        if request.args.get('preview') == '1':
+            conn.close()
+            return jsonify({'changes': changes, 'errors': errors, 'count': len(changes)})
+
+        # Apply changes
+        applied = 0
+        for ch in changes:
+            sp_id = ch.pop('sp_id')
+            sets = ", ".join(f"{k} = %s" for k in ch.keys())
+            vals = list(ch.values()) + [sp_id]
+            cur.execute(f"UPDATE sale_points SET {sets} WHERE id = %s", vals)
+            applied += cur.rowcount
+
+        conn.commit()
+
+        _md_audit_log('salepoints', 'bulk', 'bulk_upload',
+                      None, {'applied': applied, 'total_changes': len(changes),
+                             'errors': len(errors)}, _actor())
+        conn.close()
+
+        return jsonify({'applied': applied, 'errors': errors})
+    except Exception as e:
+        log.error("api_salepoints_upload: %s", e)
         return jsonify({'error': str(e)}), 500
 
 
