@@ -636,7 +636,7 @@ def _extract(data):
 
     # ── Canonical SP Merge: DISABLED — waiting for DB canonical_sp_id cleanup ──
     # Re-enable by changing _CANONICAL_MERGE_ENABLED to True once DB data is reviewed.
-    _CANONICAL_MERGE_ENABLED = False
+    _CANONICAL_MERGE_ENABLED = True
     _canon_debug = {'db_pairs': 0, 'exact': 0, 'norm': 0, 'renamed': 0, 'err': 'disabled'}
     if _CANONICAL_MERGE_ENABLED:
       try:
