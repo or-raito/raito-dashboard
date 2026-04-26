@@ -706,24 +706,11 @@ def _extract(data):
                     _canon_debug['exact' if bname in exact_aliases else 'norm'] += 1
                     continue
 
-                # Check other customer groups
-                found_elsewhere = False
-                for (d2, n2), c2 in customers.items():
-                    if (d2, n2) == (dist, norm):
-                        continue
-                    tgt_b2 = _find_branch_in_group(c2['branches'], canon_name)
-                    if tgt_b2:
-                        _merge_months(c2['branches'][tgt_b2], branches[bname], months)
-                        aliases_to_remove.append(bname)
-                        found_elsewhere = True
-                        _canon_debug['exact' if bname in exact_aliases else 'norm'] += 1
-                        break
-
-                if not found_elsewhere:
-                    # Canonical target not found in any group — rename alias
-                    branches[canon_name] = branches[bname]
-                    aliases_to_remove.append(bname)
-                    _canon_debug['renamed'] += 1
+                # Canonical target not found in this group — just rename
+                # (NEVER search other groups — causes cross-distributor data leak)
+                branches[canon_name] = branches[bname]
+                aliases_to_remove.append(bname)
+                _canon_debug['renamed'] += 1
 
             for bname in aliases_to_remove:
                 branches.pop(bname, None)
