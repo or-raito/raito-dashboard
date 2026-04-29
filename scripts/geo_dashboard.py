@@ -450,8 +450,9 @@ def build_geo_tab(data: dict) -> str:
 }}
 .geo-th-sortable {{ cursor: pointer; }}
 .geo-th-sortable:hover {{ color: #6366f1; }}
-.geo-th-right {{ text-align: center; }}
+.geo-th-right {{ text-align: left; }}
 .geo-tbl-fixed {{ table-layout: fixed; }}
+.geo-tbl-fixed td.geo-th-right {{ text-align: center; }}
 .geo-sort-icon {{ font-size: 9px; opacity: 0.4; }}
 .geo-th-sortable.geo-sort-active .geo-sort-icon {{ opacity: 1; color: #6366f1; }}
 .geo-tbl td {{
