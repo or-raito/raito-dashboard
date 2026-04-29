@@ -158,6 +158,64 @@ def build_geo_tab(data: dict) -> str:
     </div>
   </div>
 
+  <!-- ── Section 2: Stock Deployment ──────────────────────── -->
+  <div class="geo-section-divider">
+    <h3 class="geo-section-title">Stock Deployment</h3>
+    <p class="geo-section-subtitle">Units sold to sale points — where is our product in the field?</p>
+  </div>
+  <div class="geo-stock-area">
+    <div id="geo-stock-status" class="geo-status-bar">Loading stock data…</div>
+    <div class="geo-table-scroll">
+      <table class="geo-tbl" id="geo-stock-table">
+        <thead>
+          <tr>
+            <th class="geo-th-sortable" data-sort="name" onclick="geoSortStock('name')">Location <span class="geo-sort-icon">⇅</span></th>
+            <th class="geo-th-sortable geo-th-right" data-sort="pos_total" onclick="geoSortStock('pos_total')">Total POS <span class="geo-sort-icon">⇅</span></th>
+            <th class="geo-th-sortable geo-th-right" data-sort="pos_stocked" onclick="geoSortStock('pos_stocked')">Stocked POS <span class="geo-sort-icon">⇅</span></th>
+            <th class="geo-th-sortable geo-th-right" data-sort="coverage" onclick="geoSortStock('coverage')">Coverage <span class="geo-sort-icon">⇅</span></th>
+            <th class="geo-th-sortable geo-th-right" data-sort="units" onclick="geoSortStock('units')">Units <span class="geo-sort-icon">⇅</span></th>
+            <th class="geo-th-sortable geo-th-right" data-sort="revenue" onclick="geoSortStock('revenue')">Revenue <span class="geo-sort-icon">⇅</span></th>
+          </tr>
+        </thead>
+        <tbody id="geo-stock-tbody"></tbody>
+        <tfoot id="geo-stock-tfoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Section 3: Demand Trend + Repeat Purchases ───────── -->
+  <div class="geo-section-divider">
+    <h3 class="geo-section-title">Demand Over Time &amp; Repeat Purchases</h3>
+    <p class="geo-section-subtitle">Monthly demand trend and purchase consistency by geography</p>
+  </div>
+  <div class="geo-demand-area">
+    <div id="geo-demand-status" class="geo-status-bar">Loading demand data…</div>
+    <!-- Demand chart -->
+    <div id="geo-demand-chart-wrap" class="geo-demand-chart-wrap" style="display:none;">
+      <canvas id="geo-demand-canvas" height="260"></canvas>
+    </div>
+    <!-- Repeat purchase table -->
+    <div id="geo-repeat-area" style="display:none;">
+      <h4 class="geo-repeat-title">Repeat Purchase Analysis</h4>
+      <div class="geo-table-scroll">
+        <table class="geo-tbl" id="geo-repeat-table">
+          <thead>
+            <tr>
+              <th class="geo-th-sortable" data-sort="name" onclick="geoSortRepeat('name')">Location <span class="geo-sort-icon">⇅</span></th>
+              <th class="geo-th-sortable geo-th-right" data-sort="total_pos" onclick="geoSortRepeat('total_pos')">Total POS <span class="geo-sort-icon">⇅</span></th>
+              <th class="geo-th-sortable geo-th-right" data-sort="multi_month_pos" onclick="geoSortRepeat('multi_month_pos')">2+ Months <span class="geo-sort-icon">⇅</span></th>
+              <th class="geo-th-sortable geo-th-right" data-sort="multi_month_pct" onclick="geoSortRepeat('multi_month_pct')">Repeat % <span class="geo-sort-icon">⇅</span></th>
+              <th class="geo-th-sortable geo-th-right" data-sort="consecutive_pos" onclick="geoSortRepeat('consecutive_pos')">Consecutive <span class="geo-sort-icon">⇅</span></th>
+              <th class="geo-th-sortable geo-th-right" data-sort="consecutive_pct" onclick="geoSortRepeat('consecutive_pct')">Consec. % <span class="geo-sort-icon">⇅</span></th>
+              <th class="geo-th-sortable geo-th-right" data-sort="avg_active_months" onclick="geoSortRepeat('avg_active_months')">Avg Months <span class="geo-sort-icon">⇅</span></th>
+            </tr>
+          </thead>
+          <tbody id="geo-repeat-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /#tab-geo -->
 
 
@@ -434,6 +492,85 @@ def build_geo_tab(data: dict) -> str:
 .geo-btn-edit:hover {{ background: #e5e7eb; }}
 .geo-save-ok {{ color: #22c55e; font-size: 11px; font-weight: 600; }}
 .geo-save-err {{ color: #ef4444; font-size: 11px; }}
+
+/* ── Section dividers ── */
+.geo-section-divider {{
+  padding: 18px 16px 8px;
+  border-top: 2px solid #e5e7eb;
+  margin-top: 12px;
+}}
+.geo-section-title {{
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 2px;
+}}
+.geo-section-subtitle {{
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0;
+}}
+
+/* ── Stock area ── */
+.geo-stock-area {{
+  padding: 0 0 12px;
+}}
+
+/* Coverage bar */
+.geo-coverage-bar {{
+  display: inline-block;
+  width: 60px;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-right: 6px;
+}}
+.geo-coverage-fill {{
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}}
+.geo-cov-high {{ background: #22c55e; }}
+.geo-cov-mid {{ background: #f59e0b; }}
+.geo-cov-low {{ background: #ef4444; }}
+
+/* ── Demand area ── */
+.geo-demand-area {{
+  padding: 0 0 20px;
+}}
+.geo-demand-chart-wrap {{
+  padding: 12px 16px;
+  position: relative;
+  height: 280px;
+}}
+.geo-repeat-title {{
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  padding: 14px 16px 6px;
+  margin: 0;
+}}
+
+/* Repeat % badges */
+.geo-pct-badge {{
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}}
+.geo-pct-high {{ background: #dcfce7; color: #166534; }}
+.geo-pct-mid {{ background: #fef3c7; color: #92400e; }}
+.geo-pct-low {{ background: #fee2e2; color: #991b1b; }}
+
+/* Stock table footer */
+.geo-tbl tfoot td {{
+  font-weight: 700;
+  border-top: 2px solid #e5e7eb;
+  background: #f9fafb;
+}}
 </style>
 
 
@@ -1144,6 +1281,296 @@ function _geoCsvEsc(val) {{
   }}
   return s;
 }}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION 2: Stock Deployment
+// ═══════════════════════════════════════════════════════════════════════════
+
+var _geoStockData = null;
+var _geoStockSort = {{ col: 'units', asc: false }};
+
+function geoLoadStock() {{
+  var layer = document.getElementById('geo-layer-select').value;
+  var month = document.getElementById('geo-month-select').value;
+  var dist  = document.getElementById('geo-dist-select').value;
+  var brand = document.getElementById('geo-brand-select').value;
+
+  var el = document.getElementById('geo-stock-status');
+  if (el) el.textContent = 'Loading stock data…';
+
+  fetch('/api/geo/stock?layer=' + layer + '&month=' + month + '&distributor=' + dist + '&brand=' + brand + '&_v=' + Date.now())
+    .then(function(r) {{ if (!r.ok) throw new Error('Stock API ' + r.status); return r.json(); }})
+    .then(function(payload) {{
+      _geoStockData = payload.data;
+      geoRenderStockTable();
+    }})
+    .catch(function(err) {{
+      if (el) el.textContent = '⚠ ' + err.message;
+    }});
+}}
+
+function geoRenderStockTable() {{
+  var data = _geoStockData;
+  if (!data) return;
+
+  var rows = Object.keys(data).map(function(k) {{
+    var d = data[k];
+    d._id = k;
+    d.coverage = d.pos_total > 0 ? Math.round(d.pos_stocked / d.pos_total * 100) : 0;
+    return d;
+  }});
+
+  // Sort
+  var col = _geoStockSort.col;
+  var asc = _geoStockSort.asc;
+  rows.sort(function(a, b) {{
+    var va = col === 'name' ? (a.name || '').toLowerCase() : (a[col] || 0);
+    var vb = col === 'name' ? (b.name || '').toLowerCase() : (b[col] || 0);
+    if (va < vb) return asc ? -1 : 1;
+    if (va > vb) return asc ? 1 : -1;
+    return 0;
+  }});
+
+  // Filter out zero-data rows
+  rows = rows.filter(function(r) {{ return r.units > 0 || r.pos_stocked > 0; }});
+
+  var tbody = document.getElementById('geo-stock-tbody');
+  var html = '';
+  var totals = {{ pos_total: 0, pos_stocked: 0, units: 0, revenue: 0 }};
+
+  rows.forEach(function(r) {{
+    var covClass = r.coverage >= 70 ? 'geo-cov-high' : r.coverage >= 40 ? 'geo-cov-mid' : 'geo-cov-low';
+    html += '<tr>'
+      + '<td style="font-weight:500;">' + (r.name || '—') + '</td>'
+      + '<td class="geo-th-right">' + r.pos_total.toLocaleString() + '</td>'
+      + '<td class="geo-th-right">' + r.pos_stocked.toLocaleString() + '</td>'
+      + '<td class="geo-th-right"><div class="geo-coverage-bar"><div class="geo-coverage-fill ' + covClass + '" style="width:' + r.coverage + '%;"></div></div>' + r.coverage + '%</td>'
+      + '<td class="geo-th-right" style="font-weight:600;">' + r.units.toLocaleString() + '</td>'
+      + '<td class="geo-th-right">₪' + Math.round(r.revenue).toLocaleString() + '</td>'
+      + '</tr>';
+    totals.pos_total += r.pos_total;
+    totals.pos_stocked += r.pos_stocked;
+    totals.units += r.units;
+    totals.revenue += r.revenue;
+  }});
+  tbody.innerHTML = html;
+
+  // Footer totals
+  var tfoot = document.getElementById('geo-stock-tfoot');
+  var totalCov = totals.pos_total > 0 ? Math.round(totals.pos_stocked / totals.pos_total * 100) : 0;
+  tfoot.innerHTML = '<tr>'
+    + '<td style="font-weight:700;">Total (' + rows.length + ' areas)</td>'
+    + '<td class="geo-th-right">' + totals.pos_total.toLocaleString() + '</td>'
+    + '<td class="geo-th-right">' + totals.pos_stocked.toLocaleString() + '</td>'
+    + '<td class="geo-th-right">' + totalCov + '%</td>'
+    + '<td class="geo-th-right" style="font-weight:700;">' + totals.units.toLocaleString() + '</td>'
+    + '<td class="geo-th-right" style="font-weight:700;">₪' + Math.round(totals.revenue).toLocaleString() + '</td>'
+    + '</tr>';
+
+  var el = document.getElementById('geo-stock-status');
+  if (el) el.textContent = rows.length + ' areas with stock deployed';
+}}
+
+function geoSortStock(col) {{
+  if (_geoStockSort.col === col) _geoStockSort.asc = !_geoStockSort.asc;
+  else {{ _geoStockSort.col = col; _geoStockSort.asc = col === 'name'; }}
+  geoRenderStockTable();
+}}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION 3: Demand Trend + Repeat Purchases
+// ═══════════════════════════════════════════════════════════════════════════
+
+var _geoDemandChart = null;
+var _geoRepeatData = null;
+var _geoRepeatSort = {{ col: 'multi_month_pct', asc: false }};
+
+function geoLoadDemand() {{
+  var layer = document.getElementById('geo-layer-select').value;
+  var dist  = document.getElementById('geo-dist-select').value;
+  var brand = document.getElementById('geo-brand-select').value;
+
+  var el = document.getElementById('geo-demand-status');
+  if (el) el.textContent = 'Loading demand trend…';
+
+  fetch('/api/geo/demand-trend?layer=' + layer + '&distributor=' + dist + '&brand=' + brand + '&_v=' + Date.now())
+    .then(function(r) {{ if (!r.ok) throw new Error('Demand API ' + r.status); return r.json(); }})
+    .then(function(payload) {{
+      geoRenderDemandChart(payload.monthly);
+      _geoRepeatData = payload.repeat;
+      geoRenderRepeatTable();
+      if (el) el.textContent = '';
+      el.style.display = 'none';
+    }})
+    .catch(function(err) {{
+      if (el) {{ el.textContent = '⚠ ' + err.message; el.style.display = ''; }}
+    }});
+}}
+
+function geoRenderDemandChart(monthly) {{
+  if (!monthly || !monthly.length) return;
+
+  var wrap = document.getElementById('geo-demand-chart-wrap');
+  wrap.style.display = '';
+
+  var labels = monthly.map(function(m) {{ return m.label; }});
+
+  // Aggregate total units & revenue across all geos per month
+  var totalUnits = monthly.map(function(m) {{
+    var sum = 0;
+    Object.values(m.data).forEach(function(d) {{ sum += d.units; }});
+    return sum;
+  }});
+  var totalRevenue = monthly.map(function(m) {{
+    var sum = 0;
+    Object.values(m.data).forEach(function(d) {{ sum += d.revenue; }});
+    return Math.round(sum);
+  }});
+  var totalPOS = monthly.map(function(m) {{
+    var sum = 0;
+    Object.values(m.data).forEach(function(d) {{ sum += d.active_pos; }});
+    return sum;
+  }});
+
+  // Destroy old chart
+  if (_geoDemandChart) {{ _geoDemandChart.destroy(); _geoDemandChart = null; }}
+
+  var ctx = document.getElementById('geo-demand-canvas').getContext('2d');
+  _geoDemandChart = new Chart(ctx, {{
+    type: 'bar',
+    data: {{
+      labels: labels,
+      datasets: [
+        {{
+          label: 'Units',
+          data: totalUnits,
+          backgroundColor: 'rgba(99,102,241,0.7)',
+          borderRadius: 4,
+          yAxisID: 'y',
+          order: 2,
+        }},
+        {{
+          label: 'Revenue (₪)',
+          data: totalRevenue,
+          type: 'line',
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34,197,94,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4,
+          borderWidth: 2,
+          yAxisID: 'y1',
+          order: 1,
+        }},
+        {{
+          label: 'Active POS',
+          data: totalPOS,
+          type: 'line',
+          borderColor: '#f59e0b',
+          borderDash: [5, 3],
+          pointRadius: 3,
+          borderWidth: 2,
+          yAxisID: 'y2',
+          order: 0,
+        }}
+      ]
+    }},
+    options: {{
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {{ mode: 'index', intersect: false }},
+      plugins: {{
+        legend: {{ position: 'top', labels: {{ boxWidth: 12, padding: 14, font: {{ size: 11 }} }} }},
+        tooltip: {{
+          callbacks: {{
+            label: function(ctx) {{
+              var v = ctx.parsed.y;
+              if (ctx.dataset.label.indexOf('Revenue') !== -1) return 'Revenue: ₪' + v.toLocaleString();
+              return ctx.dataset.label + ': ' + v.toLocaleString();
+            }}
+          }}
+        }}
+      }},
+      scales: {{
+        x: {{ grid: {{ display: false }} }},
+        y: {{
+          position: 'left',
+          title: {{ display: true, text: 'Units', font: {{ size: 11 }} }},
+          ticks: {{ callback: function(v) {{ return v >= 1000 ? Math.round(v/1000) + 'K' : v; }} }}
+        }},
+        y1: {{
+          position: 'right',
+          title: {{ display: true, text: 'Revenue (₪)', font: {{ size: 11 }} }},
+          grid: {{ drawOnChartArea: false }},
+          ticks: {{ callback: function(v) {{ return '₪' + (v >= 1000 ? Math.round(v/1000) + 'K' : v); }} }}
+        }},
+        y2: {{
+          display: false,
+        }}
+      }}
+    }}
+  }});
+}}
+
+function geoRenderRepeatTable() {{
+  var data = _geoRepeatData;
+  if (!data) return;
+
+  document.getElementById('geo-repeat-area').style.display = '';
+
+  var rows = Object.keys(data).map(function(k) {{
+    var d = data[k];
+    d._id = k;
+    return d;
+  }});
+
+  // Sort
+  var col = _geoRepeatSort.col;
+  var asc = _geoRepeatSort.asc;
+  rows.sort(function(a, b) {{
+    var va = col === 'name' ? (a.name || '').toLowerCase() : (a[col] || 0);
+    var vb = col === 'name' ? (b.name || '').toLowerCase() : (b[col] || 0);
+    if (va < vb) return asc ? -1 : 1;
+    if (va > vb) return asc ? 1 : -1;
+    return 0;
+  }});
+
+  // Filter out areas with no POS
+  rows = rows.filter(function(r) {{ return r.total_pos > 0; }});
+
+  var tbody = document.getElementById('geo-repeat-tbody');
+  var html = '';
+  rows.forEach(function(r) {{
+    var rpClass = r.multi_month_pct >= 60 ? 'geo-pct-high' : r.multi_month_pct >= 30 ? 'geo-pct-mid' : 'geo-pct-low';
+    var cpClass = r.consecutive_pct >= 60 ? 'geo-pct-high' : r.consecutive_pct >= 30 ? 'geo-pct-mid' : 'geo-pct-low';
+    html += '<tr>'
+      + '<td style="font-weight:500;">' + (r.name || '—') + '</td>'
+      + '<td class="geo-th-right">' + r.total_pos + '</td>'
+      + '<td class="geo-th-right">' + r.multi_month_pos + '</td>'
+      + '<td class="geo-th-right"><span class="geo-pct-badge ' + rpClass + '">' + r.multi_month_pct + '%</span></td>'
+      + '<td class="geo-th-right">' + r.consecutive_pos + '</td>'
+      + '<td class="geo-th-right"><span class="geo-pct-badge ' + cpClass + '">' + r.consecutive_pct + '%</span></td>'
+      + '<td class="geo-th-right">' + r.avg_active_months + ' / ' + r.total_months + '</td>'
+      + '</tr>';
+  }});
+  tbody.innerHTML = html;
+}}
+
+function geoSortRepeat(col) {{
+  if (_geoRepeatSort.col === col) _geoRepeatSort.asc = !_geoRepeatSort.asc;
+  else {{ _geoRepeatSort.col = col; _geoRepeatSort.asc = col === 'name'; }}
+  geoRenderRepeatTable();
+}}
+
+
+// ─── Hook stock + demand into the existing filter change flow ────────────
+var _origGeoUpdateMap = geoUpdateMap;
+geoUpdateMap = function() {{
+  _origGeoUpdateMap();
+  geoLoadStock();
+  geoLoadDemand();
+}};
 
 // ─── Expose init for Maps API callback ───────────────────────────────────
 window.geoInitMap = geoInitMap;

@@ -1066,6 +1066,403 @@ def _geocode_pos_ids(pos_ids: list) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Route: Stock deployment by geography
+# ---------------------------------------------------------------------------
+
+@geo_blueprint.route("/stock")
+def get_stock():
+    """
+    GET /api/geo/stock?layer=district&month=all&distributor=all&brand=all
+
+    Returns units sold TO each sale point, aggregated by district or city.
+    This represents the B2B stock deployed to the field.
+
+    Returns:
+      {
+        "data": {
+          "<geo_id>": {
+            "name": "Tel Aviv",
+            "name_he": "תל אביב",
+            "pos_total": 347,
+            "pos_stocked": 280,
+            "units": 52000,
+            "revenue": 929504,
+            "products": { "turbo_chocolate": 12000, ... }
+          }
+        }
+      }
+    """
+    layer       = request.args.get("layer", "district")
+    month       = request.args.get("month", "all")
+    distributor = request.args.get("distributor", "all")
+    brand       = request.args.get("brand", "all")
+
+    try:
+        conn = _get_db_conn()
+        try:
+            result = _query_stock(conn, layer, month, distributor, brand)
+        finally:
+            conn.close()
+
+        return jsonify({
+            "data":        result,
+            "layer":       layer,
+            "month":       month,
+            "distributor": distributor,
+            "brand":       brand,
+        })
+    except Exception as e:
+        log.exception("Error in /api/geo/stock")
+        return jsonify({"error": str(e)}), 500
+
+
+def _query_stock(conn, layer: str, month: str, distributor: str, brand: str) -> dict:
+    """
+    Aggregate B2B stock (units sold to POS) by district or city.
+    Includes per-product breakdown and stocked-vs-total POS counts.
+    """
+    if layer == "city":
+        geo_table = "cities_geo"
+        geo_id = "cg.city_id"
+        geo_name = "cg.name_en"
+        geo_name_he = "cg.name_he"
+        spatial = "(sp.geo_point IS NOT NULL AND ST_Within(sp.geo_point, cg.geom)) OR (sp.geo_point IS NULL AND (sp.geo_municipality = cg.name_he OR sp.geo_municipality = cg.name_en))"
+    else:
+        geo_table = "municipalities_geo"
+        geo_id = "mg.municipality_id"
+        geo_name = "mg.name_en"
+        geo_name_he = "mg.name_he"
+        spatial = "(sp.geo_point IS NOT NULL AND ST_Within(sp.geo_point, mg.geom)) OR (sp.geo_point IS NULL AND (sp.geo_municipality = mg.name_he OR sp.geo_municipality = mg.name_en))"
+
+    alias = "cg" if layer == "city" else "mg"
+
+    params = []
+    dist_clause = _build_dist_clause(distributor, params)
+    month_clause = _build_month_clause(month, params)
+
+    brand_join = ""
+    brand_clause = ""
+    if brand != "all":
+        brand_clause = _build_brand_clause(brand, params)
+        if brand_clause:
+            brand_join = "LEFT JOIN products p ON p.id = st.product_id"
+
+    # Main aggregation
+    sql = f"""
+        SELECT
+            {geo_id}                                      AS geo_id,
+            {geo_name}                                    AS name,
+            {geo_name_he}                                 AS name_he,
+            COUNT(DISTINCT sp.id)::int                    AS pos_total,
+            COUNT(DISTINCT CASE WHEN st.id IS NOT NULL THEN sp.id END)::int AS pos_stocked,
+            COALESCE(SUM(st.units_sold), 0)::int          AS units,
+            COALESCE(SUM(st.revenue_ils), 0)::float       AS revenue
+        FROM {geo_table} {alias}
+        LEFT JOIN sale_points sp
+            ON sp.latitude IS NOT NULL
+            AND ({spatial})
+            {dist_clause}
+        LEFT JOIN sales_transactions st
+            ON st.sale_point_id = sp.id
+            {month_clause}
+        {brand_join}
+            {brand_clause}
+        GROUP BY {geo_id}, {geo_name}, {geo_name_he}
+        ORDER BY units DESC
+    """
+
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    result = {}
+    for row in rows:
+        gid = row["geo_id"]
+        result[gid] = {
+            "name":        row["name"] or row["name_he"],
+            "name_he":     row["name_he"],
+            "pos_total":   row["pos_total"],
+            "pos_stocked": row["pos_stocked"],
+            "units":       row["units"],
+            "revenue":     round(row["revenue"], 2),
+        }
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Route: Demand trend + repeat purchases by geography
+# ---------------------------------------------------------------------------
+
+@geo_blueprint.route("/demand-trend")
+def get_demand_trend():
+    """
+    GET /api/geo/demand-trend?layer=district&geo_id=all&distributor=all&brand=all
+
+    Returns monthly demand time series + repeat purchase metrics per geography.
+
+    Returns:
+      {
+        "monthly": [
+          { "year": 2026, "month": 1, "label": "Jan 26",
+            "data": { "<geo_id>": { "units": 1200, "revenue": 18000, "active_pos": 45 } }
+          }, ...
+        ],
+        "repeat": {
+          "<geo_id>": {
+            "name": "Tel Aviv",
+            "total_pos": 347,
+            "multi_month_pos": 210,
+            "multi_month_pct": 60.5,
+            "consecutive_pos": 180,
+            "consecutive_pct": 51.9,
+            "avg_active_months": 3.2,
+            "total_months": 5
+          }
+        }
+      }
+    """
+    layer       = request.args.get("layer", "district")
+    geo_id      = request.args.get("geo_id", "all")
+    distributor = request.args.get("distributor", "all")
+    brand       = request.args.get("brand", "all")
+
+    try:
+        conn = _get_db_conn()
+        try:
+            monthly = _query_demand_monthly(conn, layer, distributor, brand, geo_id)
+            repeat  = _query_repeat_purchases(conn, layer, distributor, brand, geo_id)
+        finally:
+            conn.close()
+
+        return jsonify({
+            "monthly": monthly,
+            "repeat":  repeat,
+            "layer":   layer,
+            "geo_id":  geo_id,
+            "distributor": distributor,
+            "brand":   brand,
+        })
+    except Exception as e:
+        log.exception("Error in /api/geo/demand-trend")
+        return jsonify({"error": str(e)}), 500
+
+
+def _geo_join_fragment(layer: str):
+    """Return (table, alias, id_col, name_col, name_he_col, spatial_clause) for district or city."""
+    if layer == "city":
+        return ("cities_geo", "cg", "cg.city_id", "cg.name_en", "cg.name_he",
+                "(sp.geo_point IS NOT NULL AND ST_Within(sp.geo_point, cg.geom)) OR "
+                "(sp.geo_point IS NULL AND (sp.geo_municipality = cg.name_he OR sp.geo_municipality = cg.name_en))")
+    return ("municipalities_geo", "mg", "mg.municipality_id", "mg.name_en", "mg.name_he",
+            "(sp.geo_point IS NOT NULL AND ST_Within(sp.geo_point, mg.geom)) OR "
+            "(sp.geo_point IS NULL AND (sp.geo_municipality = mg.name_he OR sp.geo_municipality = mg.name_en))")
+
+
+def _query_demand_monthly(conn, layer: str, distributor: str, brand: str, geo_id: str) -> list:
+    """Monthly units/revenue/active_pos by geography."""
+    geo_table, alias, id_col, name_col, name_he_col, spatial = _geo_join_fragment(layer)
+
+    params = []
+    dist_clause = _build_dist_clause(distributor, params)
+    brand_join = ""
+    brand_clause = ""
+    if brand != "all":
+        brand_clause = _build_brand_clause(brand, params)
+        if brand_clause:
+            brand_join = "LEFT JOIN products p ON p.id = st.product_id"
+
+    geo_filter = ""
+    if geo_id != "all":
+        params.append(geo_id)
+        geo_filter = f"AND {id_col} = %s"
+
+    sql = f"""
+        SELECT
+            st.year,
+            st.month,
+            {id_col}                                     AS geo_id,
+            COALESCE(SUM(st.units_sold), 0)::int         AS units,
+            COALESCE(SUM(st.revenue_ils), 0)::float      AS revenue,
+            COUNT(DISTINCT st.sale_point_id)::int         AS active_pos
+        FROM {geo_table} {alias}
+        INNER JOIN sale_points sp
+            ON sp.latitude IS NOT NULL
+            AND ({spatial})
+            {dist_clause}
+        INNER JOIN sales_transactions st
+            ON st.sale_point_id = sp.id
+        {brand_join}
+            {brand_clause}
+        WHERE 1=1 {geo_filter}
+        GROUP BY st.year, st.month, {id_col}
+        ORDER BY st.year, st.month
+    """
+
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+    # Group by (year, month)
+    months_data = {}
+    for row in rows:
+        key = (row["year"], row["month"])
+        if key not in months_data:
+            yr_short = str(row["year"])[-2:]
+            months_data[key] = {
+                "year": row["year"],
+                "month": row["month"],
+                "label": f"{month_names[row['month']]} '{yr_short}",
+                "data": {}
+            }
+        months_data[key]["data"][row["geo_id"]] = {
+            "units":      row["units"],
+            "revenue":    round(row["revenue"], 2),
+            "active_pos": row["active_pos"],
+        }
+
+    return [months_data[k] for k in sorted(months_data.keys())]
+
+
+def _query_repeat_purchases(conn, layer: str, distributor: str, brand: str, geo_id: str) -> dict:
+    """
+    Per geography: total POS, multi-month POS (2+), consecutive-month POS,
+    average active months per POS.
+    """
+    geo_table, alias, id_col, name_col, name_he_col, spatial = _geo_join_fragment(layer)
+
+    params = []
+    dist_clause = _build_dist_clause(distributor, params)
+    brand_join = ""
+    brand_clause = ""
+    if brand != "all":
+        brand_clause = _build_brand_clause(brand, params)
+        if brand_clause:
+            brand_join = "LEFT JOIN products p ON p.id = st.product_id"
+
+    geo_filter = ""
+    if geo_id != "all":
+        params.append(geo_id)
+        geo_filter = f"AND {id_col} = %s"
+
+    # Step 1: Get per-POS monthly activity per geo area
+    sql = f"""
+        WITH pos_months AS (
+            SELECT
+                {id_col}              AS geo_id,
+                {name_col}            AS name,
+                {name_he_col}         AS name_he,
+                st.sale_point_id,
+                st.year,
+                st.month,
+                (st.year * 100 + st.month) AS ym
+            FROM {geo_table} {alias}
+            INNER JOIN sale_points sp
+                ON sp.latitude IS NOT NULL
+                AND ({spatial})
+                {dist_clause}
+            INNER JOIN sales_transactions st
+                ON st.sale_point_id = sp.id
+            {brand_join}
+                {brand_clause}
+            WHERE st.sale_point_id IS NOT NULL
+                  {geo_filter}
+            GROUP BY {id_col}, {name_col}, {name_he_col},
+                     st.sale_point_id, st.year, st.month
+        ),
+        pos_stats AS (
+            SELECT
+                geo_id,
+                name,
+                name_he,
+                sale_point_id,
+                COUNT(*)::int                               AS active_months,
+                ARRAY_AGG(ym ORDER BY ym)                   AS ym_list
+            FROM pos_months
+            GROUP BY geo_id, name, name_he, sale_point_id
+        ),
+        total_months AS (
+            SELECT COUNT(DISTINCT ym)::int AS total
+            FROM pos_months
+        )
+        SELECT
+            ps.geo_id,
+            ps.name,
+            ps.name_he,
+            COUNT(*)::int                                               AS total_pos,
+            COUNT(*) FILTER (WHERE ps.active_months >= 2)::int          AS multi_month_pos,
+            SUM(ps.active_months)::float / NULLIF(COUNT(*), 0)         AS avg_active_months,
+            ps.ym_list,
+            ps.sale_point_id,
+            ps.active_months,
+            tm.total                                                    AS total_months
+        FROM pos_stats ps
+        CROSS JOIN total_months tm
+        GROUP BY ps.geo_id, ps.name, ps.name_he, ps.ym_list,
+                 ps.sale_point_id, ps.active_months, tm.total
+    """
+
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    # Post-process: aggregate per geo_id and compute consecutive months
+    geo_agg = {}
+    for row in rows:
+        gid = row["geo_id"]
+        if gid not in geo_agg:
+            geo_agg[gid] = {
+                "name": row["name"] or row["name_he"],
+                "name_he": row["name_he"],
+                "total_pos": 0,
+                "multi_month_pos": 0,
+                "consecutive_pos": 0,
+                "total_active_months": 0,
+                "total_months": row["total_months"],
+            }
+        agg = geo_agg[gid]
+        agg["total_pos"] += 1
+        agg["total_active_months"] += row["active_months"]
+        if row["active_months"] >= 2:
+            agg["multi_month_pos"] += 1
+
+        # Check for consecutive months
+        ym_list = row["ym_list"]
+        if ym_list and len(ym_list) >= 2:
+            has_consec = False
+            for i in range(len(ym_list) - 1):
+                y1, m1 = divmod(ym_list[i], 100)
+                y2, m2 = divmod(ym_list[i + 1], 100)
+                # Next month check
+                if (y1 == y2 and m2 == m1 + 1) or (m1 == 12 and m2 == 1 and y2 == y1 + 1):
+                    has_consec = True
+                    break
+            if has_consec:
+                agg["consecutive_pos"] += 1
+
+    # Compute percentages
+    result = {}
+    for gid, agg in geo_agg.items():
+        tp = agg["total_pos"]
+        result[gid] = {
+            "name":              agg["name"],
+            "name_he":           agg["name_he"],
+            "total_pos":         tp,
+            "multi_month_pos":   agg["multi_month_pos"],
+            "multi_month_pct":   round(agg["multi_month_pos"] / tp * 100, 1) if tp > 0 else 0,
+            "consecutive_pos":   agg["consecutive_pos"],
+            "consecutive_pct":   round(agg["consecutive_pos"] / tp * 100, 1) if tp > 0 else 0,
+            "avg_active_months": round(agg["total_active_months"] / tp, 1) if tp > 0 else 0,
+            "total_months":      agg["total_months"],
+        }
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Optional: invalidate the in-memory boundary cache (call after re-importing GeoJSON)
 # ---------------------------------------------------------------------------
 
