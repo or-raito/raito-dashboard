@@ -166,7 +166,15 @@ def build_geo_tab(data: dict) -> str:
   <div class="geo-stock-area">
     <div id="geo-stock-status" class="geo-status-bar">Loading stock data…</div>
     <div class="geo-table-scroll">
-      <table class="geo-tbl" id="geo-stock-table">
+      <table class="geo-tbl geo-tbl-fixed" id="geo-stock-table">
+        <colgroup>
+          <col style="width:20%">
+          <col style="width:13%">
+          <col style="width:13%">
+          <col style="width:20%">
+          <col style="width:15%">
+          <col style="width:19%">
+        </colgroup>
         <thead>
           <tr>
             <th class="geo-th-sortable" data-sort="name" onclick="geoSortStock('name')">Location <span class="geo-sort-icon">⇅</span></th>
@@ -198,7 +206,16 @@ def build_geo_tab(data: dict) -> str:
     <div id="geo-repeat-area" style="display:none;">
       <h4 class="geo-repeat-title">Repeat Purchase Analysis</h4>
       <div class="geo-table-scroll">
-        <table class="geo-tbl" id="geo-repeat-table">
+        <table class="geo-tbl geo-tbl-fixed" id="geo-repeat-table">
+          <colgroup>
+            <col style="width:18%">
+            <col style="width:12%">
+            <col style="width:12%">
+            <col style="width:14%">
+            <col style="width:14%">
+            <col style="width:14%">
+            <col style="width:16%">
+          </colgroup>
           <thead>
             <tr>
               <th class="geo-th-sortable" data-sort="name" onclick="geoSortRepeat('name')">Location <span class="geo-sort-icon">⇅</span></th>
@@ -434,6 +451,7 @@ def build_geo_tab(data: dict) -> str:
 .geo-th-sortable {{ cursor: pointer; }}
 .geo-th-sortable:hover {{ color: #6366f1; }}
 .geo-th-right {{ text-align: center; }}
+.geo-tbl-fixed {{ table-layout: fixed; }}
 .geo-sort-icon {{ font-size: 9px; opacity: 0.4; }}
 .geo-th-sortable.geo-sort-active .geo-sort-icon {{ opacity: 1; color: #6366f1; }}
 .geo-tbl td {{
