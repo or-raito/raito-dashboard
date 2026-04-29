@@ -2662,7 +2662,6 @@ def api_sp_overrides_customers():
 
 
 @app.route('/api/sp-detect-unrecognized', methods=['POST'])
-@require_admin
 def api_sp_detect_unrecognized():
     """Parse an uploaded file and return any SP names that don't match known rules.
 

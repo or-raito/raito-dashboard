@@ -4219,9 +4219,10 @@ async function doUploadModal() {{
     var detectResp = await fetch('/api/sp-detect-unrecognized', {{ method: 'POST', body: fd }});
     var detectData = await detectResp.json();
 
-    if (detectData.error) {{
-      // Detection failed — fall through to direct ingest
-      console.warn('SP detection failed, proceeding to ingest:', detectData.error);
+    if (!detectResp.ok || detectData.error) {{
+      // Detection failed — show warning but continue to ingest
+      console.warn('SP detection failed:', detectData.error || detectResp.status);
+      spinner.textContent = '⚠ SP detection unavailable (' + (detectData.error || 'HTTP ' + detectResp.status) + '). Ingesting directly...';
       await _doDirectIngest(submitBtn, spinner, result);
       return;
     }}
