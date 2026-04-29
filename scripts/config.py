@@ -273,11 +273,85 @@ def _to_en(name):
     """Translate Hebrew customer name to English via CUSTOMER_NAMES_EN."""
     return CUSTOMER_NAMES_EN.get(name, CUSTOMER_NAMES_EN.get(name.strip(), name))
 
+
+# ── SP Customer Overrides (DB-driven, cached in memory) ──────────────────────
+# These override hardcoded rules. Loaded once from sp_customer_overrides table,
+# refreshed on demand via reload_sp_overrides().
+_sp_overrides_cache = None   # None = not yet loaded; dict = loaded
+
+def reload_sp_overrides():
+    """Reload overrides from DB. Call after writing new overrides."""
+    global _sp_overrides_cache
+    _sp_overrides_cache = None
+
+def _get_sp_overrides():
+    """Load sp_customer_overrides from DB (cached after first call).
+
+    Returns dict: { 'exact': {sp_name: customer_en}, 'prefix': [...], 'contains': [...] }
+    """
+    global _sp_overrides_cache
+    if _sp_overrides_cache is not None:
+        return _sp_overrides_cache
+
+    overrides = {'exact': {}, 'prefix': [], 'contains': []}
+    try:
+        import os
+        db_url = os.environ.get('DATABASE_URL', '')
+        if not db_url:
+            _sp_overrides_cache = overrides
+            return overrides
+        import psycopg2
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT sp_name, customer_en, match_type, distributor
+            FROM sp_customer_overrides
+            ORDER BY LENGTH(sp_name) DESC
+        """)
+        for sp_name, customer_en, match_type, distributor in cur.fetchall():
+            if match_type == 'exact':
+                overrides['exact'][sp_name] = customer_en
+            elif match_type == 'prefix':
+                overrides['prefix'].append((sp_name, customer_en))
+            elif match_type == 'contains':
+                overrides['contains'].append((sp_name, customer_en))
+        cur.close()
+        conn.close()
+    except Exception:
+        pass  # DB not available (local dev without proxy) — use empty overrides
+
+    _sp_overrides_cache = overrides
+    return overrides
+
+
+def _check_sp_override(sp_name):
+    """Check if an SP name matches any user-defined override.
+
+    Returns customer_en string if matched, None otherwise.
+    """
+    ov = _get_sp_overrides()
+    # Exact match (fastest)
+    if sp_name in ov['exact']:
+        return ov['exact'][sp_name]
+    # Prefix match (longest-first, already sorted by LENGTH DESC)
+    for prefix, customer_en in ov['prefix']:
+        if sp_name.startswith(prefix):
+            return customer_en
+    # Contains match
+    for substr, customer_en in ov['contains']:
+        if substr in sp_name:
+            return customer_en
+    return None
+
+
 def extract_customer_name(customer_name, source_customer=None):
     """Extract customer name from a branch-level account name.
 
-    Resolves branch-level names (e.g., "דור אלון AM:PM הרצליה") to their
-    parent customer (e.g., "AMPM"). Uses the Customer hierarchy from registry.py.
+    Resolution order:
+      1. DB overrides (sp_customer_overrides table) — user-defined, highest priority
+      2. Hardcoded rules (Wolt, Holmes, Paz, Tiv Taam, Dor Alon split, prefixes)
+      3. Ma'ayan source_customer fallback
+      4. Raw name pass-through
 
     Args:
         customer_name: The account/branch name to classify.
@@ -288,6 +362,13 @@ def extract_customer_name(customer_name, source_customer=None):
     if not customer_name:
         return customer_name
     s = str(customer_name).strip()
+
+    # ── Step 0: Check DB overrides (user-defined, takes priority) ──
+    override = _check_sp_override(s)
+    if override:
+        return override
+
+    # ── Step 1: Hardcoded rules ──
     # Normalize all Wolt variants
     if 'וולט' in s or 'וואלט' in s:
         return _to_en('וולט מרקט')
@@ -321,6 +402,42 @@ def extract_customer_name(customer_name, source_customer=None):
             return _to_en('פז ילו')
         return _to_en(sc)
     return _to_en(s)
+
+
+def is_sp_recognized(sp_name, source_customer=None):
+    """Check if an SP name would be recognized by extract_customer_name().
+
+    Returns True if it matches a DB override OR a hardcoded rule.
+    Returns False if it would fall through to source_customer fallback or raw name.
+    Used by the upload flow to detect unrecognized SPs.
+    """
+    if not sp_name:
+        return True
+    s = str(sp_name).strip()
+
+    # DB override = recognized
+    if _check_sp_override(s):
+        return True
+
+    # Hardcoded rules = recognized
+    if 'וולט' in s or 'וואלט' in s:
+        return True
+    if 'הולמס' in s:
+        return True
+    if 'פז יילו' in s or 'פז ילו' in s:
+        return True
+    if 'טיב טעם' in s:
+        return True
+    if s.startswith('דור אלון'):
+        return True
+    if 'שפר את' in s:
+        return True
+    for prefix in _CUSTOMER_PREFIXES_LOCAL:
+        if s.startswith(prefix):
+            return True
+
+    # Would fall through — unrecognized
+    return False
 
 # Backward-compatible alias — being phased out in favor of extract_customer_name
 extract_chain_name = extract_customer_name

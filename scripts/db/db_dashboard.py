@@ -463,7 +463,7 @@ _UPLOAD_HTML = """<!DOCTYPE html>
   }
   .card {
     background: #1a1d27; border: 1px solid #2d3148; border-radius: 16px;
-    width: 100%; max-width: 560px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    width: 100%; max-width: 640px; padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   }
   .logo { font-size: 13px; letter-spacing: 3px; color: #6c7aaa; text-transform: uppercase; margin-bottom: 8px; }
   h1 { font-size: 26px; font-weight: 700; color: #fff; margin-bottom: 6px; }
@@ -502,6 +502,19 @@ _UPLOAD_HTML = """<!DOCTYPE html>
   }
   .btn:hover { background: #4a58d8; }
   .btn:disabled { background: #2d3148; color: #4a5568; cursor: not-allowed; }
+  .btn-secondary {
+    width: 100%; padding: 12px; background: transparent; color: #6c7aaa; border: 1px solid #2d3148;
+    border-radius: 10px; font-size: 14px; cursor: pointer;
+    margin-top: 12px; transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: #5b6af0; color: #e2e8f0; }
+  .btn-green {
+    width: 100%; padding: 14px; background: #27ae60; color: #fff; border: none;
+    border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;
+    margin-top: 20px; transition: background 0.2s;
+  }
+  .btn-green:hover { background: #219a52; }
+  .btn-green:disabled { background: #2d3148; color: #4a5568; cursor: not-allowed; }
   .result {
     display: none; margin-top: 24px; border-radius: 12px; padding: 20px;
     font-size: 13px; line-height: 1.7;
@@ -516,44 +529,116 @@ _UPLOAD_HTML = """<!DOCTYPE html>
   .spinner { display: none; text-align: center; margin-top: 16px; color: #6c7aaa; font-size: 14px; }
   .back-link { display: block; text-align: center; margin-top: 24px; font-size: 13px; color: #5b6af0; text-decoration: none; }
   .back-link:hover { text-decoration: underline; }
+
+  /* ── SP Review Step ── */
+  #spReviewStep { display: none; }
+  .review-header {
+    background: #1a1a0d; border: 1px solid #4a4a1a; border-radius: 10px;
+    padding: 16px; margin-bottom: 20px; color: #f6e05e; font-size: 14px;
+  }
+  .review-header strong { color: #fff; }
+  .review-summary {
+    display: flex; gap: 20px; margin-bottom: 16px; font-size: 13px; color: #6c7aaa;
+  }
+  .review-summary span { color: #e2e8f0; font-weight: 600; }
+  .sp-review-list {
+    max-height: 400px; overflow-y: auto; border: 1px solid #2d3148;
+    border-radius: 10px; background: #12151f;
+  }
+  .sp-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    border-bottom: 1px solid #2d3148; font-size: 13px;
+  }
+  .sp-row:last-child { border-bottom: none; }
+  .sp-row .sp-name {
+    flex: 1; color: #e2e8f0; direction: rtl; text-align: right;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0;
+  }
+  .sp-row .sp-current {
+    font-size: 11px; color: #4a5568; min-width: 80px; text-align: center;
+  }
+  .sp-row select {
+    width: 180px; min-width: 180px; padding: 6px 10px; font-size: 12px;
+    background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px;
+    color: #e2e8f0;
+  }
+  .sp-row select.assigned { border-color: #27ae60; background: #0d1f17; }
+  .bulk-assign {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    background: #1a1d27; border: 1px solid #2d3148; border-radius: 10px;
+    margin-bottom: 12px;
+  }
+  .bulk-assign label { font-size: 12px; color: #6c7aaa; white-space: nowrap; }
+  .bulk-assign select { flex: 1; }
+  .bulk-assign button {
+    padding: 6px 16px; background: #5b6af0; color: #fff; border: none;
+    border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
 </style>
 </head>
 <body>
 <div class="card">
   <div class="logo">Raito</div>
-  <h1>Upload Distributor File</h1>
-  <p class="subtitle">Drop a sales or stock file — it loads directly into the database.</p>
 
-  <div class="drop-zone" id="dropZone">
-    <div class="drop-icon">📂</div>
-    <div class="drop-text">Drag & drop file here, or <span onclick="document.getElementById('fileInput').click()">browse</span></div>
-    <input type="file" id="fileInput" accept=".xlsx,.xls,.pdf" style="display:none">
-    <div class="file-name" id="fileName"></div>
-  </div>
+  <!-- ══ Step 1: File Selection ══ -->
+  <div id="uploadStep">
+    <h1>Upload Distributor File</h1>
+    <p class="subtitle">Drop a sales or stock file — new sale points will be detected automatically.</p>
 
-  <div class="options">
-    <div class="field">
-      <label>Distributor</label>
-      <select id="distributor">
-        <option value="">Auto-detect from filename</option>
-        <option value="icedream">Icedream</option>
-        <option value="mayyan">Ma'ayan</option>
-        <option value="biscotti">Biscotti</option>
-        <option value="karfree">Karfree (warehouse stock)</option>
-      </select>
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">📂</div>
+      <div class="drop-text">Drag & drop file here, or <span onclick="document.getElementById('fileInput').click()">browse</span></div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.pdf" style="display:none">
+      <div class="file-name" id="fileName"></div>
     </div>
-    <label class="toggle-row">
-      <input type="checkbox" id="forceCheck">
-      <span class="toggle-label">
-        Force re-import
-        <small>Overwrite existing data for this period</small>
-      </span>
-    </label>
+
+    <div class="options">
+      <div class="field">
+        <label>Distributor</label>
+        <select id="distributor">
+          <option value="">Auto-detect from filename</option>
+          <option value="icedream">Icedream</option>
+          <option value="mayyan">Ma'ayan</option>
+          <option value="biscotti">Biscotti</option>
+          <option value="karfree">Karfree (warehouse stock)</option>
+        </select>
+      </div>
+      <label class="toggle-row">
+        <input type="checkbox" id="forceCheck">
+        <span class="toggle-label">
+          Force re-import
+          <small>Overwrite existing data for this period</small>
+        </span>
+      </label>
+    </div>
+
+    <button class="btn" id="uploadBtn" disabled onclick="startUpload()">Upload & Detect</button>
   </div>
 
-  <button class="btn" id="uploadBtn" disabled onclick="doUpload()">Upload & Ingest</button>
+  <!-- ══ Step 2: SP Review ══ -->
+  <div id="spReviewStep">
+    <h1>Review New Sale Points</h1>
+    <p class="subtitle">These sale points are not recognized. Assign each to a customer, or skip to use defaults.</p>
 
-  <div class="spinner" id="spinner">⏳ Uploading and ingesting data...</div>
+    <div class="review-summary" id="reviewSummary"></div>
+
+    <div class="review-header" id="reviewHeader"></div>
+
+    <!-- Bulk assign -->
+    <div class="bulk-assign">
+      <label>Assign all to:</label>
+      <select id="bulkCustomer"><option value="">Choose customer...</option></select>
+      <button onclick="bulkAssign()">Apply</button>
+    </div>
+
+    <div class="sp-review-list" id="spList"></div>
+
+    <button class="btn-green" id="saveAndIngestBtn" onclick="saveAndIngest()">Save Assignments & Ingest</button>
+    <button class="btn-secondary" onclick="skipAndIngest()">Skip — Ingest Without Assigning</button>
+  </div>
+
+  <div class="spinner" id="spinner">⏳ Processing...</div>
   <div class="result" id="result"></div>
   <a href="/" class="back-link">← Back to dashboard</a>
 </div>
@@ -564,6 +649,8 @@ _UPLOAD_HTML = """<!DOCTYPE html>
   const fileNameEl = document.getElementById('fileName');
   const uploadBtn = document.getElementById('uploadBtn');
   let selectedFile = null;
+  let knownCustomers = [];
+  let detectedDistributor = '';
 
   fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
 
@@ -583,13 +670,184 @@ _UPLOAD_HTML = """<!DOCTYPE html>
     uploadBtn.disabled = false;
   }
 
-  async function doUpload() {
+  // ── Step 1: Detect unrecognized SPs ──
+  async function startUpload() {
     if (!selectedFile) return;
     const spinner = document.getElementById('spinner');
     const result = document.getElementById('result');
 
     uploadBtn.disabled = true;
     spinner.style.display = 'block';
+    spinner.textContent = '⏳ Scanning for new sale points...';
+    result.style.display = 'none';
+
+    const fd = new FormData();
+    fd.append('file', selectedFile, selectedFile.name);
+    fd.append('distributor', document.getElementById('distributor').value);
+
+    try {
+      const resp = await fetch('/api/sp-detect-unrecognized', { method: 'POST', body: fd });
+      const data = await resp.json();
+      spinner.style.display = 'none';
+
+      if (data.error) {
+        result.style.display = 'block';
+        result.className = 'result error';
+        result.innerHTML = '<div class="result-title">✗ Error</div>' + escHtml(data.error);
+        uploadBtn.disabled = false;
+        return;
+      }
+
+      detectedDistributor = data.distributor || '';
+
+      if (data.is_stock || !data.unrecognized || data.unrecognized.length === 0) {
+        // No unrecognized SPs — proceed directly to ingestion
+        doIngest();
+        return;
+      }
+
+      // Load customer list for dropdowns
+      try {
+        const custResp = await fetch('/api/sp-overrides/customers');
+        const custData = await custResp.json();
+        knownCustomers = custData.customers || [];
+      } catch(e) { knownCustomers = []; }
+
+      // Show review step
+      showReviewStep(data);
+
+    } catch (err) {
+      spinner.style.display = 'none';
+      result.style.display = 'block';
+      result.className = 'result error';
+      result.innerHTML = '<div class="result-title">✗ Network error</div>' + escHtml(String(err));
+      uploadBtn.disabled = false;
+    }
+  }
+
+  function showReviewStep(data) {
+    document.getElementById('uploadStep').style.display = 'none';
+    document.getElementById('spReviewStep').style.display = 'block';
+
+    const summary = document.getElementById('reviewSummary');
+    summary.innerHTML =
+      'Total SPs: <span>' + data.total_sps + '</span> &nbsp;|&nbsp; ' +
+      'Recognized: <span style="color:#68d391">' + data.recognized + '</span> &nbsp;|&nbsp; ' +
+      'Unrecognized: <span style="color:#f6e05e">' + data.unrecognized.length + '</span>';
+
+    const header = document.getElementById('reviewHeader');
+    header.innerHTML = '⚠ <strong>' + data.unrecognized.length + ' sale point' +
+      (data.unrecognized.length > 1 ? 's' : '') +
+      '</strong> not matched to any customer. Assign them below or they will use the default mapping.';
+
+    // Populate bulk dropdown
+    const bulkSel = document.getElementById('bulkCustomer');
+    bulkSel.innerHTML = '<option value="">Choose customer...</option>';
+    knownCustomers.forEach(c => {
+      bulkSel.innerHTML += '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>';
+    });
+
+    // Populate SP list
+    const list = document.getElementById('spList');
+    list.innerHTML = '';
+    data.unrecognized.forEach((sp, i) => {
+      const opts = knownCustomers.map(c =>
+        '<option value="' + escHtml(c) + '"' +
+        (c === sp.current_mapping ? ' selected' : '') +
+        '>' + escHtml(c) + '</option>'
+      ).join('');
+      list.innerHTML +=
+        '<div class="sp-row" data-sp="' + escAttr(sp.sp_name) + '">' +
+        '  <div class="sp-name" title="' + escAttr(sp.sp_name) + '">' + escHtml(sp.sp_name) + '</div>' +
+        '  <div class="sp-current">now: ' + escHtml(sp.current_mapping) + '</div>' +
+        '  <select class="sp-customer" onchange="markAssigned(this)">' +
+        '    <option value="">— select —</option>' + opts +
+        '  </select>' +
+        '</div>';
+    });
+  }
+
+  function markAssigned(sel) {
+    if (sel.value) { sel.classList.add('assigned'); }
+    else { sel.classList.remove('assigned'); }
+  }
+
+  function bulkAssign() {
+    const val = document.getElementById('bulkCustomer').value;
+    if (!val) return;
+    document.querySelectorAll('.sp-customer').forEach(sel => {
+      sel.value = val;
+      sel.classList.add('assigned');
+    });
+  }
+
+  // ── Save overrides then ingest ──
+  async function saveAndIngest() {
+    const spinner = document.getElementById('spinner');
+    spinner.style.display = 'block';
+    spinner.textContent = '⏳ Saving assignments...';
+    document.getElementById('saveAndIngestBtn').disabled = true;
+
+    // Collect assignments
+    const overrides = [];
+    document.querySelectorAll('.sp-row').forEach(row => {
+      const spName = row.dataset.sp;
+      const sel = row.querySelector('.sp-customer');
+      if (sel && sel.value) {
+        overrides.push({
+          sp_name: spName,
+          customer_en: sel.value,
+          match_type: 'exact',
+          distributor: detectedDistributor || null,
+          notes: 'Assigned during file upload'
+        });
+      }
+    });
+
+    if (overrides.length > 0) {
+      try {
+        const resp = await fetch('/api/sp-overrides', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ overrides })
+        });
+        const data = await resp.json();
+        if (data.error) {
+          spinner.style.display = 'none';
+          const result = document.getElementById('result');
+          result.style.display = 'block';
+          result.className = 'result error';
+          result.innerHTML = '<div class="result-title">✗ Failed to save</div>' + escHtml(data.error);
+          document.getElementById('saveAndIngestBtn').disabled = false;
+          return;
+        }
+      } catch (err) {
+        spinner.style.display = 'none';
+        const result = document.getElementById('result');
+        result.style.display = 'block';
+        result.className = 'result error';
+        result.innerHTML = '<div class="result-title">✗ Network error</div>' + escHtml(String(err));
+        document.getElementById('saveAndIngestBtn').disabled = false;
+        return;
+      }
+    }
+
+    // Now do the actual ingestion
+    doIngest();
+  }
+
+  function skipAndIngest() {
+    doIngest();
+  }
+
+  // ── Actual file ingestion (Step 2 or direct) ──
+  async function doIngest() {
+    const spinner = document.getElementById('spinner');
+    const result = document.getElementById('result');
+
+    document.getElementById('spReviewStep').style.display = 'none';
+    spinner.style.display = 'block';
+    spinner.textContent = '⏳ Ingesting data...';
     result.style.display = 'none';
 
     const fd = new FormData();
@@ -608,14 +866,12 @@ _UPLOAD_HTML = """<!DOCTYPE html>
         result.className = 'result error';
         result.innerHTML = '<div class="result-title">✗ Error</div>' + escHtml(data.error);
       } else if (data.batches_new === 0 && data.batches_skipped > 0 && !data.weekly_override) {
-        // All periods already in DB and no weekly_chart_overrides update either
         result.className = 'result skipped';
         result.innerHTML = '<div class="result-title">⚠ Already ingested</div>' +
           '<table><tr><td>File</td><td>' + escHtml(data.filename) + '</td></tr>' +
           '<tr><td>Skipped</td><td>' + data.batches_skipped + ' batch(es) already in DB</td></tr>' +
           '<tr><td>Tip</td><td>Enable "Force re-import" to overwrite</td></tr></table>';
       } else if (data.batches_new === 0 && data.batches_skipped > 0 && data.weekly_override) {
-        // Periods already ingested BUT weekly chart data was updated — normal weekly flow
         var wks = data.weekly_overrides || [data.weekly_override];
         var wkRows = wks.map(function(wk) {
           return '<tr><td>W' + wk.week_num + ' (' + escHtml(wk.label||'') + ')</td><td>' +
@@ -628,7 +884,7 @@ _UPLOAD_HTML = """<!DOCTYPE html>
           '<tr><td>File</td><td>' + escHtml(data.filename) + '</td></tr>' +
           '<tr><td>Distributor</td><td>' + escHtml(data.distributor) + '</td></tr>' +
           wkRows +
-          '<tr><td colspan="2" style="color:#a0aec0;font-size:11px;padding-top:6px">Historical periods already in DB — weekly totals updated successfully</td></tr>' +
+          '<tr><td colspan="2" style="color:#a0aec0;font-size:11px;padding-top:6px">Weekly totals updated</td></tr>' +
           '</table>' +
           '<div style="margin-top:12px"><a href="/refresh" style="color:#68d391">→ Refresh dashboard</a></div>';
       } else {
@@ -651,11 +907,13 @@ _UPLOAD_HTML = """<!DOCTYPE html>
       result.className = 'result error';
       result.innerHTML = '<div class="result-title">✗ Network error</div>' + escHtml(String(err));
     }
-    uploadBtn.disabled = false;
   }
 
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escAttr(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 </script>
 </body>
@@ -667,6 +925,10 @@ def upload():
     """File upload page — ingest a distributor file directly into Cloud SQL."""
     if request.method == 'GET':
         return Response(_UPLOAD_HTML, mimetype='text/html; charset=utf-8')
+
+    # ── POST: require admin session ───────────────────────────────────────────
+    if not session.get('md_admin'):
+        return jsonify({'error': 'Authentication required. POST to /api/auth/login first.'}), 401
 
     # ── POST: handle uploaded file ────────────────────────────────────────────
     import tempfile
@@ -1796,6 +2058,7 @@ def api_weekly_overrides_get():
 
 
 @app.route('/api/weekly-overrides', methods=['POST'])
+@require_admin
 def api_weekly_overrides_post():
     """Store or update a weekly override from an uploaded file."""
     try:
@@ -1839,6 +2102,7 @@ def api_weekly_overrides_post():
 # ── /api/rebuild  (regenerate dashboard from current DB state) ────────────────
 
 @app.route('/api/rebuild', methods=['POST'])
+@require_admin
 def api_rebuild():
     """Recompute portfolio, invalidate dashboard cache + background rebuild."""
     try:
@@ -2230,6 +2494,259 @@ def api_salepoints_export():
     except Exception as e:
         log.error("api_salepoints_export: %s", e)
         return jsonify({'error': str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SP CUSTOMER OVERRIDES API  (/api/sp-overrides/*)
+#
+# User-defined SP→Customer mappings that take priority over hardcoded rules.
+# Stored in sp_customer_overrides table. Used by extract_customer_name().
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _ensure_sp_overrides_table():
+    """Create sp_customer_overrides table if it doesn't exist."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS sp_customer_overrides (
+                id          SERIAL PRIMARY KEY,
+                sp_name     TEXT NOT NULL,
+                customer_en TEXT NOT NULL,
+                distributor TEXT,
+                match_type  TEXT NOT NULL DEFAULT 'exact',
+                notes       TEXT,
+                created_at  TIMESTAMPTZ DEFAULT NOW(),
+                updated_at  TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE (sp_name, distributor)
+            )
+        """)
+        conn.commit()
+        log.info("sp_customer_overrides table ensured")
+    except Exception as e:
+        log.error("Failed to ensure sp_customer_overrides: %s", e)
+    finally:
+        conn.close()
+
+
+@app.route('/api/sp-overrides', methods=['GET'])
+@require_admin
+def api_sp_overrides_list():
+    """List all SP→Customer overrides."""
+    _ensure_sp_overrides_table()
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, sp_name, customer_en, distributor, match_type, notes, created_at
+            FROM sp_customer_overrides
+            ORDER BY customer_en, sp_name
+        """)
+        rows = cur.fetchall()
+        overrides = [
+            {'id': r[0], 'sp_name': r[1], 'customer_en': r[2], 'distributor': r[3],
+             'match_type': r[4], 'notes': r[5], 'created_at': r[6].isoformat() if r[6] else None}
+            for r in rows
+        ]
+        return jsonify({'overrides': overrides, 'count': len(overrides)})
+    except Exception as e:
+        log.error("api_sp_overrides_list: %s", e)
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/sp-overrides', methods=['POST'])
+@require_admin
+def api_sp_overrides_create():
+    """Create one or more SP→Customer overrides.
+
+    Body: { "overrides": [{"sp_name": "...", "customer_en": "...", "match_type": "exact", "notes": "..."}] }
+    Or single: { "sp_name": "...", "customer_en": "..." }
+    """
+    _ensure_sp_overrides_table()
+    data = request.get_json(force=True)
+
+    # Support both single and batch
+    if 'overrides' in data:
+        items = data['overrides']
+    else:
+        items = [data]
+
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        created = 0
+        for item in items:
+            sp_name = item.get('sp_name', '').strip()
+            customer_en = item.get('customer_en', '').strip()
+            if not sp_name or not customer_en:
+                continue
+            match_type = item.get('match_type', 'exact')
+            distributor = item.get('distributor') or None
+            notes = item.get('notes') or None
+            cur.execute("""
+                INSERT INTO sp_customer_overrides (sp_name, customer_en, distributor, match_type, notes)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (sp_name, distributor)
+                DO UPDATE SET customer_en = EXCLUDED.customer_en,
+                              match_type = EXCLUDED.match_type,
+                              notes = EXCLUDED.notes,
+                              updated_at = NOW()
+            """, (sp_name, customer_en, distributor, match_type, notes))
+            created += 1
+        conn.commit()
+
+        # Reload the in-memory cache
+        from config import reload_sp_overrides
+        reload_sp_overrides()
+
+        # Invalidate dashboard cache so next build picks up new mappings
+        _invalidate_cache()
+
+        return jsonify({'created': created, 'status': 'ok'})
+    except Exception as e:
+        log.error("api_sp_overrides_create: %s", e)
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/sp-overrides/<int:override_id>', methods=['DELETE'])
+@require_admin
+def api_sp_overrides_delete(override_id):
+    """Delete a single SP override."""
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM sp_customer_overrides WHERE id = %s", (override_id,))
+        deleted = cur.rowcount
+        conn.commit()
+
+        from config import reload_sp_overrides
+        reload_sp_overrides()
+        _invalidate_cache()
+
+        return jsonify({'deleted': deleted, 'status': 'ok'})
+    except Exception as e:
+        log.error("api_sp_overrides_delete: %s", e)
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/sp-overrides/customers', methods=['GET'])
+@require_admin
+def api_sp_overrides_customers():
+    """Return list of known customer names for the dropdown."""
+    from registry import CUSTOMER_NAMES_EN
+    # Get unique English names, sorted
+    customers = sorted(set(CUSTOMER_NAMES_EN.values()))
+    # Also check master_data for any additional customers
+    try:
+        conn = _md_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT data FROM master_data WHERE entity = 'customers'")
+        row = cur.fetchone()
+        if row and row[0]:
+            for c in row[0]:
+                name = c.get('name_en') or c.get('name') or ''
+                if name and name not in customers:
+                    customers.append(name)
+            customers.sort()
+        conn.close()
+    except Exception:
+        pass
+    return jsonify({'customers': customers})
+
+
+@app.route('/api/sp-detect-unrecognized', methods=['POST'])
+@require_admin
+def api_sp_detect_unrecognized():
+    """Parse an uploaded file and return any SP names that don't match known rules.
+
+    This is called BEFORE the actual ingestion so the user can assign customers
+    to unrecognized SPs. After assignment, the file is re-uploaded for real ingestion.
+
+    Returns: { "unrecognized": [{"sp_name": "...", "suggested_customer": "...", "units": N}], "total_sps": N }
+    """
+    import tempfile, shutil
+    from pathlib import Path
+
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({'error': 'No file received.'}), 400
+
+    distributor_override = request.form.get('distributor', '').strip() or None
+
+    tmp_dir = tempfile.mkdtemp(prefix='raito_detect_')
+    try:
+        safe_name = Path(file.filename).name
+        tmp_path = Path(tmp_dir) / safe_name
+        file.save(str(tmp_path))
+
+        from db.raito_loader import detect_distributor, STOCK_PATTERNS
+
+        if distributor_override:
+            distributor = distributor_override
+            is_stock = (distributor == 'karfree') or any(
+                p in safe_name.lower() for p in STOCK_PATTERNS
+            )
+        else:
+            distributor, is_stock = detect_distributor(tmp_path)
+            if not distributor:
+                return jsonify({'error': f'Could not auto-detect distributor from "{safe_name}".'}), 400
+
+        if is_stock:
+            return jsonify({'unrecognized': [], 'total_sps': 0, 'is_stock': True})
+
+        # Parse the file to extract SP names
+        from config import is_sp_recognized, extract_customer_name
+        sp_names = set()
+
+        try:
+            if distributor == 'icedream':
+                from parsers import parse_icedreams_file
+                data = parse_icedreams_file(str(tmp_path))
+                for cust in data.get('by_customer', {}):
+                    sp_names.add(str(cust).strip())
+            elif distributor == 'mayyan':
+                from parsers import parse_mayyan_file
+                data = parse_mayyan_file(str(tmp_path))
+                # Ma'ayan: accounts are branch-level names
+                for chain_raw, accounts in data.get('by_account', {}).items():
+                    for acct_name in accounts:
+                        sp_names.add(str(acct_name).strip())
+            elif distributor == 'biscotti':
+                from parsers import _parse_biscotti_file
+                data = _parse_biscotti_file(str(tmp_path))
+                for cust in data.get('by_customer', {}):
+                    sp_names.add(str(cust).strip())
+        except Exception as e:
+            log.error("SP detection parse error: %s", e)
+            return jsonify({'error': f'Parse error: {e}'}), 500
+
+        # Check each SP against rules
+        unrecognized = []
+        for sp in sorted(sp_names):
+            if not is_sp_recognized(sp):
+                # Suggest what it currently maps to (for context)
+                current = extract_customer_name(sp)
+                unrecognized.append({
+                    'sp_name': sp,
+                    'current_mapping': current,
+                })
+
+        return jsonify({
+            'unrecognized': unrecognized,
+            'total_sps': len(sp_names),
+            'recognized': len(sp_names) - len(unrecognized),
+            'distributor': distributor,
+        })
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @app.route('/api/salepoints/upload', methods=['POST'])

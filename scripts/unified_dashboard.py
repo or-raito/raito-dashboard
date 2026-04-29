@@ -891,6 +891,7 @@ def _build_master_data_tab(master_data):
   <button class="md-stab" onclick="mdGo('pricing')"      id="mdt-pricing">💰 Pricing</button>
   <button class="md-stab" onclick="mdGo('logistics')"    id="mdt-logistics">📐 Logistics</button>
   <button class="md-stab" onclick="mdGo('portfolio')"    id="mdt-portfolio">📊 Portfolio</button>
+  <button class="md-stab" onclick="mdGo('sp_mappings')"  id="mdt-sp_mappings">🔗 SP Mappings</button>
 </div>
 
 <!-- ── Content Body ── -->
@@ -1061,6 +1062,60 @@ def _build_master_data_tab(master_data):
           <span style="color:#cbd5e1;padding:3px 10px">— Not listed</span>
         </div>
         <div id="md-portfolio-matrix" style="overflow-x:auto; padding:0 16px 16px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SP Mappings -->
+  <div id="mds-sp_mappings" class="md-section">
+    <div class="md-section-card">
+      <div class="md-card-header">
+        <div style="display:flex;align-items:center">
+          <h3>SP → Customer Mappings</h3>
+          <span class="md-count" id="cnt-sp_mappings"></span>
+        </div>
+        <button class="md-btn md-btn-primary" onclick="spmAdd()">+ Add Override</button>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);padding:0 16px 8px;margin:0">
+        Custom overrides that map sale-point names to customers. These take priority over the built-in classification rules.
+      </p>
+      <div style="padding:0 16px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;color:var(--text-muted)">Customer</label>
+        <select id="flt-spm-customer" onchange="rSpMappings()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)">
+          <option value="all">All Customers</option>
+        </select>
+        <label style="font-size:12px;color:var(--text-muted)">Match Type</label>
+        <select id="flt-spm-match" onchange="rSpMappings()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)">
+          <option value="all">All Types</option>
+          <option value="exact">Exact</option>
+          <option value="prefix">Prefix</option>
+          <option value="contains">Contains</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="md-tbl">
+          <thead><tr><th style="direction:rtl">SP Name (HE)</th><th>Customer (EN)</th><th>Distributor</th><th>Match Type</th><th>Notes</th><th>Created</th><th></th></tr></thead>
+          <tbody id="md-tbl-sp_mappings"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Unmatched SPs -->
+    <div class="md-section-card" style="margin-top:20px">
+      <div class="md-card-header">
+        <div style="display:flex;align-items:center">
+          <h3>⚠️ Unmatched Sale Points</h3>
+          <span class="md-count" id="cnt-spm-unmatched"></span>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);padding:0 16px 8px;margin:0">
+        Sale points that currently fall through all classification rules. Assign them to a customer to resolve.
+      </p>
+      <div style="overflow-x:auto">
+        <table class="md-tbl">
+          <thead><tr><th style="direction:rtl">SP Name (HE)</th><th>Current Mapping</th><th>Assign to Customer</th><th></th></tr></thead>
+          <tbody id="md-tbl-unmatched"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -1385,7 +1440,8 @@ def _build_master_data_tab(master_data):
     var fn = {
       brands: rBrands, products: rProducts, manufacturers: rManufacturers,
       distributors: rDistributors, customers: rCustomers,
-      pricing: rPricing, logistics: rLogistics, portfolio: rPortfolio
+      pricing: rPricing, logistics: rLogistics, portfolio: rPortfolio,
+      sp_mappings: rSpMappings
     }[sec];
     if(fn) fn();
   };
@@ -1664,6 +1720,211 @@ def _build_master_data_tab(master_data):
     html+='</tbody></table>';
     setHTML('md-portfolio-matrix', html);
   }
+
+  /* ── SP MAPPINGS ── */
+  var _spmData = [];      // cached overrides from API
+  var _spmCusts = [];     // known customer names
+  var _spmUnmatched = []; // unmatched SPs from latest upload
+
+  function rSpMappings() {
+    // Fetch overrides + customer list from API
+    Promise.all([
+      fetch('/api/sp-overrides').then(function(r){return r.json();}),
+      fetch('/api/sp-overrides/customers').then(function(r){return r.json();})
+    ]).then(function(results) {
+      _spmData = results[0].overrides || [];
+      _spmCusts = results[1].customers || [];
+      _renderSpmTable();
+      _renderSpmUnmatched();
+    }).catch(function(e) {
+      setHTML('md-tbl-sp_mappings', '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Could not load SP overrides. API may be offline.</td></tr>');
+    });
+  }
+
+  function _renderSpmTable() {
+    var cf = document.getElementById('flt-spm-customer');
+    var mf = document.getElementById('flt-spm-match');
+    var custFilter = cf ? cf.value : 'all';
+    var matchFilter = mf ? mf.value : 'all';
+
+    // Populate customer filter
+    if(cf) {
+      var prev = cf.value;
+      var custs = {};
+      _spmData.forEach(function(o){ custs[o.customer_en]=1; });
+      var opts = '<option value="all">All Customers</option>';
+      Object.keys(custs).sort().forEach(function(c){
+        opts += '<option'+(c===prev?' selected':'')+'>'+esc(c)+'</option>';
+      });
+      cf.innerHTML = opts;
+    }
+
+    var data = _spmData.filter(function(o){
+      if(custFilter && custFilter!=='all' && o.customer_en !== custFilter) return false;
+      if(matchFilter && matchFilter!=='all' && o.match_type !== matchFilter) return false;
+      return true;
+    });
+
+    var rows = '';
+    data.forEach(function(o) {
+      var created = o.created_at ? new Date(o.created_at).toLocaleDateString('en-GB') : '—';
+      rows += '<tr>';
+      rows += '<td style="direction:rtl;text-align:right;font-weight:600">'+esc(o.sp_name)+'</td>';
+      rows += '<td>'+esc(o.customer_en)+'</td>';
+      rows += '<td>'+esc(o.distributor||'Any')+'</td>';
+      rows += '<td>'+spmChip(o.match_type)+'</td>';
+      rows += '<td style="font-size:12px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.notes||'')+'</td>';
+      rows += '<td style="font-size:12px;color:var(--text-muted)">'+created+'</td>';
+      rows += '<td class="td-actions"><button class="md-act-btn" onclick="spmEdit('+o.id+')">✏️</button>'
+             +'<button class="md-act-btn danger" onclick="spmDel('+o.id+')">🗑</button></td>';
+      rows += '</tr>';
+    });
+    if(!rows) rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">No overrides yet. Add one or use the Upload page to auto-detect.</td></tr>';
+    setHTML('md-tbl-sp_mappings', rows);
+    setCount('sp_mappings', data.length + (_spmData.length !== data.length ? '/'+_spmData.length : ''));
+  }
+
+  function spmChip(type) {
+    var colors = { exact: '#10b981', prefix: '#5D5FEF', contains: '#f59e0b' };
+    var c = colors[type] || '#94a3b8';
+    return '<span style="background:'+c+'22;color:'+c+';padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600">'+esc(type)+'</span>';
+  }
+
+  function _renderSpmUnmatched() {
+    // Get unmatched SPs from the sale_points table (those with customer = SP name or generic mapping)
+    fetch('/api/sp-overrides/customers').then(function(r){return r.json();}).then(function(custData) {
+      var custs = custData.customers || [];
+      // Also fetch known unmatched from the SP table
+      // We'll use the salepoints API if available, otherwise show help text
+      fetch('/api/salepoints?limit=5000').then(function(r){return r.json();}).then(function(spData) {
+        var sps = spData.data || spData.salepoints || [];
+        // Find SPs whose customer mapping looks like a fallback
+        var unmatched = [];
+        var seen = {};
+        sps.forEach(function(sp) {
+          var name = sp.branch_name_he || sp.sp_name || '';
+          if(!name || seen[name]) return;
+          // Check if this SP is already overridden
+          var hasOverride = _spmData.some(function(o){ return o.sp_name === name; });
+          if(hasOverride) return;
+          // Check if customer mapping looks like a fallback
+          var cust = sp.customer_name || sp.customer_en || '';
+          if(!cust || cust === 'Other' || cust === 'Unknown' || cust === name) {
+            seen[name] = true;
+            unmatched.push({ sp_name: name, current: cust || 'Unassigned' });
+          }
+        });
+        _spmUnmatched = unmatched;
+        _renderUnmatchedRows(custs);
+      }).catch(function() {
+        setHTML('md-tbl-unmatched', '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">Upload a distributor file via the Upload tab to detect unmatched SPs.</td></tr>');
+        setCount('spm-unmatched', '0');
+      });
+    });
+  }
+
+  function _renderUnmatchedRows(custs) {
+    var rows = '';
+    _spmUnmatched.forEach(function(u, idx) {
+      rows += '<tr>';
+      rows += '<td style="direction:rtl;text-align:right;font-weight:600">'+esc(u.sp_name)+'</td>';
+      rows += '<td><span style="color:#f59e0b;font-size:12px">'+esc(u.current)+'</span></td>';
+      rows += '<td><select id="spm-assign-'+idx+'" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text);min-width:150px">';
+      rows += '<option value="">— Select —</option>';
+      custs.forEach(function(c){ rows += '<option value="'+esc(c)+'">'+esc(c)+'</option>'; });
+      rows += '</select></td>';
+      rows += '<td><button class="md-btn md-btn-primary" style="font-size:11px;padding:4px 12px" onclick="spmAssign('+idx+')">Assign</button></td>';
+      rows += '</tr>';
+    });
+    if(!rows) rows = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">All sale points are mapped. 🎉</td></tr>';
+    setHTML('md-tbl-unmatched', rows);
+    setCount('spm-unmatched', _spmUnmatched.length || '0');
+  }
+
+  /* SP Mappings CRUD */
+  window.spmAdd = function() {
+    // Build a simple modal for adding an override
+    var custOpts = '<option value="">— Select Customer —</option>';
+    _spmCusts.forEach(function(c){ custOpts += '<option>'+esc(c)+'</option>'; });
+    var html = '<div style="display:flex;flex-direction:column;gap:12px">';
+    html += '<label style="font-size:12px;color:var(--text-muted)">SP Name (Hebrew, exact as it appears in reports)</label>';
+    html += '<input id="spm-f-name" type="text" dir="rtl" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text);font-size:14px">';
+    html += '<label style="font-size:12px;color:var(--text-muted)">Customer (EN)</label>';
+    html += '<select id="spm-f-customer" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)">'+custOpts+'</select>';
+    html += '<label style="font-size:12px;color:var(--text-muted)">Match Type</label>';
+    html += '<select id="spm-f-match" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)"><option value="exact">Exact</option><option value="prefix">Prefix</option><option value="contains">Contains</option></select>';
+    html += '<label style="font-size:12px;color:var(--text-muted)">Distributor (optional — leave blank for all)</label>';
+    html += '<input id="spm-f-dist" type="text" placeholder="e.g. icedream, maayan, biscotti" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)">';
+    html += '<label style="font-size:12px;color:var(--text-muted)">Notes (optional)</label>';
+    html += '<input id="spm-f-notes" type="text" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)">';
+    html += '</div>';
+    document.getElementById('md-modal-title').textContent = 'Add SP Override';
+    setHTML('md-modal-fields', html);
+    // Override the save button
+    document.querySelector('#md-modal .md-modal-ftr .md-btn-primary').onclick = function(){ spmSaveNew(); };
+    document.getElementById('md-overlay').style.display = 'flex';
+  };
+
+  window.spmSaveNew = function() {
+    var name = document.getElementById('spm-f-name').value.trim();
+    var cust = document.getElementById('spm-f-customer').value;
+    var match = document.getElementById('spm-f-match').value;
+    var dist = document.getElementById('spm-f-dist').value.trim();
+    var notes = document.getElementById('spm-f-notes').value.trim();
+    if(!name || !cust) { alert('SP Name and Customer are required.'); return; }
+    fetch('/api/sp-overrides', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ sp_name: name, customer_en: cust, match_type: match, distributor: dist||null, notes: notes||null })
+    }).then(function(r){ return r.json(); }).then(function(d) {
+      if(d.error) { alert(d.error); return; }
+      document.getElementById('md-overlay').style.display = 'none';
+      showToast('Override saved ✓');
+      rSpMappings();
+    }).catch(function(e){ alert('Error: '+e.message); });
+  };
+
+  window.spmEdit = function(id) {
+    var o = _spmData.find(function(x){ return x.id===id; });
+    if(!o) return;
+    // Reuse the add modal, pre-filled
+    spmAdd();
+    document.getElementById('md-modal-title').textContent = 'Edit SP Override';
+    document.getElementById('spm-f-name').value = o.sp_name;
+    document.getElementById('spm-f-customer').value = o.customer_en;
+    document.getElementById('spm-f-match').value = o.match_type;
+    document.getElementById('spm-f-dist').value = o.distributor || '';
+    document.getElementById('spm-f-notes').value = o.notes || '';
+    // Override save to do PUT (we'll re-POST with same sp_name — upsert handles it)
+    document.querySelector('#md-modal .md-modal-ftr .md-btn-primary').onclick = function() {
+      // Delete old + create new (since API uses upsert on sp_name+distributor)
+      spmSaveNew();
+    };
+  };
+
+  window.spmDel = function(id) {
+    if(!confirm('Delete this SP override?')) return;
+    fetch('/api/sp-overrides/'+id, { method:'DELETE' }).then(function(r){return r.json();}).then(function(d) {
+      if(d.error) { alert(d.error); return; }
+      showToast('Override deleted ✓');
+      rSpMappings();
+    }).catch(function(e){ alert('Error: '+e.message); });
+  };
+
+  window.spmAssign = function(idx) {
+    var sel = document.getElementById('spm-assign-'+idx);
+    if(!sel || !sel.value) { alert('Please select a customer first.'); return; }
+    var sp = _spmUnmatched[idx];
+    fetch('/api/sp-overrides', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ sp_name: sp.sp_name, customer_en: sel.value, match_type: 'exact', notes: 'Assigned from MD tab — was: '+sp.current })
+    }).then(function(r){return r.json();}).then(function(d) {
+      if(d.error) { alert(d.error); return; }
+      showToast(esc(sp.sp_name)+' → '+sel.value+' ✓');
+      rSpMappings();
+    }).catch(function(e){ alert('Error: '+e.message); });
+  };
 
   /* ── CRUD ── */
   var _mMode=null, _mSheet=null, _mIdx=null;
