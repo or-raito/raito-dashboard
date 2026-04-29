@@ -3763,7 +3763,7 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
           <option value="geo_addresses">POS Addresses (GEO)</option>
         </select>
       </div>
-      <div class="upl-drop-zone" id="upl-drop-zone" onclick="document.getElementById('upl-file-input').click()">
+      <div class="upl-drop-zone" id="upl-drop-zone">
         <div class="upl-icon">📂</div>
         <div class="upl-text">Drag &amp; drop file here, or <span>browse</span></div>
         <input type="file" id="upl-file-input" accept=".xlsx,.xls,.pdf,.csv" style="display:none">
