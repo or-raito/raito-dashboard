@@ -501,7 +501,7 @@ function geoInitMap() {{
 // ─── Load municipality/district boundaries (GeoJSON) ─────────────────────
 function geoLoadBoundaries() {{
   geoSetStatus('Loading district boundaries…');
-  fetch('/api/geo/municipalities')
+  fetch('/api/geo/municipalities?_v=' + Date.now())
     .then(function(r) {{
       if (!r.ok) throw new Error('Boundary API returned ' + r.status);
       return r.json();

@@ -193,7 +193,7 @@ def get_municipalities():
             status=200,
             mimetype="application/json",
         )
-        resp.headers["Cache-Control"] = "public, max-age=86400"  # 24h
+        resp.headers["Cache-Control"] = "public, max-age=3600"  # 1h
         return resp
     except Exception as e:
         log.exception("Error serving municipalities GeoJSON")
