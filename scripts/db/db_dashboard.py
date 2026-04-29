@@ -2716,12 +2716,16 @@ def api_sp_detect_unrecognized():
             elif distributor == 'mayyan':
                 from parsers import parse_mayyan_file
                 data = parse_mayyan_file(str(tmp_path))
-                # data = {month_key: {'by_account': {chain: {acct: ...}}, ...}}
+                # data = {month_key: {'by_account': {(chain, acct): {product: ...}}, ...}}
+                # Keys are tuples (chain_name, branch_name).
+                # extract_customer_name() works on chain names, so check those.
                 for month_data in data.values():
                     if isinstance(month_data, dict):
-                        for chain_raw, accounts in month_data.get('by_account', {}).items():
-                            for acct_name in accounts:
-                                sp_names.add(str(acct_name).strip())
+                        for key in month_data.get('by_account', {}):
+                            if isinstance(key, tuple) and len(key) >= 2:
+                                sp_names.add(str(key[0]).strip())  # chain name
+                            else:
+                                sp_names.add(str(key).strip())
             elif distributor == 'biscotti':
                 from parsers import _parse_biscotti_file
                 data = _parse_biscotti_file(str(tmp_path))
