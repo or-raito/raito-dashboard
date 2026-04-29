@@ -1829,10 +1829,11 @@ def _build_master_data_tab(master_data):
       rows += '<tr>';
       rows += '<td style="direction:rtl;text-align:right;font-weight:600">'+esc(u.sp_name)+'</td>';
       rows += '<td><span style="color:#f59e0b;font-size:12px">'+esc(u.current)+'</span></td>';
-      rows += '<td><select id="spm-assign-'+idx+'" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text);min-width:150px">';
-      rows += '<option value="">— Select —</option>';
-      custs.forEach(function(c){ rows += '<option value="'+esc(c)+'">'+esc(c)+'</option>'; });
-      rows += '</select></td>';
+      var dlId = 'spm-dl-'+idx;
+      rows += '<td><input id="spm-assign-'+idx+'" list="'+dlId+'" type="text" placeholder="Type or pick..." style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text);min-width:150px">';
+      rows += '<datalist id="'+dlId+'">';
+      custs.forEach(function(c){ rows += '<option value="'+esc(c)+'">'; });
+      rows += '</datalist></td>';
       rows += '<td><button class="md-btn md-btn-primary" style="font-size:11px;padding:4px 12px" onclick="spmAssign('+idx+')">Assign</button></td>';
       rows += '</tr>';
     });
@@ -1844,13 +1845,14 @@ def _build_master_data_tab(master_data):
   /* SP Mappings CRUD */
   window.spmAdd = function() {
     // Build a simple modal for adding an override
-    var custOpts = '<option value="">— Select Customer —</option>';
-    _spmCusts.forEach(function(c){ custOpts += '<option>'+esc(c)+'</option>'; });
+    var custDL = '';
+    _spmCusts.forEach(function(c){ custDL += '<option value="'+esc(c)+'">'; });
     var html = '<div style="display:flex;flex-direction:column;gap:12px">';
     html += '<label style="font-size:12px;color:var(--text-muted)">SP Name (Hebrew, exact as it appears in reports)</label>';
     html += '<input id="spm-f-name" type="text" dir="rtl" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text);font-size:14px">';
-    html += '<label style="font-size:12px;color:var(--text-muted)">Customer (EN)</label>';
-    html += '<select id="spm-f-customer" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)">'+custOpts+'</select>';
+    html += '<label style="font-size:12px;color:var(--text-muted)">Customer (EN) — type or pick from suggestions</label>';
+    html += '<input id="spm-f-customer" list="spm-cust-list" type="text" placeholder="e.g. Shufersal, AMPM, Wolt" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)">';
+    html += '<datalist id="spm-cust-list">'+custDL+'</datalist>';
     html += '<label style="font-size:12px;color:var(--text-muted)">Match Type</label>';
     html += '<select id="spm-f-match" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg);color:var(--text)"><option value="exact">Exact</option><option value="prefix">Prefix</option><option value="contains">Contains</option></select>';
     html += '<label style="font-size:12px;color:var(--text-muted)">Distributor (optional — leave blank for all)</label>';
