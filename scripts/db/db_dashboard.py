@@ -2708,20 +2708,28 @@ def api_sp_detect_unrecognized():
             if distributor == 'icedream':
                 from parsers import parse_icedreams_file
                 data = parse_icedreams_file(str(tmp_path))
-                for cust in data.get('by_customer', {}):
-                    sp_names.add(str(cust).strip())
+                # data = {month_key: {'by_customer': {name: ...}, ...}}
+                for month_data in data.values():
+                    if isinstance(month_data, dict):
+                        for cust in month_data.get('by_customer', {}):
+                            sp_names.add(str(cust).strip())
             elif distributor == 'mayyan':
                 from parsers import parse_mayyan_file
                 data = parse_mayyan_file(str(tmp_path))
-                # Ma'ayan: accounts are branch-level names
-                for chain_raw, accounts in data.get('by_account', {}).items():
-                    for acct_name in accounts:
-                        sp_names.add(str(acct_name).strip())
+                # data = {month_key: {'by_account': {chain: {acct: ...}}, ...}}
+                for month_data in data.values():
+                    if isinstance(month_data, dict):
+                        for chain_raw, accounts in month_data.get('by_account', {}).items():
+                            for acct_name in accounts:
+                                sp_names.add(str(acct_name).strip())
             elif distributor == 'biscotti':
                 from parsers import _parse_biscotti_file
                 data = _parse_biscotti_file(str(tmp_path))
-                for cust in data.get('by_customer', {}):
-                    sp_names.add(str(cust).strip())
+                # data = {month_key: {'by_customer': {branch: ...}, ...}}
+                for month_data in data.values():
+                    if isinstance(month_data, dict):
+                        for cust in month_data.get('by_customer', {}):
+                            sp_names.add(str(cust).strip())
         except Exception as e:
             log.error("SP detection parse error: %s", e)
             return jsonify({'error': f'Parse error: {e}'}), 500
