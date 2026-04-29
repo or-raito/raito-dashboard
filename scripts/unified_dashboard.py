@@ -3794,10 +3794,20 @@ if(sessionStorage.getItem('raito-auth')==='1'){{document.getElementById('login-g
       </div>
       <div class="upl-spinner" id="upl-spinner">⏳ Uploading and ingesting data...</div>
       <div class="upl-result" id="upl-result"></div>
+      <!-- SP Review Step (hidden until detection finds unrecognized SPs) -->
+      <div id="upl-sp-review" style="display:none">
+        <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin:8px 0">
+          <div style="font-weight:700;font-size:13px;color:#92400e">⚠ Unrecognized Sale Points Found</div>
+          <div style="font-size:12px;color:#92400e;margin-top:4px" id="upl-sp-summary"></div>
+        </div>
+        <div style="max-height:300px;overflow-y:auto;margin:8px 0" id="upl-sp-list"></div>
+      </div>
     </div>
     <div class="upload-modal-footer">
       <button class="upl-cancel" onclick="closeUploadModal()">Cancel</button>
-      <button class="upl-submit" id="upl-submit-btn" disabled onclick="doUploadModal()">Upload &amp; Ingest</button>
+      <button class="upl-submit" id="upl-submit-btn" disabled onclick="doUploadModal()">Upload &amp; Detect</button>
+      <button class="upl-submit" id="upl-assign-btn" style="display:none" onclick="uplSaveAndIngest()">Save &amp; Ingest</button>
+      <button class="upl-cancel" id="upl-skip-btn" style="display:none" onclick="uplSkipAndIngest()">Skip — Ingest Only</button>
     </div>
   </div>
 </div>
@@ -4103,6 +4113,10 @@ function showUploadModal() {{
   document.getElementById('upl-submit-btn').disabled = true;
   document.getElementById('upl-drop-zone').classList.remove('drag-over');
   document.getElementById('upl-file-input').value = '';
+  document.getElementById('upl-sp-review').style.display = 'none';
+  document.getElementById('upl-assign-btn').style.display = 'none';
+  document.getElementById('upl-skip-btn').style.display = 'none';
+  document.getElementById('upl-submit-btn').style.display = '';
   document.getElementById('upload-modal-overlay').classList.add('active');
   _uplBindEvents();
 }}
@@ -4195,7 +4209,130 @@ async function doUploadModal() {{
     return;
   }}
 
-  // --- Standard distributor file upload ---
+  // --- Step 1: Detect unrecognized SPs ---
+  var fd = new FormData();
+  fd.append('file', _uplFile, _uplFile.name);
+  fd.append('distributor', document.getElementById('upl-distributor').value);
+
+  try {{
+    spinner.textContent = '⏳ Scanning for unrecognized sale points...';
+    var detectResp = await fetch('/api/sp-detect-unrecognized', {{ method: 'POST', body: fd }});
+    var detectData = await detectResp.json();
+
+    if (detectData.error) {{
+      // Detection failed — fall through to direct ingest
+      console.warn('SP detection failed, proceeding to ingest:', detectData.error);
+      await _doDirectIngest(submitBtn, spinner, result);
+      return;
+    }}
+
+    var unrecognized = detectData.unrecognized || [];
+
+    if (unrecognized.length === 0) {{
+      // All SPs recognized — proceed directly to ingest
+      spinner.textContent = '⏳ All SPs recognized. Ingesting data...';
+      await _doDirectIngest(submitBtn, spinner, result);
+      return;
+    }}
+
+    // --- Step 2: Show unrecognized SPs for review ---
+    spinner.style.display = 'none';
+    var review = document.getElementById('upl-sp-review');
+    var summary = document.getElementById('upl-sp-summary');
+    var list = document.getElementById('upl-sp-list');
+
+    summary.textContent = detectData.recognized + ' of ' + detectData.total_sps + ' SPs recognized. ' +
+      unrecognized.length + ' need assignment. Distributor: ' + (detectData.distributor || 'auto');
+
+    // Fetch customer list for dropdowns
+    var custResp = await fetch('/api/sp-overrides/customers');
+    var custData = await custResp.json();
+    var custs = custData.customers || [];
+    _uplUnrecognized = unrecognized;
+
+    var dlOpts = '';
+    custs.forEach(function(c) {{ dlOpts += '<option value="' + _uplEsc(c) + '">'; }});
+
+    var html = '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+    html += '<thead><tr><th style="text-align:right;padding:6px 8px;border-bottom:1px solid #e2e8f0">SP Name</th>';
+    html += '<th style="padding:6px 8px;border-bottom:1px solid #e2e8f0">Current</th>';
+    html += '<th style="padding:6px 8px;border-bottom:1px solid #e2e8f0">Assign to Customer</th></tr></thead><tbody>';
+    unrecognized.forEach(function(u, i) {{
+      html += '<tr style="border-bottom:1px solid #f1f5f9">';
+      html += '<td style="direction:rtl;text-align:right;padding:6px 8px;font-weight:600">' + _uplEsc(u.sp_name) + '</td>';
+      html += '<td style="padding:6px 8px;color:#f59e0b">' + _uplEsc(u.current_mapping || 'Unknown') + '</td>';
+      html += '<td style="padding:6px 8px"><input id="upl-sp-assign-' + i + '" list="upl-sp-dl-' + i + '" type="text" placeholder="Type or pick..." '
+            + 'style="width:100%;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px;background:var(--bg,#fff);color:var(--text,#1e293b)">'
+            + '<datalist id="upl-sp-dl-' + i + '">' + dlOpts + '</datalist></td>';
+      html += '</tr>';
+    }});
+    html += '</tbody></table>';
+    list.innerHTML = html;
+
+    review.style.display = 'block';
+    submitBtn.style.display = 'none';
+    document.getElementById('upl-assign-btn').style.display = '';
+    document.getElementById('upl-skip-btn').style.display = '';
+
+  }} catch(err) {{
+    // If detection endpoint doesn't exist or fails, fall through to direct ingest
+    console.warn('SP detection error, falling back to direct ingest:', err);
+    await _doDirectIngest(submitBtn, spinner, result);
+  }}
+  submitBtn.disabled = false;
+}}
+
+var _uplUnrecognized = [];
+
+async function uplSaveAndIngest() {{
+  // Save any assigned overrides, then ingest
+  var overrides = [];
+  _uplUnrecognized.forEach(function(u, i) {{
+    var val = document.getElementById('upl-sp-assign-' + i);
+    if (val && val.value.trim()) {{
+      overrides.push({{ sp_name: u.sp_name, customer_en: val.value.trim(), match_type: 'exact', notes: 'Assigned during upload' }});
+    }}
+  }});
+
+  var spinner = document.getElementById('upl-spinner');
+  var result = document.getElementById('upl-result');
+  var submitBtn = document.getElementById('upl-submit-btn');
+
+  if (overrides.length > 0) {{
+    spinner.style.display = 'block';
+    spinner.textContent = '⏳ Saving ' + overrides.length + ' SP assignment(s)...';
+    document.getElementById('upl-sp-review').style.display = 'none';
+    document.getElementById('upl-assign-btn').style.display = 'none';
+    document.getElementById('upl-skip-btn').style.display = 'none';
+    try {{
+      await fetch('/api/sp-overrides', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ overrides: overrides }})
+      }});
+    }} catch(e) {{
+      console.warn('Failed to save overrides:', e);
+    }}
+  }}
+
+  // Now do the actual ingest
+  await _doDirectIngest(submitBtn, spinner, result);
+}}
+
+async function uplSkipAndIngest() {{
+  document.getElementById('upl-sp-review').style.display = 'none';
+  document.getElementById('upl-assign-btn').style.display = 'none';
+  document.getElementById('upl-skip-btn').style.display = 'none';
+  var spinner = document.getElementById('upl-spinner');
+  var result = document.getElementById('upl-result');
+  var submitBtn = document.getElementById('upl-submit-btn');
+  await _doDirectIngest(submitBtn, spinner, result);
+}}
+
+async function _doDirectIngest(submitBtn, spinner, result) {{
+  spinner.style.display = 'block';
+  spinner.textContent = '⏳ Uploading and ingesting data...';
+
   var fd = new FormData();
   fd.append('file', _uplFile, _uplFile.name);
   fd.append('distributor', document.getElementById('upl-distributor').value);
@@ -4211,7 +4348,6 @@ async function doUploadModal() {{
       result.className = 'upl-result error';
       result.innerHTML = '<div class="upl-result-title">✗ Error</div>' + _uplEsc(data.error);
     }} else if (data.batches_new === 0 && data.batches_skipped > 0 && !data.weekly_override) {{
-      // All periods already in DB and no weekly chart update either
       result.className = 'upl-result skipped';
       result.innerHTML = '<div class="upl-result-title">⚠ Already ingested</div>' +
         '<table>' +
@@ -4220,7 +4356,6 @@ async function doUploadModal() {{
         '<tr><td>Tip</td><td>Enable "Force re-import" to overwrite</td></tr>' +
         '</table>';
     }} else if (data.batches_new === 0 && data.batches_skipped > 0 && data.weekly_override) {{
-      // Historical periods already ingested but weekly chart data was updated — normal weekly flow
       var wks = data.weekly_overrides || [data.weekly_override];
       var wkRows = wks.map(function(wk) {{
         return '<tr><td>W' + wk.week_num + ' (' + _uplEsc(wk.label||'') + ')</td><td>' +
@@ -4262,7 +4397,10 @@ async function doUploadModal() {{
     result.className = 'upl-result error';
     result.innerHTML = '<div class="upl-result-title">✗ Network error</div>' + _uplEsc(String(err));
   }}
+  submitBtn.style.display = '';
   submitBtn.disabled = false;
+  document.getElementById('upl-assign-btn').style.display = 'none';
+  document.getElementById('upl-skip-btn').style.display = 'none';
 }}
 
 // ══════════════════════════════════════════════════════════════════════════════
