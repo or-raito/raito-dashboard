@@ -920,6 +920,50 @@ _UPLOAD_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+def _convert_xls_to_xlsx(xls_path):
+    """Convert a legacy .xls file to .xlsx using xlrd + openpyxl.
+
+    Returns the new .xlsx Path (in the same directory) and the updated filename.
+    If the file is already .xlsx or conversion fails, returns the original path unchanged.
+    """
+    from pathlib import Path
+    p = Path(xls_path)
+    if p.suffix.lower() != '.xls':
+        return p, p.name
+
+    try:
+        import xlrd
+        from openpyxl import Workbook
+
+        xls_wb = xlrd.open_workbook(str(p))
+        xlsx_path = p.with_suffix('.xlsx')
+        out_wb = Workbook()
+        # Remove the default sheet created by Workbook()
+        out_wb.remove(out_wb.active)
+
+        for sheet_name in xls_wb.sheet_names():
+            xls_sheet = xls_wb.sheet_by_name(sheet_name)
+            out_ws = out_wb.create_sheet(title=sheet_name)
+            for row_idx in range(xls_sheet.nrows):
+                for col_idx in range(xls_sheet.ncols):
+                    cell = xls_sheet.cell(row_idx, col_idx)
+                    val = cell.value
+                    # xlrd date handling: convert float dates to datetime
+                    if cell.ctype == xlrd.XL_CELL_DATE:
+                        try:
+                            val = xlrd.xldate_as_datetime(val, xls_wb.datemode)
+                        except Exception:
+                            pass
+                    out_ws.cell(row=row_idx + 1, column=col_idx + 1, value=val)
+
+        out_wb.save(str(xlsx_path))
+        log.info(f"Converted .xls → .xlsx: {p.name} → {xlsx_path.name}")
+        return xlsx_path, xlsx_path.name
+    except Exception as e:
+        log.error(f"Failed to convert .xls → .xlsx: {e}")
+        return p, p.name
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     """File upload page — ingest a distributor file directly into Cloud SQL."""
@@ -949,6 +993,9 @@ def upload():
         safe_name = Path(file.filename).name
         tmp_path = Path(tmp_dir) / safe_name
         file.save(str(tmp_path))
+
+        # Auto-convert .xls → .xlsx so all downstream parsers work
+        tmp_path, safe_name = _convert_xls_to_xlsx(tmp_path)
 
         # Import only what we need — no DB tables required beyond weekly_chart_overrides
         from db.raito_loader import detect_distributor, _copy_to_data_folder, STOCK_PATTERNS
@@ -2684,6 +2731,9 @@ def api_sp_detect_unrecognized():
         safe_name = Path(file.filename).name
         tmp_path = Path(tmp_dir) / safe_name
         file.save(str(tmp_path))
+
+        # Auto-convert .xls → .xlsx so parsers (openpyxl) can read it
+        tmp_path, safe_name = _convert_xls_to_xlsx(tmp_path)
 
         from db.raito_loader import detect_distributor, STOCK_PATTERNS
 
