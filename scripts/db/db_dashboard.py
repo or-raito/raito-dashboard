@@ -1106,11 +1106,13 @@ def upload():
         # in sync with the BO/CC/SP tabs (which use in-memory parser data).
         st_result = None
         if not is_stock and distributor in ('icedream', 'mayyan', 'biscotti'):
+            log.info(f"  Step 2b: starting sales_transactions ingestion for {distributor}")
             try:
                 st_result = _ingest_to_sales_transactions(tmp_path, distributor, safe_name)
-                log.info(f"  sales_transactions: {st_result}")
+                log.info(f"  sales_transactions result: {st_result}")
             except Exception as e:
-                log.error(f"  sales_transactions ingestion failed (non-fatal): {e}")
+                import traceback
+                log.error(f"  sales_transactions ingestion FAILED: {e}\n{traceback.format_exc()}")
                 st_result = {'error': str(e)}
 
         # ── Step 3: Invalidate dashboard cache ───────────────────────────────────
@@ -1305,25 +1307,27 @@ def _ingest_to_sales_transactions(filepath, distributor, filename):
     Uses force=True so re-uploads overwrite prior data for the same file.
     """
     from pathlib import Path
-    import sys, importlib
+    import sys
+
+    # raito_loader lives in scripts/db/ — ensure it can import from scripts/
+    scripts_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    db_dir = os.path.join(scripts_dir, 'db')
+    if db_dir not in sys.path:
+        sys.path.insert(0, db_dir)
+
+    log.info(f"  sys.path includes: {scripts_dir}, {db_dir}")
+
+    from raito_loader import (
+        load_caches, load_icedream_sales,
+        load_mayyan_sales, load_biscotti_sales,
+    )
+    log.info("  raito_loader imported successfully")
 
     conn = _md_conn()
     try:
         cur = conn.cursor()
-
-        # raito_loader lives in scripts/db/ — ensure it can import from scripts/
-        scripts_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if scripts_dir not in sys.path:
-            sys.path.insert(0, scripts_dir)
-        db_dir = os.path.join(scripts_dir, 'db')
-        if db_dir not in sys.path:
-            sys.path.insert(0, db_dir)
-
-        from raito_loader import (
-            load_caches, load_icedream_sales,
-            load_mayyan_sales, load_biscotti_sales,
-            load_inventory_snapshot,
-        )
 
         # Initialize the caches that raito_loader needs
         load_caches(cur)
