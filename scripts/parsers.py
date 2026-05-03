@@ -186,7 +186,7 @@ def _parse_icedream_weekly_xlsx(filepath):
       {'month': str, 'by_customer': {name: {product: {units, value, cartons}}}, 'totals': {}}
     """
     import os
-    wb = load_workbook(filepath)
+    wb = load_workbook(filepath, data_only=True)
     ws = wb[wb.sheetnames[0]]
 
     # --- Detect week number — scan first 5 rows, all columns ---
@@ -222,19 +222,41 @@ def _parse_icedream_weekly_xlsx(filepath):
         s = re.sub(r'\*[^*]*$', '', s).strip()
         return s.strip()
 
-    for row_idx in range(3, ws.max_row + 1):
+    # --- Find header row and detect column order ---
+    header_row = None
+    qty_col = 3   # default: col 3 = כמות (qty), col 4 = כספי (revenue)
+    rev_col = 4
+    for r in range(1, 8):
+        v = ws.cell(row=r, column=2).value
+        if v and 'פריט' in str(v):
+            header_row = r
+            # Check if columns are swapped (כספי before כמות)
+            for c in range(3, ws.max_column + 1):
+                hdr = str(ws.cell(row=r, column=c).value or '')
+                if 'כספי' in hdr or 'כסף' in hdr:
+                    rev_col = c
+                elif 'כמות' in hdr:
+                    qty_col = c
+            break
+
+    data_start = (header_row + 1) if header_row else 3
+    max_row = ws.max_row or 1000  # Google Sheets exports may have None max_row
+
+    for row_idx in range(data_start, max_row + 1):
         acct_raw = ws.cell(row=row_idx, column=1).value
-        product_raw = ws.cell(row=row_idx, column=2).value
-        qty_raw = ws.cell(row=row_idx, column=3).value
-        rev_raw = ws.cell(row=row_idx, column=4).value
 
         # Update current account when column 1 has a value
         if acct_raw:
-            current_account = _clean_account(str(acct_raw).strip())
+            cleaned = _clean_account(str(acct_raw).strip())
+            if cleaned:
+                current_account = cleaned
 
-        if not product_raw or not current_account:
+        if not current_account:
             continue
 
+        product_raw = ws.cell(row=row_idx, column=2).value
+        if not product_raw:
+            continue
         product_str = str(product_raw).strip()
 
         # Skip summary rows
@@ -250,6 +272,10 @@ def _parse_icedream_weekly_xlsx(filepath):
             continue
 
         upc = extract_units_per_carton(product_str)
+
+        qty_raw = ws.cell(row=row_idx, column=qty_col).value
+        rev_raw = ws.cell(row=row_idx, column=rev_col).value
+
         qty = float(qty_raw) if qty_raw not in (None, '', ' ') else 0.0
         rev = float(rev_raw) if rev_raw not in (None, '', ' ') else 0.0
 
@@ -261,6 +287,10 @@ def _parse_icedream_weekly_xlsx(filepath):
         if units == 0 and value == 0:
             continue
 
+        # Skip summary rows that might appear as account names
+        if current_account and 'סה"כ' in current_account:
+            continue
+
         # Totals
         if product not in data['totals']:
             data['totals'][product] = {'units': 0, 'value': 0, 'cartons': 0}
@@ -270,8 +300,6 @@ def _parse_icedream_weekly_xlsx(filepath):
 
         # By customer — keep raw per-branch name so SP tab sees per-branch rows.
         # Downstream CC/BO call extract_customer_name() at read time to aggregate.
-        # (Was collapsing branches here, bucketing all Wolt branches into 1 row;
-        # legacy parser parse_icedreams_file preserves raw keys — matching that.)
         cust_name = current_account
         if cust_name not in data['by_customer']:
             data['by_customer'][cust_name] = {}
