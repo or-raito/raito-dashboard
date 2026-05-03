@@ -39,15 +39,27 @@ def main():
     print("Loading caches (products, customers, distributors)...")
     load_caches(cur)
 
-    # Use a dummy path — the loaders call parse_all_*() which read from data/ folder
-    # The actual filepath param is only used for _copy_to_data_folder (already done)
-    dummy = Path("dummy.xlsx")
+    # Pass a real file from each data/ subfolder so _copy_to_data_folder doesn't crash.
+    # The loaders call parse_all_*() which scan the whole directory anyway.
+    from config import DATA_DIR
+    def _pick_file(subfolder):
+        d = DATA_DIR / subfolder
+        for f in sorted(d.glob('*.xlsx')):
+            if '_archive' not in str(f) and not f.name.startswith('stock'):
+                return f
+        return None
 
     results = {}
 
     print("\n=== Icedream ===")
+    ice_file = _pick_file('icedreams')
+    if not ice_file:
+        print("  ✗ No .xlsx found in data/icedreams/")
+        results['icedream'] = {'error': 'No file found'}
+    else:
+        print(f"  Using file: {ice_file.name}")
     try:
-        rows, new, skipped = load_icedream_sales(cur, dummy, dry_run=False, force=True, verbose=True)
+        rows, new, skipped = load_icedream_sales(cur, ice_file, dry_run=False, force=True, verbose=True)
         results['icedream'] = {'rows': rows, 'new': new, 'skipped': skipped}
         print(f"  → {rows} rows, {new} batches new, {skipped} skipped")
     except Exception as e:
@@ -56,8 +68,14 @@ def main():
         results['icedream'] = {'error': str(e)}
 
     print("\n=== Ma'ayan ===")
+    may_file = _pick_file('mayyan')
+    if not may_file:
+        print("  ✗ No .xlsx found in data/mayyan/")
+        results['mayyan'] = {'error': 'No file found'}
+    else:
+        print(f"  Using file: {may_file.name}")
     try:
-        rows, new, skipped = load_mayyan_sales(cur, dummy, dry_run=False, force=True, verbose=True)
+        rows, new, skipped = load_mayyan_sales(cur, may_file, dry_run=False, force=True, verbose=True)
         results['mayyan'] = {'rows': rows, 'new': new, 'skipped': skipped}
         print(f"  → {rows} rows, {new} batches new, {skipped} skipped")
     except Exception as e:
@@ -66,8 +84,14 @@ def main():
         results['mayyan'] = {'error': str(e)}
 
     print("\n=== Biscotti ===")
+    bis_file = _pick_file('biscotti')
+    if not bis_file:
+        print("  ✗ No .xlsx found in data/biscotti/")
+        results['biscotti'] = {'error': 'No file found'}
+    else:
+        print(f"  Using file: {bis_file.name}")
     try:
-        rows, new, skipped = load_biscotti_sales(cur, dummy, dry_run=False, force=True, verbose=True)
+        rows, new, skipped = load_biscotti_sales(cur, bis_file, dry_run=False, force=True, verbose=True)
         results['biscotti'] = {'rows': rows, 'new': new, 'skipped': skipped}
         print(f"  → {rows} rows, {new} batches new, {skipped} skipped")
     except Exception as e:
