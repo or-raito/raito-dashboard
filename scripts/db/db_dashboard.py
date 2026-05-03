@@ -920,15 +920,31 @@ _UPLOAD_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+def _is_ole2_file(filepath):
+    """Check if a file is actually OLE2/BIFF (.xls) format by reading magic bytes,
+    regardless of file extension.  OLE2 starts with D0 CF 11 E0 A1 B1 1A E1."""
+    try:
+        with open(filepath, 'rb') as f:
+            magic = f.read(8)
+        return magic[:8] == b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'
+    except Exception:
+        return False
+
+
 def _convert_xls_to_xlsx(xls_path):
     """Convert a legacy .xls file to .xlsx using xlrd + openpyxl.
 
+    Detects the actual file format by magic bytes, not extension — Icedream
+    often sends OLE2 (.xls) files with a .xlsx extension.
+
     Returns the new .xlsx Path (in the same directory) and the updated filename.
-    If the file is already .xlsx or conversion fails, returns the original path unchanged.
+    If the file is already a real .xlsx or conversion fails, returns the original unchanged.
     """
     from pathlib import Path
     p = Path(xls_path)
-    if p.suffix.lower() != '.xls':
+
+    # Only convert if the file is actually OLE2 format (regardless of extension)
+    if not _is_ole2_file(p):
         return p, p.name
 
     try:
@@ -936,7 +952,13 @@ def _convert_xls_to_xlsx(xls_path):
         from openpyxl import Workbook
 
         xls_wb = xlrd.open_workbook(str(p))
-        xlsx_path = p.with_suffix('.xlsx')
+
+        # Build output path — if it already ends in .xlsx, add _converted suffix
+        if p.suffix.lower() == '.xlsx':
+            xlsx_path = p.with_name(p.stem + '_converted.xlsx')
+        else:
+            xlsx_path = p.with_suffix('.xlsx')
+
         out_wb = Workbook()
         # Remove the default sheet created by Workbook()
         out_wb.remove(out_wb.active)
@@ -957,8 +979,15 @@ def _convert_xls_to_xlsx(xls_path):
                     out_ws.cell(row=row_idx + 1, column=col_idx + 1, value=val)
 
         out_wb.save(str(xlsx_path))
-        log.info(f"Converted .xls → .xlsx: {p.name} → {xlsx_path.name}")
-        return xlsx_path, xlsx_path.name
+        out_name = xlsx_path.name
+        # If original had .xlsx extension, replace it with the converted file
+        if p.suffix.lower() == '.xlsx':
+            p.unlink()
+            xlsx_path.rename(p)
+            xlsx_path = p
+            out_name = p.name
+        log.info(f"Converted OLE2 .xls → .xlsx: {p.name} ({xls_wb.sheet_names()})")
+        return xlsx_path, out_name
     except Exception as e:
         log.error(f"Failed to convert .xls → .xlsx: {e}")
         return p, p.name
@@ -1072,6 +1101,18 @@ def upload():
 
         weekly_override = max(weekly_overrides, key=lambda r: r['week_num']) if weekly_overrides else None
 
+        # ── Step 2b: Ingest into sales_transactions (for GEO tab) ────────────
+        # This ensures the GEO tab (which queries sales_transactions) stays
+        # in sync with the BO/CC/SP tabs (which use in-memory parser data).
+        st_result = None
+        if not is_stock and distributor in ('icedream', 'mayyan', 'biscotti'):
+            try:
+                st_result = _ingest_to_sales_transactions(tmp_path, distributor, safe_name)
+                log.info(f"  sales_transactions: {st_result}")
+            except Exception as e:
+                log.error(f"  sales_transactions ingestion failed (non-fatal): {e}")
+                st_result = {'error': str(e)}
+
         # ── Step 3: Invalidate dashboard cache ───────────────────────────────────
         # Invalidate cache + start background rebuild so next GET / is fast
         _invalidate_cache()
@@ -1089,6 +1130,8 @@ def upload():
             response['weekly_override'] = weekly_override
         if weekly_overrides:
             response['weekly_overrides'] = weekly_overrides
+        if st_result:
+            response['sales_transactions'] = st_result
 
         return jsonify(response)
 
@@ -1251,6 +1294,68 @@ def _price_history_write(record, action='create', old_record=None):
             conn.close()
         except Exception:
             pass
+
+
+def _ingest_to_sales_transactions(filepath, distributor, filename):
+    """
+    Ingest a sales file into sales_transactions using raito_loader.
+
+    This keeps the GEO tab (which queries sales_transactions) in sync with
+    the BO/CC/SP tabs (which use in-memory parser data from the data/ folder).
+    Uses force=True so re-uploads overwrite prior data for the same file.
+    """
+    from pathlib import Path
+    import sys, importlib
+
+    conn = _md_conn()
+    try:
+        cur = conn.cursor()
+
+        # raito_loader lives in scripts/db/ — ensure it can import from scripts/
+        scripts_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        db_dir = os.path.join(scripts_dir, 'db')
+        if db_dir not in sys.path:
+            sys.path.insert(0, db_dir)
+
+        from raito_loader import (
+            load_caches, load_icedream_sales,
+            load_mayyan_sales, load_biscotti_sales,
+            load_inventory_snapshot,
+        )
+
+        # Initialize the caches that raito_loader needs
+        load_caches(cur)
+
+        fp = Path(filepath) if not isinstance(filepath, Path) else filepath
+
+        loader_map = {
+            'icedream': load_icedream_sales,
+            'mayyan':   load_mayyan_sales,
+            'biscotti': load_biscotti_sales,
+        }
+        loader_fn = loader_map.get(distributor)
+        if not loader_fn:
+            return {'skipped': True, 'reason': f'No loader for {distributor}'}
+
+        total_rows, batches_new, batches_skipped = loader_fn(
+            cur, fp, dry_run=False, force=True, verbose=True,
+        )
+
+        conn.commit()
+
+        return {
+            'rows_inserted': total_rows,
+            'batches_new': batches_new,
+            'batches_skipped': batches_skipped,
+        }
+
+    except Exception as e:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _md_conn():

@@ -291,7 +291,9 @@ def _build_month_clause(month: str, params: list, table_alias: str = "st") -> st
     Returns the SQL clause string and appends to params list.
     """
     if month == "all":
-        return ""
+        # Default to current year so GEO matches BO/CC scope
+        params.append(2026)
+        return f"AND {table_alias}.year >= %s"
     try:
         parts = month.split("-")
         year = int(parts[0])
